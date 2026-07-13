@@ -117,6 +117,31 @@ a:focus-visible {
   text-decoration: none;
 }
 
+.graph-guide {
+  position: absolute;
+  top: 54px;
+  right: 42px;
+  left: 42px;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.graph-guide span:last-child {
+  text-align: right;
+}
+
+.graph-guide strong {
+  color: var(--ink);
+  text-align: center;
+}
+
 .icon-button {
   width: 34px;
   padding: 0 !important;
@@ -837,6 +862,38 @@ a:focus-visible {
 .purpose {
   margin: 13px 0;
   color: var(--ink-soft);
+}
+
+.architecture-summary {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-block: 1px solid var(--line);
+}
+
+.architecture-summary div {
+  padding: 10px 8px 10px 0;
+}
+
+.architecture-summary div + div {
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.architecture-summary strong,
+.architecture-summary span {
+  display: block;
+}
+
+.architecture-summary strong {
+  font-size: 18px;
+}
+
+.architecture-summary span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
 }
 
 .recommendation {
