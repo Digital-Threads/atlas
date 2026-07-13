@@ -840,10 +840,15 @@ a:focus-visible {
 }
 
 .details .badge {
+  max-width: calc(100% - 48px);
   color: #34413c;
   background: #edf1ef;
   border-color: #d8dfdc;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
 }
 
 .details h1 {
@@ -862,6 +867,29 @@ a:focus-visible {
 .purpose {
   margin: 13px 0;
   color: var(--ink-soft);
+}
+
+.flow-purpose {
+  margin: 14px 0;
+  padding: 11px 12px;
+  color: #253b34;
+  background: #eef6f3;
+  border-left: 3px solid var(--green);
+}
+
+.flow-purpose span {
+  display: block;
+  margin-bottom: 4px;
+  color: #17634f;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.flow-purpose p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .architecture-summary {
