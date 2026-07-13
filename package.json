@@ -2,28 +2,64 @@
   "name": "@dthreads/atlas",
   "version": "0.1.0",
   "description": "Architecture intelligence for NestJS codebases.",
-  "private": true,
+  "keywords": [
+    "nestjs",
+    "architecture",
+    "static-analysis",
+    "dependency-graph",
+    "mcp"
+  ],
+  "private": false,
+  "license": "MIT",
   "author": "Digital Threads",
   "repository": {
     "type": "git",
     "url": "https://github.com/Digital-Threads/atlas.git"
   },
   "homepage": "https://github.com/Digital-Threads/atlas",
+  "type": "module",
+  "bin": {
+    "atlas": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/*.js",
+    "dist/*.js.map",
+    "dist/*.d.ts",
+    "dist/cli",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "dev:cli": "tsx src/cli/index.ts",
+    "build": "npm run build:cli && npm run build:website",
+    "build:cli": "tsup src/index.ts src/cli/index.ts --format esm --dts --sourcemap --clean --out-dir dist --target node20 --tsconfig tsconfig.cli.json",
+    "build:website": "next build",
+    "prepack": "npm run build:cli",
     "start": "next start",
-    "test": "node --test tests/*.test.mjs",
+    "test": "npm run build:cli && node --test tests/*.test.mjs",
     "lint": "eslint .",
-    "check": "npm run lint && npm run test && npm run build"
+    "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build:website"
   },
   "dependencies": {
-    "next": "16.2.6",
-    "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "commander": "15.0.0",
+    "cytoscape": "3.34.0",
+    "ts-morph": "28.0.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "22.19.19",
@@ -31,7 +67,11 @@
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "tsx": "4.20.6",
+    "tsup": "8.5.1",
     "typescript": "5.9.3"
-  },
-  "type": "module"
+  }
 }

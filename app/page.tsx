@@ -65,7 +65,7 @@ export default function Home() {
             <a href="#mcp">MCP</a>
             <a href="#privacy">Privacy</a>
           </div>
-          <a className="nav-action" href="#start">npx atlas scan</a>
+          <a className="nav-action" href="#start">npx @dthreads/atlas scan</a>
         </nav>
 
         <div className="hero-grid" id="top">
