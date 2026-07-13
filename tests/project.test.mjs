@@ -77,12 +77,19 @@ test("covers the complete NestJS MVP architecture surface", async () => {
 
   for (const node of result.graph.nodes.filter((item) => ["module", "controller", "service", "provider", "repository", "method", "function", "route"].includes(item.type))) {
     assert.ok(node.metadata?.description, `missing architecture description for ${node.id}`);
+    assert.ok(node.metadata?.plainDescription, `missing plain-language description for ${node.id}`);
+    assert.equal(node.metadata?.plainDescriptionSource, "inferred_from_code_structure");
   }
   assert.match(query.getNode("module:AppModule").metadata.description, /NestJS module/);
   assert.match(query.getNode("service:UsersService").metadata.description, /writes User/);
   assert.match(query.getNode("function:src/main.ts:bootstrap").metadata.description, /Top-level function/);
   assert.match(query.getNode("route:DELETE:/api/users/:id").metadata.flowDescription, /enters the application through UsersController\.remove/);
   assert.match(query.getNode("route:DELETE:/api/users/:id").metadata.flowDescription, /UsersService\.findAll/);
+  assert.match(query.getNode("module:AppModule").metadata.plainDescription, /Groups the parts of the application/);
+  assert.match(query.getNode("service:UsersService").metadata.plainDescription, /operations and rules related to users/i);
+  assert.match(query.getNode("function:src/main.ts:bootstrap").metadata.plainDescription, /Starts and configures the application/);
+  assert.match(query.getNode("route:DELETE:/api/users/:id").metadata.plainFlowDescription, /asks the system to remove a user/i);
+  assert.match(query.getNode("route:DELETE:/api/users/:id").metadata.plainFlowDescription, /reads the required data/i);
 
   const createFlow = query.findFlowFromRoute("route:POST:/api/users");
   for (const id of ["method:UsersController.create", "method:UsersService.create", "method:PrismaService.user.create", "table:User"]) {
@@ -128,7 +135,11 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerApp, /Depends on/);
   assert.match(viewerApp, /Request flow/);
   assert.match(viewerApp, /flowDescription/);
+  assert.match(viewerApp, /plainDescription/);
+  assert.match(viewerApp, /Technical explanation/);
   assert.match(viewerCss, /\.flow-purpose/);
+  assert.match(viewerCss, /\.plain-purpose/);
+  assert.match(viewerCss, /\.technical-purpose/);
   assert.match(viewerHtml, /id="graph-guide"/);
   assert.match(viewerHtml, /src="cytoscape\.min\.js"/);
   assert.doesNotMatch(viewerHtml, /https?:\/\//);
