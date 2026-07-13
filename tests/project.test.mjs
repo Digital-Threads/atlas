@@ -99,7 +99,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerApp, /source:edge\.from,target:edge\.to/);
   assert.match(viewerApp, /Dependencies/);
   assert.match(viewerApp, /data-tab="source"/);
-  assert.match(viewerCss, /\[hidden\]\{display:none!important\}/);
+  assert.match(viewerCss, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
   assert.match(viewerApp, /renderModePreview/);
   assert.match(viewerHtml, /src="cytoscape\.min\.js"/);
   assert.doesNotMatch(viewerHtml, /https?:\/\//);
