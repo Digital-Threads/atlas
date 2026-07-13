@@ -2,7 +2,8 @@ import { createRequire } from "node:module";
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ArchitectureGraph, ArchitectureRisk, ScanMetadata } from "../core/types.js";
-import { viewerCss, viewerHtml, viewerJs, viewerLayoutCss } from "../viewer/templates.js";
+import { viewerCss, viewerLayoutCss } from "../viewer/styles.js";
+import { viewerHtml, viewerJs } from "../viewer/templates.js";
 import { generateReport } from "./report.js";
 
 const require = createRequire(import.meta.url);
