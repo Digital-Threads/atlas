@@ -869,14 +869,16 @@ a:focus-visible {
   color: var(--ink-soft);
 }
 
+.plain-purpose,
 .flow-purpose {
   margin: 14px 0;
   padding: 11px 12px;
   color: #253b34;
   background: #eef6f3;
-  border-left: 3px solid var(--green);
+  border-left: 3px solid var(--teal);
 }
 
+.plain-purpose span,
 .flow-purpose span {
   display: block;
   margin-bottom: 4px;
@@ -886,9 +888,38 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
+.plain-purpose p,
 .flow-purpose p {
   margin: 0;
   font-size: 12px;
+  line-height: 1.55;
+}
+
+.plain-purpose small,
+.flow-purpose small {
+  display: block;
+  margin-top: 7px;
+  color: #668078;
+  font-size: 10px;
+}
+
+.technical-purpose {
+  margin: 10px 0 14px;
+  padding-block: 8px;
+  color: var(--muted);
+  border-block: 1px solid var(--line);
+}
+
+.technical-purpose summary {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.technical-purpose p {
+  margin: 8px 0 2px;
+  font-size: 11px;
   line-height: 1.55;
 }
 
