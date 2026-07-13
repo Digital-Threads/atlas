@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, relative, resolve } from "node:path";
+import createIgnore from "ignore";
 import type { ScannedFile } from "../core/types.js";
 
 const ignoredDirectories = new Set([
   "node_modules", "dist", "build", ".git", "coverage", ".atlas", ".next", ".nuxt",
-  ".cache", "tmp", "logs", ".turbo", ".idea", ".vscode",
+  ".cache", "tmp", ".tmp", "temp", ".temp", "logs", ".turbo", ".idea", ".vscode",
+  ".worktrees", "worktrees", ".pnpm-store", ".yarn", ".nx", ".angular", ".svelte-kit",
+  ".output", ".serverless", ".aws-sam", ".parcel-cache", ".vercel", "storybook-static",
 ]);
 const supportedExtensions = new Set([".ts", ".js", ".json", ".yml", ".yaml", ".prisma"]);
 
@@ -14,10 +17,21 @@ export interface FileScanResult {
   ignored: number;
 }
 
-export async function scanFiles(projectRoot: string): Promise<FileScanResult> {
+export interface FileScanOptions {
+  ignoredPaths?: string[];
+}
+
+export async function scanFiles(projectRoot: string, options: FileScanOptions = {}): Promise<FileScanResult> {
   const root = resolve(projectRoot);
   const files: ScannedFile[] = [];
+  const ignoreRules = createIgnore();
   let ignored = 0;
+  const gitignore = await readFile(resolve(root, ".gitignore"), "utf8").catch(() => "");
+  if (gitignore) ignoreRules.add(gitignore);
+  for (const path of options.ignoredPaths ?? []) {
+    const normalized = path.replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/$/, "");
+    if (normalized && normalized !== "." && !normalized.startsWith("../")) ignoreRules.add(`${normalized}/`);
+  }
 
   async function walk(directory: string, isRoot = false): Promise<void> {
     let entries;
@@ -30,6 +44,11 @@ export async function scanFiles(projectRoot: string): Promise<FileScanResult> {
     }
     for (const entry of entries) {
       const absolutePath = resolve(directory, entry.name);
+      const projectPath = relative(root, absolutePath).replaceAll("\\", "/");
+      if (ignoreRules.ignores(entry.isDirectory() ? `${projectPath}/` : projectPath)) {
+        ignored += 1;
+        continue;
+      }
       if (entry.isSymbolicLink()) {
         ignored += 1;
         continue;
@@ -53,7 +72,7 @@ export async function scanFiles(projectRoot: string): Promise<FileScanResult> {
         const hash = isEnv ? undefined : createHash("sha256").update(await readFile(absolutePath)).digest("hex");
         files.push({
           absolutePath,
-          path: relative(root, absolutePath).replaceAll("\\", "/"),
+          path: projectPath,
           extension: isEnv ? ".env" : extension,
           size: fileStat.size,
           hash,
