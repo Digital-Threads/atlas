@@ -1,5 +1,5 @@
 {
-  "name": "atlas-architecture-intelligence-site",
+  "name": "@dthreads/atlas",
   "version": "0.1.0",
   "private": true,
   "engines": {
