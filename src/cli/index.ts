@@ -19,11 +19,12 @@ program.command("scan")
   .action(async (options) => {
     if (options.format !== "json") throw new Error(`Unsupported format: ${options.format}. Use json.`);
     console.log("Atlas scan started");
-    console.log("Scanning files...");
-    const result = await scanProject({ projectPath: options.path, outputPath: options.output, debug: options.debug });
-    const stack = result.metadata.detectedStacks.find((item) => item.name === "nestjs");
-    console.log(`${result.metadata.filesScanned} files found`);
-    console.log(stack ? `NestJS detected with confidence ${stack.confidence}` : "No supported framework detected; generated a basic project graph");
+    const result = await scanProject({
+      projectPath: options.path,
+      outputPath: options.output,
+      debug: options.debug,
+      onProgress: ({ message }) => console.log(message),
+    });
     console.log(`Graph created: ${result.graph.stats.totalNodes} nodes, ${result.graph.stats.totalEdges} edges`);
     console.log(`Risks detected: ${result.risks.length}`);
     console.log(`Viewer created: ${resolve(result.outputPath, "viewer", "index.html")}`);

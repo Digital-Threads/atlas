@@ -12,6 +12,8 @@
   --env: #b28412;
   --risk: #c94646;
   --charcoal: #202826;
+  --font-geist-sans: Arial;
+  --font-geist-mono: Consolas;
 }
 
 * {

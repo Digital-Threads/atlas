@@ -38,7 +38,7 @@ const flowSteps = [
   "ts-morph extracts classes, decorators, methods, and injections",
   "Graph builder writes graph.json, risks.json, metadata.json, and report.md",
   "Viewer opens a searchable architecture map",
-  "MCP server exposes structured graph tools to AI agents",
+  "MCP server exposes structured graph queries to compatible developer tools",
 ];
 
 const mcpTools = [
@@ -84,7 +84,7 @@ export default function Home() {
             <div className="trust-row" aria-label="Product principles">
               <span>Static analysis first</span>
               <span>Graph is source of truth</span>
-              <span>AI only explains</span>
+              <span>Evidence and confidence</span>
             </div>
           </div>
 
@@ -230,8 +230,8 @@ Done`}</pre>
 
       <section className="mcp-section" id="mcp">
         <div className="section-heading">
-          <p className="eyebrow">AI integration</p>
-          <h2>MCP tools query the graph; AI explains what the graph proves.</h2>
+          <p className="eyebrow">Tool integration</p>
+          <h2>MCP tools expose the same architecture graph through structured queries.</h2>
         </div>
         <div className="tool-grid">
           {mcpTools.map((tool) => (
@@ -247,9 +247,8 @@ Done`}</pre>
         </div>
         <p>
           Atlas is designed as a local-first architecture intelligence engine.
-          Env values are never saved, AI is off by default, and source snippets
-          are only sent for optional explanations when the user explicitly
-          enables that mode.
+          Environment values are never saved, source snippets remain in the local
+          output, and the scanner performs no network requests.
         </p>
       </section>
     </main>

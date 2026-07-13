@@ -3,6 +3,7 @@ import type {
   GraphEdge,
   GraphEdgeType,
   GraphNode,
+  GraphSearchResult,
   GraphStats,
   GraphSubgraph,
 } from "./types.js";
@@ -37,6 +38,15 @@ export class GraphBuilder {
 
   hasNode(id: string): boolean {
     return this.nodes.has(id);
+  }
+
+  validate(): string[] {
+    const errors: string[] = [];
+    for (const edge of this.edges.values()) {
+      if (!this.nodes.has(edge.from)) errors.push(`${edge.id}: missing source ${edge.from}`);
+      if (!this.nodes.has(edge.to)) errors.push(`${edge.id}: missing target ${edge.to}`);
+    }
+    return errors;
   }
 
   toGraph(project: ArchitectureGraph["project"]): ArchitectureGraph {
@@ -74,8 +84,14 @@ export class GraphQuery {
       .slice(0, 100);
   }
 
-  search(query: string): GraphNode[] {
-    return this.findNode(query);
+  search(query: string): GraphSearchResult[] {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [];
+    return this.findNode(query).map((node) => ({
+      node,
+      score: scoreNode(node, needle),
+      matches: matchingFields(node, needle),
+    }));
   }
 
   getNode(id: string): GraphNode | null {
@@ -95,6 +111,28 @@ export class GraphQuery {
   findControllers(): GraphNode[] { return this.byType("controller"); }
   findTables(): GraphNode[] { return this.byType("table"); }
   findExternalApis(): GraphNode[] { return this.byType("external_api"); }
+
+  getNeighbors(nodeId: string, depth = 1): GraphSubgraph {
+    if (!this.nodeMap.has(nodeId)) return { nodes: [], edges: [] };
+    const nodeIds = new Set([nodeId]);
+    const edgeIds = new Set<string>();
+    let frontier = [nodeId];
+    for (let level = 0; level < Math.max(0, depth) && frontier.length; level += 1) {
+      const next: string[] = [];
+      for (const id of frontier) {
+        for (const edge of [...this.getIncoming(id), ...this.getOutgoing(id)]) {
+          edgeIds.add(edge.id);
+          const neighbor = edge.from === id ? edge.to : edge.from;
+          if (!nodeIds.has(neighbor)) { nodeIds.add(neighbor); next.push(neighbor); }
+        }
+      }
+      frontier = next;
+    }
+    return {
+      nodes: [...nodeIds].map((id) => this.nodeMap.get(id)).filter(Boolean) as GraphNode[],
+      edges: this.graph.edges.filter((edge) => edgeIds.has(edge.id)),
+    };
+  }
 
   findFlowFromRoute(routeId: string): GraphSubgraph {
     return this.walk(routeId, "outgoing", 12, new Set([
@@ -160,4 +198,16 @@ function scoreNode(node: GraphNode, needle: string): number {
   if (label.startsWith(needle)) return 80;
   if (node.id.toLowerCase().includes(needle)) return 60;
   return 20;
+}
+
+function matchingFields(node: GraphNode, needle: string): string[] {
+  const fields = {
+    id: node.id,
+    label: node.label,
+    name: node.name ?? "",
+    type: node.type,
+    file: node.file ?? "",
+    metadata: JSON.stringify(node.metadata ?? {}),
+  };
+  return Object.entries(fields).filter(([, value]) => value.toLowerCase().includes(needle)).map(([key]) => key);
 }

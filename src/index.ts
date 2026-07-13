@@ -21,26 +21,50 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const packageJson = await readJson(resolve(projectRoot, "package.json"));
   const projectName = String(packageJson?.name ?? basename(projectRoot));
   const outputPath = resolve(projectRoot, options.outputPath ?? ".atlas");
+  options.onProgress?.({ stage: "scan_files", message: "Scanning files..." });
   const fileScan = await scanFiles(projectRoot);
+  options.onProgress?.({ stage: "scan_files", message: `${fileScan.files.length} files found` });
+  options.onProgress?.({ stage: "detect_stack", message: "Detecting project stack..." });
   const detectedStacks = await detectStacks(projectRoot, fileScan.files);
+  const nestStack = detectedStacks.find((stack) => stack.name === "nestjs");
+  options.onProgress?.({
+    stage: "detect_stack",
+    message: nestStack
+      ? `NestJS detected with confidence ${nestStack.confidence}`
+      : "No supported framework detected. Generating a basic project graph.",
+  });
   const builder = new GraphBuilder();
 
   builder.addNode({ id: "project:root", type: "project", label: projectName, name: projectName, file: ".", source: "config", confidence: 1, metadata: { root: projectRoot } });
   for (const file of fileScan.files) {
-    builder.addNode({ id: `file:${file.path}`, type: "file", label: file.path, name: basename(file.path), file: file.path, language: languageFor(file.extension), source: "static_analysis", confidence: 1, metadata: { extension: file.extension, size: file.size, hash: file.hash, lastModified: file.lastModified } });
+    const metadata = file.extension === ".env"
+      ? { extension: file.extension, lastModified: file.lastModified, sensitive: true, valuesStored: false }
+      : { extension: file.extension, size: file.size, hash: file.hash, lastModified: file.lastModified };
+    builder.addNode({ id: `file:${file.path}`, type: "file", label: file.path, name: basename(file.path), file: file.path, language: languageFor(file.extension), source: "static_analysis", confidence: 1, metadata });
+    if ([".json", ".yml", ".yaml"].includes(file.extension) && file.path !== "package.json") {
+      builder.addNode({ id: `config:${file.path}`, type: "config", label: file.path, name: basename(file.path), file: file.path, language: languageFor(file.extension), source: "config", confidence: 1 });
+      builder.addEdge({ from: `file:${file.path}`, to: `config:${file.path}`, type: "declares", source: "config", confidence: 1 });
+    }
   }
   addFileHierarchy(builder, projectRoot, fileScan.files.map((file) => file.path));
 
   const adapter = new NestAdapter();
-  if (await adapter.detect({ projectRoot, files: fileScan.files, detectedStacks, debug: options.debug })) {
-    const adapterResult = await adapter.scan({ projectRoot, files: fileScan.files, detectedStacks, debug: options.debug });
-    for (const node of adapterResult.nodes) builder.addNode(node);
-    for (const edge of adapterResult.edges) builder.addEdge(edge);
+  const adapterContext = { projectRoot, files: fileScan.files, detectedStacks, debug: options.debug };
+  const adapterDetection = await adapter.detect(adapterContext);
+  if (adapterDetection.detected) {
+    options.onProgress?.({ stage: "parse_architecture", message: "Parsing NestJS architecture..." });
+    const adapterResult = await adapter.scan(adapterContext);
+    for (const node of await adapter.buildNodes(adapterResult)) builder.addNode(node);
+    for (const edge of await adapter.buildEdges(adapterResult)) builder.addEdge(edge);
     if (options.debug) for (const warning of adapterResult.warnings) console.error(`[debug] ${warning}`);
   }
 
+  options.onProgress?.({ stage: "build_graph", message: "Building architecture graph..." });
+  const integrityErrors = builder.validate();
+  if (integrityErrors.length) throw new Error(`Graph integrity check failed: ${integrityErrors[0]}`);
   const project = { name: projectName, root: projectRoot, detectedStacks: detectedStacks.map((stack) => stack.name), createdAt: new Date().toISOString() };
   let graph = builder.toGraph(project);
+  options.onProgress?.({ stage: "detect_risks", message: "Detecting architecture risks..." });
   const risks = detectRisks(graph);
   for (const item of risks) {
     builder.addNode({ id: item.id, type: "risk", label: item.title, name: item.title, file: item.file, source: "static_analysis", confidence: 1, metadata: { severity: item.severity, riskType: item.type, description: item.description, recommendation: item.recommendation } });
@@ -60,6 +84,7 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
     filesIgnored: fileScan.ignored,
     detectedStacks,
   };
+  options.onProgress?.({ stage: "write_outputs", message: "Writing graph, report, and viewer..." });
   await writeOutputs(outputPath, graph, metadata, risks);
   return { graph, metadata, risks, outputPath };
 }

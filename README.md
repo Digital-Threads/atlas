@@ -123,15 +123,16 @@ The NestJS adapter currently detects:
 - projects, folders, files, packages, and imports;
 - modules, controllers, services, providers, and dependency injection;
 - routes, controller methods, service methods, and method calls;
-- DTOs and validation decorators;
+- DTO fields, types, optional flags, validation decorators, and custom NestJS decorators;
 - guards, pipes, interceptors, and middleware;
 - Prisma models and operations;
-- TypeORM entities and columns;
+- TypeORM entities, columns, relations, repositories, and read/write operations;
 - environment variable names, without their values;
 - external HTTP API hosts;
 - unit test relationships;
-- architecture risks such as missing tests, circular imports, large controllers,
-  controller-level database access, and routes with no detected service flow.
+- all seven MVP architecture risks: excessive service dependencies, missing service
+  tests, too many external APIs, circular imports, large controllers, direct
+  controller database access, and routes with no detected service flow.
 
 Static analysis has limits. Dynamic modules, runtime-generated providers, reflection,
 and indirect calls may not always be resolved. Every inferred graph item includes its
@@ -220,13 +221,18 @@ npm run dev:cli -- scan --path ./tests/fixtures/nest-app
 npm run build:cli    # CLI and library package
 npm run build:website
 npm test
+npm run test:performance
 npm run lint
 npm run typecheck
 ```
 
-The integration test scans a real NestJS fixture, validates route-to-database flow,
-checks that environment values never enter the graph, generates every output file,
-and queries the result through an actual MCP subprocess.
+The tests scan a representative NestJS fixture, validate route-to-database flow,
+exercise all ten MCP tools, verify all seven risk rules, and confirm that environment
+values never enter generated artifacts. The performance test generates 1,000
+TypeScript files, 100 controllers, 300 services, and 1,000 routes.
+
+The detailed MVP requirements and their automated evidence are listed in
+[`docs/PRD-COMPLIANCE.md`](docs/PRD-COMPLIANCE.md).
 
 ## Privacy and security
 

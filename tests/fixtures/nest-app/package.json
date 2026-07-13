@@ -1,9 +1,17 @@
 {
   "name": "atlas-nest-fixture",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "nest start",
+    "test": "jest"
+  },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
+    "@nestjs/axios": "^4.0.0",
+    "@nestjs/typeorm": "^11.0.0",
     "@prisma/client": "^6.0.0",
-    "axios": "^1.0.0"
+    "axios": "^1.0.0",
+    "typeorm": "^0.3.0"
   }
 }

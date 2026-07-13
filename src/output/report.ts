@@ -22,6 +22,9 @@ export function generateReport(graph: ArchitectureGraph, risks: ArchitectureRisk
     `- Risks: ${risks.length}`,
     "",
   ];
+  if (!graph.project.detectedStacks.length || !byType("module").length) {
+    lines.push("## Warnings", "", "No supported framework architecture was detected. The report contains the basic project and file graph only.", "");
+  }
   addNodeSection(lines, "Modules", byType("module"));
   addNodeSection(lines, "Routes", byType("route"), (node) => `${node.label}${node.file ? ` — \`${node.file}\`` : ""}`);
   addNodeSection(lines, "Controllers", byType("controller"));

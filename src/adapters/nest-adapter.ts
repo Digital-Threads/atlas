@@ -6,11 +6,12 @@ import {
   SyntaxKind,
   type ClassDeclaration,
   type Decorator,
+  type FunctionDeclaration,
   type MethodDeclaration,
   type SourceFile,
 } from "ts-morph";
 import type { GraphEdge, GraphNode, GraphNodeType } from "../core/types.js";
-import type { AdapterContext, AdapterResult, ArchitectureAdapter } from "./adapter.js";
+import type { AdapterContext, AdapterDetectionResult, AdapterResult, ArchitectureAdapter } from "./adapter.js";
 
 const httpDecorators: Record<string, string> = {
   Get: "GET", Post: "POST", Put: "PUT", Patch: "PATCH", Delete: "DELETE",
@@ -20,6 +21,8 @@ const readMethods = new Set(["findUnique", "findFirst", "findMany", "count", "ag
 const writeMethods = new Set([
   "create", "createMany", "update", "updateMany", "upsert", "delete", "deleteMany",
 ]);
+const typeOrmReadMethods = new Set(["find", "findBy", "findOne", "findOneBy", "findAndCount", "count", "countBy", "exist", "exists"]);
+const typeOrmWriteMethods = new Set(["save", "insert", "update", "upsert", "delete", "remove", "softDelete", "softRemove", "recover", "restore", "clear"]);
 
 interface ClassInfo {
   name: string;
@@ -28,14 +31,19 @@ interface ClassInfo {
   file: string;
   declaration: ClassDeclaration;
   constructorTypes: Map<string, string>;
+  repositoryEntities: Map<string, string>;
 }
 
 export class NestAdapter implements ArchitectureAdapter {
   readonly name = "nestjs";
 
-  async detect(context: AdapterContext): Promise<boolean> {
-    return context.detectedStacks.some((stack) => stack.name === "nestjs" && stack.confidence >= 0.35);
+  async detect(context: AdapterContext): Promise<AdapterDetectionResult> {
+    const stack = context.detectedStacks.find((item) => item.name === "nestjs");
+    return { detected: Boolean(stack && stack.confidence >= 0.35), confidence: stack?.confidence ?? 0, evidence: stack?.evidence ?? [] };
   }
+
+  async buildNodes(result: AdapterResult): Promise<GraphNode[]> { return result.nodes; }
+  async buildEdges(result: AdapterResult): Promise<AdapterResult["edges"]> { return result.edges; }
 
   async scan(context: AdapterContext): Promise<AdapterResult> {
     const nodes = new Map<string, GraphNode>();
@@ -47,7 +55,11 @@ export class NestAdapter implements ArchitectureAdapter {
     };
 
     const tsFiles = context.files.filter((file) => file.extension === ".ts" || file.extension === ".js");
-    const project = new Project({
+    const tsConfig = context.files.find((file) => file.path === "tsconfig.json");
+    const project = new Project(tsConfig ? {
+      tsConfigFilePath: tsConfig.absolutePath,
+      skipAddingFilesFromTsConfig: true,
+    } : {
       skipAddingFilesFromTsConfig: true,
       compilerOptions: { allowJs: true, experimentalDecorators: true, skipLibCheck: true },
     });
@@ -63,8 +75,8 @@ export class NestAdapter implements ArchitectureAdapter {
         const type = classifyClass(declaration, file);
         if (!type) continue;
         const id = `${type}:${name}`;
-        const constructorTypes = getConstructorTypes(declaration);
-        const info: ClassInfo = { name, id, type, file, declaration, constructorTypes };
+        const { constructorTypes, repositoryEntities } = getConstructorInfo(declaration);
+        const info: ClassInfo = { name, id, type, file, declaration, constructorTypes, repositoryEntities };
         classes.set(name, info);
         addNode(classNode(info));
         addEdge(`file:${file}`, id, "declares");
@@ -73,14 +85,17 @@ export class NestAdapter implements ArchitectureAdapter {
 
     await parsePrisma(context, addNode, addEdge);
 
+    const globalPrefix = findGlobalPrefix(sourceFiles);
     for (const sourceFile of sourceFiles) {
       const file = relativePath(context.projectRoot, sourceFile.getFilePath());
-      parseImports(sourceFile, context.projectRoot, addEdge);
+      parseImports(sourceFile, context.projectRoot, addNode, addEdge);
+      parseFunctions(sourceFile, file, addNode, addEdge);
+      parseBootstrapGlobals(sourceFile, file, classes, addNode, addEdge);
       for (const declaration of sourceFile.getClasses()) {
         const name = declaration.getName();
         const info = name ? classes.get(name) : undefined;
         if (!info) continue;
-        parseClass(info, classes, addNode, addEdge);
+        parseClass(info, classes, addNode, addEdge, globalPrefix);
       }
       if (isTestFile(file)) parseTest(sourceFile, file, classes, addNode, addEdge);
     }
@@ -128,6 +143,7 @@ function classNode(info: ClassInfo): GraphNode {
     metadata: {
       decorators: info.declaration.getDecorators().map((item) => item.getName()),
       methods,
+      ...(info.type === "dto" ? { fields: dtoFields(info.declaration) } : {}),
       sourcePreview: trimSource(info.declaration.getText()),
     },
   };
@@ -138,23 +154,25 @@ function parseClass(
   classes: Map<string, ClassInfo>,
   addNode: (node: GraphNode) => void,
   addEdge: EdgeAdder,
+  globalPrefix: string,
 ) {
   parseModule(info, classes, addNode, addEdge);
-  parseTypeOrm(info, addNode, addEdge);
+  parseTypeOrm(info, classes, addNode, addEdge);
 
   for (const [parameter, typeName] of info.constructorTypes) {
     const target = ensureClass(typeName, classes, info.file, addNode);
-    addEdge(info.id, target.id, "injects", { via: "constructor", parameter });
+    addEdge(info.id, target.id, "injects", { via: "constructor", parameter, repositoryEntity: info.repositoryEntities.get(parameter) });
   }
 
   for (const method of info.declaration.getMethods()) {
     const methodId = `method:${info.name}.${method.getName()}`;
     addNode(methodNode(info, method));
     addEdge(info.id, methodId, "has_method");
-    parseRoute(info, method, methodId, addNode, addEdge);
+    parseRoute(info, method, methodId, globalPrefix, addNode, addEdge);
     parseMethodRelations(info, method, methodId, classes, addNode, addEdge);
     parseAppliedDecorators(method.getDecorators(), methodId, classes, info.file, addNode, addEdge);
   }
+  parseMiddlewareConfiguration(info, classes, addNode, addEdge);
   parseAppliedDecorators(info.declaration.getDecorators(), info.id, classes, info.file, addNode, addEdge);
 }
 
@@ -172,8 +190,25 @@ function parseModule(info: ClassInfo, classes: Map<string, ClassInfo>, addNode: 
     const initializer = property.getInitializer();
     if (!initializer || !Node.isArrayLiteralExpression(initializer)) continue;
     for (const element of initializer.getElements()) {
+      if (Node.isObjectLiteralExpression(element)) {
+        const provide = element.getProperty("provide");
+        if (!provide || !Node.isPropertyAssignment(provide)) continue;
+        const token = cleanToken(provide.getInitializer()?.getText() ?? "provider");
+        const providerId = `provider:${token}`;
+        addNode({ id: providerId, type: "provider", label: token, name: token, file: info.file, framework: "nestjs", source: "config", confidence: 1, metadata: { moduleProvider: element.getText() } });
+        addEdge(info.id, providerId, edgeType, { moduleProperty: propertyName, customProvider: true });
+        for (const key of ["useClass", "useExisting"]) {
+          const implementation = element.getProperty(key);
+          if (!implementation || !Node.isPropertyAssignment(implementation)) continue;
+          const targetName = implementation.getInitializer()?.getText().match(/[A-Z][A-Za-z0-9_$]*/)?.[0];
+          if (!targetName) continue;
+          const target = ensureClass(targetName, classes, info.file, addNode);
+          addEdge(providerId, target.id, "references", { providerStrategy: key });
+        }
+        continue;
+      }
       const names = element.getText().match(/[A-Z][A-Za-z0-9_$]*/g) ?? [];
-      const targetName = names.at(-1);
+      const targetName = propertyName === "imports" ? (names.find((name) => name.endsWith("Module")) ?? names.at(-1)) : names.at(-1);
       if (!targetName) continue;
       const target = ensureClass(targetName, classes, info.file, addNode, propertyName === "imports" ? "module" : "provider");
       addEdge(info.id, target.id, edgeType, { moduleProperty: propertyName });
@@ -181,20 +216,20 @@ function parseModule(info: ClassInfo, classes: Map<string, ClassInfo>, addNode: 
   }
 }
 
-function parseRoute(info: ClassInfo, method: MethodDeclaration, methodId: string, addNode: NodeAdder, addEdge: EdgeAdder) {
+function parseRoute(info: ClassInfo, method: MethodDeclaration, methodId: string, globalPrefix: string, addNode: NodeAdder, addEdge: EdgeAdder) {
   if (info.type !== "controller") return;
   const controllerPath = decoratorString(info.declaration.getDecorator("Controller"));
   for (const decorator of method.getDecorators()) {
     const httpMethod = httpDecorators[decorator.getName()];
     if (!httpMethod) continue;
     const methodPath = decoratorString(decorator);
-    const path = joinRoute(controllerPath, methodPath);
+    const path = joinRoute(globalPrefix, controllerPath, methodPath);
     const routeId = `route:${httpMethod}:${path}`;
     addNode({
       id: routeId, type: "route", label: `${httpMethod} ${path}`, name: `${httpMethod} ${path}`,
       file: info.file, framework: "nestjs", language: "typescript", confidence: 1, source: "ast",
       sourceLocation: location(info.file, method),
-      metadata: { httpMethod, path, controller: info.name, handler: method.getName() },
+      metadata: { method: httpMethod, httpMethod, path, controller: info.name, handler: method.getName() },
     });
     addEdge(routeId, methodId, "handles");
   }
@@ -213,8 +248,17 @@ function parseMethodRelations(
     const target = classes.get(typeName);
     if (target?.type === "dto") {
       addEdge(methodId, target.id, "uses", { parameter: parameter.getName() });
-      addEdge(methodId, target.id, "validates", { decorators: parameter.getDecorators().map((item) => item.getName()) });
+      addEdge(methodId, target.id, "validates", {
+        decorators: parameter.getDecorators().map((item) => item.getName()),
+        fields: dtoFields(target.declaration),
+      });
     }
+  }
+
+  const explicitReturnType = method.getReturnTypeNode()?.getText() ?? "";
+  for (const returnType of referencedTypeNames(explicitReturnType)) {
+    const target = classes.get(returnType);
+    if (target) addEdge(methodId, target.id, "returns");
   }
 
   for (const call of method.getDescendantsOfKind(SyntaxKind.CallExpression)) {
@@ -229,6 +273,12 @@ function parseMethodRelations(
         addNode({ id: targetMethodId, type: "method", label: `${target.name}.${targetMethod}`, name: targetMethod, file: target.file, framework: "nestjs", language: "typescript", confidence: classes.has(typeName) ? 1 : 0.75, source: classes.has(typeName) ? "ast" : "heuristic", metadata: { class: target.name, method: targetMethod } });
         addEdge(target.id, targetMethodId, "has_method");
         addEdge(methodId, targetMethodId, "calls", { via: property });
+        const entityName = info.repositoryEntities.get(property);
+        if (entityName && (typeOrmReadMethods.has(targetMethod) || typeOrmWriteMethods.has(targetMethod))) {
+          const { id: tableId, name: tableName } = tableForEntity(entityName, classes);
+          addNode({ id: tableId, type: "table", label: tableName, name: tableName, framework: "typeorm", source: "heuristic", confidence: 0.9 });
+          addEdge(targetMethodId, tableId, typeOrmReadMethods.has(targetMethod) ? "reads" : "writes", { operation: targetMethod, via: property, orm: "typeorm" });
+        }
       }
     }
 
@@ -238,7 +288,29 @@ function parseMethodRelations(
       const typeName = info.constructorTypes.get(property) ?? "";
       if (/Prisma/i.test(typeName) && (readMethods.has(operation) || writeMethods.has(operation))) {
         const tableId = findTableId(modelName, addNode);
-        addEdge(methodId, tableId, readMethods.has(operation) ? "reads" : "writes", { operation, via: property });
+        const operationId = `method:${typeName}.${modelName}.${operation}`;
+        addNode({ id: operationId, type: "method", label: `${typeName}.${modelName}.${operation}`, name: operation, file: info.file, framework: "prisma", source: "ast", confidence: 1, metadata: { class: typeName, model: modelName, method: operation, databaseOperation: true } });
+        const prismaService = ensureClass(typeName, classes, info.file, addNode, "service");
+        addEdge(prismaService.id, operationId, "has_method", { generatedFromUsage: true });
+        addEdge(methodId, operationId, "calls", { via: property, orm: "prisma" });
+        addEdge(operationId, tableId, readMethods.has(operation) ? "reads" : "writes", { operation, via: property, orm: "prisma" });
+      }
+    }
+
+    if (isExternalHttpCall(expression, info)) {
+      const argumentsText = call.getArguments().map((argument) => argument.getText()).join(" ");
+      for (const api of extractExternalApis(argumentsText)) {
+        const id = `external_api:${api}`;
+        addNode({ id, type: "external_api", label: api, name: api, confidence: 0.98, source: "static_analysis", metadata: { client: expression } });
+        addEdge(methodId, id, "connects_to", { client: expression });
+      }
+      for (const envName of extractEnvNames(argumentsText)) {
+        const envId = `environment_variable:${envName}`;
+        const externalId = `external_api:unknown:${envName}`;
+        addNode({ id: envId, type: "environment_variable", label: envName, name: envName, source: "static_analysis", confidence: 1, metadata: { valueStored: false } });
+        addNode({ id: externalId, type: "external_api", label: `Unknown API (${envName})`, name: envName, source: "heuristic", confidence: 0.7, metadata: { hostUnknown: true, configuredBy: envName, client: expression } });
+        addEdge(envId, externalId, "connects_to", { hostUnknown: true });
+        addEdge(methodId, externalId, "connects_to", { client: expression, configuredBy: envName }, "heuristic", 0.7);
       }
     }
   }
@@ -249,25 +321,31 @@ function parseMethodRelations(
     addNode({ id, type: "environment_variable", label: envName, name: envName, confidence: 1, source: "static_analysis", metadata: { valueStored: false } });
     addEdge(methodId, id, "uses");
   }
-  for (const api of extractExternalApis(text)) {
-    const id = `external_api:${api}`;
-    addNode({ id, type: "external_api", label: api, name: api, confidence: 0.95, source: "static_analysis" });
-    addEdge(methodId, id, "connects_to");
-  }
 }
 
-function parseTypeOrm(info: ClassInfo, addNode: NodeAdder, addEdge: EdgeAdder) {
+function parseTypeOrm(info: ClassInfo, classes: Map<string, ClassInfo>, addNode: NodeAdder, addEdge: EdgeAdder) {
   if (info.type !== "entity") return;
   const tableName = decoratorString(info.declaration.getDecorator("Entity")) || info.name;
   const tableId = `table:${tableName}`;
+  addNode({ id: "database:typeorm", type: "database", label: "TypeORM", name: "TypeORM", framework: "typeorm", source: "config", confidence: 1 });
   addNode({ id: tableId, type: "table", label: tableName, name: tableName, file: info.file, framework: "typeorm", confidence: 1, source: "ast" });
+  addEdge("database:typeorm", tableId, "contains");
   addEdge(info.id, tableId, "references");
   for (const property of info.declaration.getProperties()) {
     const decorators = property.getDecorators().map((item) => item.getName());
-    if (!decorators.some((name) => ["Column", "PrimaryColumn", "PrimaryGeneratedColumn"].includes(name))) continue;
-    const columnId = `column:${tableName}.${property.getName()}`;
-    addNode({ id: columnId, type: "column", label: `${tableName}.${property.getName()}`, name: property.getName(), file: info.file, framework: "typeorm", source: "ast", confidence: 1, metadata: { type: property.getTypeNode()?.getText(), decorators } });
-    addEdge(tableId, columnId, "has_column");
+    if (decorators.some((name) => ["Column", "PrimaryColumn", "PrimaryGeneratedColumn"].includes(name))) {
+      const columnId = `column:${tableName}.${property.getName()}`;
+      addNode({ id: columnId, type: "column", label: `${tableName}.${property.getName()}`, name: property.getName(), file: info.file, framework: "typeorm", source: "ast", confidence: 1, metadata: { type: property.getTypeNode()?.getText(), decorators } });
+      addEdge(tableId, columnId, "has_column");
+    }
+    const relation = decorators.find((name) => ["ManyToOne", "OneToMany", "OneToOne", "ManyToMany"].includes(name));
+    if (relation) {
+      const targetName = referencedTypeNames(property.getTypeNode()?.getText() ?? "").find((name) => name !== info.name);
+      if (!targetName) continue;
+      const { id: targetTableId, name: targetTableName } = tableForEntity(targetName, classes);
+      addNode({ id: targetTableId, type: "table", label: targetTableName, name: targetTableName, framework: "typeorm", source: "heuristic", confidence: 0.85 });
+      addEdge(tableId, targetTableId, "references", { relation, property: property.getName(), orm: "typeorm" }, "ast", 1);
+    }
   }
 }
 
@@ -277,8 +355,9 @@ async function parsePrisma(context: AdapterContext, addNode: NodeAdder, addEdge:
   const content = await readFile(schema.absolutePath, "utf8").catch(() => "");
   if (!content) return;
   addNode({ id: "database:prisma", type: "database", label: "Prisma", name: "Prisma", file: schema.path, framework: "prisma", source: "config", confidence: 1 });
-  for (const match of content.matchAll(/model\s+(\w+)\s*\{([\s\S]*?)\}/g)) {
-    const [, modelName, body] = match;
+  const models = [...content.matchAll(/model\s+(\w+)\s*\{([\s\S]*?)\}/g)].map((match) => ({ name: match[1], body: match[2] }));
+  const modelNames = new Set(models.map((model) => model.name));
+  for (const { name: modelName, body } of models) {
     const modelId = `model:${modelName}`;
     const tableId = `table:${modelName}`;
     addNode({ id: modelId, type: "model", label: modelName, name: modelName, file: schema.path, framework: "prisma", source: "config", confidence: 1 });
@@ -289,6 +368,11 @@ async function parsePrisma(context: AdapterContext, addNode: NodeAdder, addEdge:
       const field = line.trim().match(/^(\w+)\s+([\w\[\]?]+)/);
       if (!field) continue;
       const [, fieldName, fieldType] = field;
+      const relatedModel = fieldType.replace(/[\[\]?]/g, "");
+      if (modelNames.has(relatedModel)) {
+        addEdge(tableId, `table:${relatedModel}`, "references", { relation: fieldType.includes("[]") ? "has_many" : "belongs_to", field: fieldName, orm: "prisma" }, "config", 1);
+        continue;
+      }
       const columnId = `column:${modelName}.${fieldName}`;
       addNode({ id: columnId, type: "column", label: `${modelName}.${fieldName}`, name: fieldName, file: schema.path, framework: "prisma", source: "config", confidence: 1, metadata: { type: fieldType } });
       addEdge(tableId, columnId, "has_column");
@@ -296,12 +380,20 @@ async function parsePrisma(context: AdapterContext, addNode: NodeAdder, addEdge:
   }
 }
 
-function parseImports(sourceFile: SourceFile, projectRoot: string, addEdge: EdgeAdder) {
+function parseImports(sourceFile: SourceFile, projectRoot: string, addNode: NodeAdder, addEdge: EdgeAdder) {
   const from = `file:${relativePath(projectRoot, sourceFile.getFilePath())}`;
   for (const declaration of sourceFile.getImportDeclarations()) {
+    const specifier = declaration.getModuleSpecifierValue();
     const target = declaration.getModuleSpecifierSourceFile();
-    if (!target || !target.getFilePath().startsWith(resolve(projectRoot))) continue;
-    addEdge(from, `file:${relativePath(projectRoot, target.getFilePath())}`, "imports", { specifier: declaration.getModuleSpecifierValue() });
+    if (target?.getFilePath().startsWith(resolve(projectRoot))) {
+      addEdge(from, `file:${relativePath(projectRoot, target.getFilePath())}`, "imports", { specifier });
+      continue;
+    }
+    const packageName = importedPackageName(specifier);
+    if (!packageName) continue;
+    const id = `library:${packageName}`;
+    addNode({ id, type: "library", label: packageName, name: packageName, source: "ast", confidence: 1, metadata: { imported: true } });
+    addEdge(from, id, "imports", { specifier });
   }
 }
 
@@ -335,6 +427,19 @@ async function parsePackageJson(context: AdapterContext, addNode: NodeAdder, add
   if (!packageFile) return;
   try {
     const packageJson = JSON.parse(await readFile(packageFile.absolutePath, "utf8"));
+    const packageNodeId = "package:root";
+    addNode({
+      id: packageNodeId,
+      type: "package",
+      label: String(packageJson.name ?? "package.json"),
+      name: String(packageJson.name ?? "package.json"),
+      file: "package.json",
+      source: "package_json",
+      confidence: 1,
+      metadata: { version: packageJson.version, scripts: packageJson.scripts ?? {}, packageManager: packageJson.packageManager },
+    });
+    addEdge("file:package.json", packageNodeId, "declares", undefined, "package_json");
+    addEdge("project:root", packageNodeId, "contains", undefined, "package_json");
     const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
     for (const [name, version] of Object.entries(dependencies)) {
       const id = `library:${name}`;
@@ -375,21 +480,32 @@ function methodNode(info: ClassInfo, method: MethodDeclaration): GraphNode {
   };
 }
 
-function getConstructorTypes(declaration: ClassDeclaration): Map<string, string> {
-  const result = new Map<string, string>();
+function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "constructorTypes" | "repositoryEntities"> {
+  const constructorTypes = new Map<string, string>();
+  const repositoryEntities = new Map<string, string>();
   for (const constructor of declaration.getConstructors()) {
     for (const parameter of constructor.getParameters()) {
-      result.set(parameter.getName(), simpleType(parameter.getTypeNode()?.getText() ?? parameter.getType().getText()));
+      const repositoryDecorator = parameter.getDecorator("InjectRepository");
+      const repositoryEntity = repositoryDecorator?.getArguments()[0]?.getText().match(/[A-Z][A-Za-z0-9_$]*/)?.[0];
+      if (repositoryEntity) {
+        const repositoryName = `${repositoryEntity}Repository`;
+        constructorTypes.set(parameter.getName(), repositoryName);
+        repositoryEntities.set(parameter.getName(), repositoryEntity);
+        continue;
+      }
+      const injectDecorator = parameter.getDecorator("Inject");
+      const token = injectDecorator?.getArguments()[0]?.getText().replace(/^['"`]|['"`]$/g, "");
+      constructorTypes.set(parameter.getName(), token || simpleType(parameter.getTypeNode()?.getText() ?? parameter.getType().getText()));
     }
   }
-  return result;
+  return { constructorTypes, repositoryEntities };
 }
 
 function ensureClass(name: string, classes: Map<string, ClassInfo>, file: string, addNode: NodeAdder, fallbackType: GraphNodeType = "provider") {
   const existing = classes.get(name);
   if (existing) return existing;
   const type = inferType(name, fallbackType);
-  const inferred = { name, id: `${type}:${name}`, type, file, declaration: undefined as unknown as ClassDeclaration, constructorTypes: new Map<string, string>() };
+  const inferred = { name, id: `${type}:${name}`, type, file, declaration: undefined as unknown as ClassDeclaration, constructorTypes: new Map<string, string>(), repositoryEntities: new Map<string, string>() };
   addNode({ id: inferred.id, type, label: name, name, file, framework: "nestjs", language: "typescript", confidence: 0.7, source: "heuristic" });
   return inferred;
 }
@@ -434,8 +550,8 @@ function decoratorString(decorator?: Decorator): string {
   return argument.getText().replace(/^['"`]|['"`]$/g, "");
 }
 
-function joinRoute(prefix: string, path: string): string {
-  const joined = `/${prefix}/${path}`.replace(/\/+/g, "/");
+function joinRoute(...parts: string[]): string {
+  const joined = `/${parts.join("/")}`.replace(/\/+/g, "/");
   return joined.length > 1 && joined.endsWith("/") ? joined.slice(0, -1) : joined;
 }
 
@@ -457,6 +573,126 @@ function trimSource(source: string): string {
 
 function isTestFile(file: string): boolean {
   return /\.(spec|test)\.[jt]s$/.test(file);
+}
+
+function dtoFields(declaration: ClassDeclaration) {
+  return declaration.getProperties().map((property) => ({
+    name: property.getName(),
+    type: property.getTypeNode()?.getText() ?? property.getType().getText(property),
+    optional: property.hasQuestionToken(),
+    validators: property.getDecorators().map((decorator) => decorator.getName()),
+  }));
+}
+
+function parseFunctions(sourceFile: SourceFile, file: string, addNode: NodeAdder, addEdge: EdgeAdder) {
+  for (const declaration of sourceFile.getFunctions()) {
+    const name = declaration.getName();
+    if (!name) continue;
+    const id = `function:${file}:${name}`;
+    addNode(functionNode(declaration, id, file));
+    addEdge(`file:${file}`, id, "declares");
+    if (isCustomDecorator(declaration.getText())) addDecoratorNode(name, file, declaration, addNode, addEdge);
+  }
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const name = declaration.getName();
+    if (!isCustomDecorator(declaration.getInitializer()?.getText() ?? "")) continue;
+    addDecoratorNode(name, file, declaration, addNode, addEdge);
+  }
+}
+
+function isCustomDecorator(text: string): boolean {
+  return /\b(?:createParamDecorator|SetMetadata|applyDecorators)\s*\(/.test(text);
+}
+
+function addDecoratorNode(name: string, file: string, declaration: Node, addNode: NodeAdder, addEdge: EdgeAdder) {
+  const id = `decorator:${name}`;
+  addNode({
+    id, type: "decorator", label: name, name, file, language: "typescript", framework: "nestjs",
+    source: "ast", confidence: 1, sourceLocation: location(file, declaration),
+    metadata: { sourcePreview: trimSource(declaration.getText()) },
+  });
+  addEdge(`file:${file}`, id, "declares");
+}
+
+function functionNode(declaration: FunctionDeclaration, id: string, file: string): GraphNode {
+  return {
+    id, type: "function", label: declaration.getName() ?? "anonymous", name: declaration.getName(), file,
+    language: "typescript", source: "ast", confidence: 1, sourceLocation: location(file, declaration),
+    metadata: {
+      parameters: declaration.getParameters().map((parameter) => ({ name: parameter.getName(), type: parameter.getTypeNode()?.getText() ?? "unknown" })),
+      returnType: declaration.getReturnTypeNode()?.getText() ?? declaration.getReturnType().getText(declaration),
+      sourcePreview: trimSource(declaration.getText()),
+    },
+  };
+}
+
+function findGlobalPrefix(sourceFiles: SourceFile[]): string {
+  for (const sourceFile of sourceFiles) {
+    for (const match of sourceFile.getText().matchAll(/\.setGlobalPrefix\(\s*['"`]([^'"`]+)['"`]/g)) return match[1];
+  }
+  return "";
+}
+
+function parseBootstrapGlobals(sourceFile: SourceFile, file: string, classes: Map<string, ClassInfo>, addNode: NodeAdder, addEdge: EdgeAdder) {
+  const globals: Record<string, GraphNodeType> = {
+    useGlobalGuards: "guard", useGlobalPipes: "pipe", useGlobalInterceptors: "interceptor", use: "middleware",
+  };
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const method = call.getExpression().getText().split(".").at(-1) ?? "";
+    const type = globals[method];
+    if (!type) continue;
+    for (const argument of call.getArguments()) {
+      const name = argument.getText().match(/[A-Z][A-Za-z0-9_$]*/)?.[0];
+      if (!name) continue;
+      const target = ensureClass(name, classes, file, addNode, type);
+      addEdge("project:root", target.id, "decorates", { global: true, bootstrapMethod: method });
+    }
+  }
+}
+
+function parseMiddlewareConfiguration(info: ClassInfo, classes: Map<string, ClassInfo>, addNode: NodeAdder, addEdge: EdgeAdder) {
+  if (info.type !== "module") return;
+  for (const method of info.declaration.getMethods()) {
+    for (const call of method.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      if (!call.getExpression().getText().endsWith(".apply")) continue;
+      for (const argument of call.getArguments()) {
+        const name = argument.getText().match(/[A-Z][A-Za-z0-9_$]*/)?.[0];
+        if (!name) continue;
+        const target = ensureClass(name, classes, info.file, addNode, "middleware");
+        addEdge(info.id, target.id, "uses", { via: "MiddlewareConsumer.apply" });
+      }
+    }
+  }
+}
+
+function importedPackageName(specifier: string): string | null {
+  if (specifier.startsWith(".") || specifier.startsWith("/") || specifier.startsWith("node:")) return null;
+  const parts = specifier.split("/");
+  return specifier.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
+}
+
+function cleanToken(value: string): string {
+  const unquoted = value.replace(/^['"`]|['"`]$/g, "");
+  return unquoted.replace(/[^A-Za-z0-9_.$:@/-]+/g, "_").replace(/^_+|_+$/g, "") || "provider";
+}
+
+function referencedTypeNames(value: string): string[] {
+  const ignored = new Set(["Promise", "Array", "Record", "Partial", "Readonly", "Observable", "String", "Number", "Boolean", "Date"]);
+  return [...new Set(value.match(/[A-Z][A-Za-z0-9_$]*/g) ?? [])].filter((name) => !ignored.has(name));
+}
+
+function isExternalHttpCall(expression: string, info: ClassInfo): boolean {
+  if (/^(fetch|axios(?:\.[A-Za-z_$][\w$]*)?|got(?:\.[A-Za-z_$][\w$]*)?|request(?:\.[A-Za-z_$][\w$]*)?)$/.test(expression)) return true;
+  const member = expression.match(/^this\.([A-Za-z_$][\w$]*)\.(get|post|put|patch|delete|request|head|options)$/i);
+  if (!member) return false;
+  const dependencyType = info.constructorTypes.get(member[1]) ?? "";
+  return /HttpService|HttpClient|Axios|Got|Request/i.test(dependencyType) || /(http|api|client)/i.test(member[1]);
+}
+
+function tableForEntity(entityName: string, classes: Map<string, ClassInfo>): { id: string; name: string } {
+  const entity = classes.get(entityName);
+  const tableName = entity?.type === "entity" ? (decoratorString(entity.declaration.getDecorator("Entity")) || entityName) : entityName;
+  return { id: `table:${tableName}`, name: tableName };
 }
 
 type NodeAdder = (node: GraphNode) => void;

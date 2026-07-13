@@ -119,10 +119,30 @@ export interface GraphSubgraph {
   edges: GraphEdge[];
 }
 
+export interface GraphSearchResult {
+  node: GraphNode;
+  score: number;
+  matches: string[];
+}
+
+export type ScanProgressStage =
+  | "scan_files"
+  | "detect_stack"
+  | "parse_architecture"
+  | "build_graph"
+  | "detect_risks"
+  | "write_outputs";
+
+export interface ScanProgress {
+  stage: ScanProgressStage;
+  message: string;
+}
+
 export interface ScanOptions {
   projectPath: string;
   outputPath?: string;
   debug?: boolean;
+  onProgress?: (progress: ScanProgress) => void;
 }
 
 export interface ScanResult {

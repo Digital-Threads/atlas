@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, stat } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { Script } from "node:vm";
@@ -13,42 +14,117 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fixture = resolve(here, "fixtures/nest-app");
 const cli = resolve(here, "../dist/cli/index.js");
 
-test("scans a NestJS project and produces queryable outputs", async () => {
+test("covers the complete NestJS MVP architecture surface", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "atlas-test-"));
   const project = resolve(root, "project");
   await cp(fixture, project, { recursive: true });
-
-  const result = await scanProject({ projectPath: project });
+  const progress = [];
+  const result = await scanProject({ projectPath: project, onProgress: (event) => progress.push(event.stage) });
   const query = new GraphQuery(result.graph);
 
   assert.equal(result.metadata.detectedStacks[0]?.name, "nestjs");
   assert.ok(result.metadata.detectedStacks[0]?.confidence >= 0.8);
-  for (const id of [
-    "module:AppModule", "controller:UsersController", "service:UsersService",
-    "dto:CreateUserDto", "route:POST:/users", "method:UsersController.create",
-    "table:User", "environment_variable:EXAMPLE_API_KEY", "external_api:api.example.com",
-  ]) assert.ok(query.getNode(id), `missing node ${id}`);
+  assert.deepEqual([...new Set(progress)], ["scan_files", "detect_stack", "parse_architecture", "build_graph", "detect_risks", "write_outputs"]);
 
-  const flow = query.findFlowFromRoute("route:POST:/users");
-  assert.ok(flow.nodes.some((node) => node.id === "method:UsersService.create"));
-  assert.ok(flow.nodes.some((node) => node.id === "table:User"));
+  const requiredNodes = [
+    "project:root", "package:root", "config:nest-cli.json", "module:AppModule",
+    "controller:UsersController", "service:UsersService", "service:AuditService", "service:PrismaService",
+    "dto:CreateUserDto", "guard:AuthGuard", "pipe:RequestValidationPipe", "pipe:ValidationPipe",
+    "interceptor:AuditInterceptor", "middleware:LoggerMiddleware", "provider:MAILER",
+    "decorator:CurrentUser",
+    "function:src/main.ts:bootstrap", "route:POST:/api/users", "route:GET:/api/users",
+    "method:UsersController.create", "method:UsersService.create", "method:PrismaService.user.create",
+    "database:prisma", "model:User", "table:User", "table:Post", "column:User.email",
+    "database:typeorm", "entity:UserEntity", "repository:UserEntityRepository",
+    "table:typeorm_users", "method:UserEntityRepository.find", "method:UserEntityRepository.save",
+    "environment_variable:EXAMPLE_API_KEY", "environment_variable:AUDIT_API_URL",
+    "external_api:api.example.com", "external_api:unknown:AUDIT_API_URL", "test:src/users.service.spec.ts",
+    "library:@nestjs/core", "library:typeorm",
+  ];
+  for (const id of requiredNodes) assert.ok(query.getNode(id), `missing node ${id}`);
+
+  for (const method of ["ALL", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]) {
+    assert.ok(query.findRoutes().some((route) => route.metadata?.httpMethod === method), `missing ${method} route`);
+  }
+  assert.equal(query.findControllers().length, 1);
+  assert.ok(query.findServices().length >= 3);
+  assert.equal(query.findRoutes().length, 8);
+
+  const dto = query.getNode("dto:CreateUserDto");
+  assert.deepEqual(dto.metadata.fields.map((field) => field.name), ["email", "name"]);
+  assert.deepEqual(dto.metadata.fields[0].validators, ["IsEmail"]);
+  assert.ok(dto.metadata.fields[1].validators.includes("IsOptional"));
+
+  const packageNode = query.getNode("package:root");
+  assert.equal(packageNode.metadata.scripts.start, "nest start");
+  assert.ok(result.graph.edges.some((edge) => edge.from === "file:src/audit.service.ts" && edge.to === "library:@nestjs/typeorm" && edge.type === "imports"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "module:AppModule" && edge.to === "middleware:LoggerMiddleware" && edge.type === "uses"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "project:root" && edge.to === "pipe:ValidationPipe" && edge.type === "decorates"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "table:User" && edge.to === "table:Post" && edge.metadata?.relation === "has_many"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "table:typeorm_users" && edge.to === "table:typeorm_posts" && edge.type === "references"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:UserEntityRepository.find" && edge.to === "table:typeorm_users" && edge.type === "reads"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:UserEntityRepository.save" && edge.to === "table:typeorm_users" && edge.type === "writes"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "environment_variable:AUDIT_API_URL" && edge.to === "external_api:unknown:AUDIT_API_URL" && edge.type === "connects_to"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "test:src/users.service.spec.ts" && edge.to === "service:UsersService" && edge.type === "tests"));
 
+  const createFlow = query.findFlowFromRoute("route:POST:/api/users");
+  for (const id of ["method:UsersController.create", "method:UsersService.create", "method:PrismaService.user.create", "table:User"]) {
+    assert.ok(createFlow.nodes.some((node) => node.id === id), `flow is missing ${id}`);
+  }
+  assert.ok(createFlow.edges.some((edge) => edge.from === "method:PrismaService.user.create" && edge.to === "table:User" && edge.type === "writes"));
+  assert.ok(query.getNeighbors("service:UsersService", 1).nodes.some((node) => node.id === "controller:UsersController"));
+  assert.equal(query.search("UsersService")[0].node.id, "service:UsersService");
+  assert.ok(query.search("UsersService")[0].matches.includes("label"));
+
   const serialized = JSON.stringify(result.graph);
-  assert.doesNotMatch(serialized, /secret-password|never-store-this-value/);
-  for (const path of ["graph.json", "metadata.json", "risks.json", "report.md", "viewer/index.html", "viewer/app.js", "viewer/cytoscape.min.js", "viewer/graph.json"]) {
+  assert.doesNotMatch(serialized, /secret-password|never-store-this-value|private\.example\.test/);
+  const envFileNode = query.getNode("file:.env");
+  assert.equal(envFileNode.metadata.sensitive, true);
+  assert.equal(envFileNode.metadata.hash, undefined);
+  assert.equal(envFileNode.metadata.size, undefined);
+
+  for (const path of ["graph.json", "metadata.json", "risks.json", "report.md", "viewer/index.html", "viewer/app.js", "viewer/style.css", "viewer/cytoscape.min.js", "viewer/graph.json"]) {
     assert.ok((await stat(resolve(project, ".atlas", path))).isFile(), `missing output ${path}`);
   }
   const report = await readFile(resolve(project, ".atlas/report.md"), "utf8");
-  assert.match(report, /POST \/users/);
+  assert.match(report, /POST \/api\/users/);
+  assert.match(report, /Database Models and Tables/);
+  assert.doesNotMatch(report, /never-store-this-value|private\.example\.test/);
+
   const viewerApp = await readFile(resolve(project, ".atlas/viewer/app.js"), "utf8");
   const viewerHtml = await readFile(resolve(project, ".atlas/viewer/index.html"), "utf8");
   const viewerCss = await readFile(resolve(project, ".atlas/viewer/style.css"), "utf8");
   assert.doesNotThrow(() => new Script(viewerApp));
-  assert.match(viewerApp, /source:edge\.from, target:edge\.to/);
+  assert.match(viewerApp, /source:edge\.from,target:edge\.to/);
+  assert.match(viewerApp, /Dependencies/);
+  assert.match(viewerApp, /data-tab="source"/);
   assert.match(viewerCss, /#empty\[hidden\]\{display:none\}/);
+  assert.match(viewerCss, /\.search-results\[hidden\]\{display:none\}/);
   assert.match(viewerHtml, /src="cytoscape\.min\.js"/);
   assert.doesNotMatch(viewerHtml, /https?:\/\//);
+
+  const cliScan = spawnSync(process.execPath, [cli, "scan", "--path", project], { encoding: "utf8" });
+  assert.equal(cliScan.status, 0, cliScan.stderr);
+  assert.match(cliScan.stdout, /Scanning files\.\.\.[\s\S]*NestJS detected[\s\S]*Graph created:[\s\S]*Done/);
+
+  await writeFile(resolve(project, ".atlas/report.md"), "stale report\n");
+  const cliReport = spawnSync(process.execPath, [cli, "report", "--path", project], { encoding: "utf8" });
+  assert.equal(cliReport.status, 0, cliReport.stderr);
+  assert.match(await readFile(resolve(project, ".atlas/report.md"), "utf8"), /Atlas Architecture Report/);
+
+  const port = 44000 + (process.pid % 1000);
+  const viewerServer = spawn(process.execPath, [cli, "serve", "--path", project, "--port", String(port)], { stdio: ["ignore", "pipe", "pipe"] });
+  await waitForOutput(viewerServer, `http://localhost:${port}`);
+  try {
+    const indexResponse = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(indexResponse.status, 200);
+    assert.match(indexResponse.headers.get("content-type") ?? "", /text\/html/);
+    assert.match(await indexResponse.text(), /Atlas Architecture Map/);
+    const traversalResponse = await fetch(`http://127.0.0.1:${port}/%2e%2e/%2e%2e/package.json`);
+    assert.notEqual(traversalResponse.status, 200);
+  } finally {
+    viewerServer.kill();
+  }
 
   const transport = new StdioClientTransport({ command: process.execPath, args: [cli, "mcp", "--path", project], stderr: "pipe" });
   const client = new Client({ name: "atlas-test", version: "1.0.0" });
@@ -56,18 +132,85 @@ test("scans a NestJS project and produces queryable outputs", async () => {
   try {
     const tools = await client.listTools();
     assert.equal(tools.tools.length, 10);
-    assert.ok(tools.tools.some((tool) => tool.name === "atlas_find_routes"));
-    const response = await client.callTool({ name: "atlas_find_routes", arguments: {} });
-    assert.match(JSON.stringify(response), /POST \/users/);
+    for (const name of ["atlas_find_node", "atlas_get_node", "atlas_get_dependencies", "atlas_get_dependents", "atlas_find_routes", "atlas_find_flow", "atlas_find_tables", "atlas_find_external_apis", "atlas_search", "atlas_project_summary"]) {
+      assert.ok(tools.tools.some((tool) => tool.name === name), `missing MCP tool ${name}`);
+    }
+    const routes = await client.callTool({ name: "atlas_find_routes", arguments: {} });
+    assert.match(JSON.stringify(routes), /POST \/api\/users/);
+    const flow = await client.callTool({ name: "atlas_find_flow", arguments: { query: "POST /api/users" } });
+    assert.match(JSON.stringify(flow), /PrismaService\.user\.create/);
+    const dependencies = await client.callTool({ name: "atlas_get_dependencies", arguments: { id: "service:UsersService", depth: 3 } });
+    assert.match(JSON.stringify(dependencies), /table:User/);
+    const nodeSearch = await client.callTool({ name: "atlas_find_node", arguments: { query: "UsersService" } });
+    assert.match(JSON.stringify(nodeSearch), /service:UsersService/);
+    const nodeDetails = await client.callTool({ name: "atlas_get_node", arguments: { id: "service:UsersService" } });
+    assert.match(JSON.stringify(nodeDetails), /method:UsersService\.create/);
+    const dependents = await client.callTool({ name: "atlas_get_dependents", arguments: { id: "service:UsersService", depth: 2 } });
+    assert.match(JSON.stringify(dependents), /controller:UsersController/);
+    const tables = await client.callTool({ name: "atlas_find_tables", arguments: {} });
+    assert.match(JSON.stringify(tables), /table:User/);
+    const externalApis = await client.callTool({ name: "atlas_find_external_apis", arguments: {} });
+    assert.match(JSON.stringify(externalApis), /api\.example\.com/);
+    const search = await client.callTool({ name: "atlas_search", arguments: { query: "CreateUserDto" } });
+    assert.match(JSON.stringify(search), /dto:CreateUserDto/);
+    const summary = await client.callTool({ name: "atlas_project_summary", arguments: {} });
+    assert.match(JSON.stringify(summary), /atlas-nest-fixture/);
   } finally {
     await client.close();
   }
 });
 
-test("identifies Atlas as a Digital Threads package", async () => {
+function waitForOutput(child, expected) {
+  return new Promise((resolvePromise, reject) => {
+    let output = "";
+    const timer = setTimeout(() => reject(new Error(`Timed out waiting for server output: ${output}`)), 10_000);
+    const inspect = (chunk) => {
+      output += chunk.toString();
+      if (!output.includes(expected)) return;
+      clearTimeout(timer);
+      resolvePromise();
+    };
+    child.stdout.on("data", inspect);
+    child.stderr.on("data", inspect);
+    child.once("exit", (code) => {
+      if (!output.includes(expected)) {
+        clearTimeout(timer);
+        reject(new Error(`Viewer server exited with ${code}: ${output}`));
+      }
+    });
+  });
+}
+
+test("handles unsupported projects and sensitive files without crashing or leaking values", async () => {
+  const project = await mkdtemp(resolve(tmpdir(), "atlas-plain-"));
+  await mkdir(resolve(project, "src"), { recursive: true });
+  await mkdir(resolve(project, "node_modules/hidden"), { recursive: true });
+  await writeFile(resolve(project, "package.json"), JSON.stringify({ name: "plain-typescript" }));
+  await writeFile(resolve(project, "src/index.ts"), "export const value = 1;\n");
+  await writeFile(resolve(project, ".env"), "JWT_SECRET=do-not-store-this\n");
+  await writeFile(resolve(project, "private.pem"), "PRIVATE KEY VALUE\n");
+  await writeFile(resolve(project, "node_modules/hidden/secret.ts"), "export const secret = 'hidden';\n");
+
+  const result = await scanProject({ projectPath: project });
+  assert.equal(result.metadata.detectedStacks.length, 0);
+  assert.ok(result.graph.nodes.some((node) => node.id === "project:root"));
+  const serialized = JSON.stringify(result.graph);
+  assert.doesNotMatch(serialized, /do-not-store-this|PRIVATE KEY VALUE|node_modules\/hidden/);
+  const report = await readFile(resolve(project, ".atlas/report.md"), "utf8");
+  assert.match(report, /No supported framework architecture was detected/);
+});
+
+test("rejects unsupported output formats with a clear CLI error", () => {
+  const execution = spawnSync(process.execPath, [cli, "scan", "--path", fixture, "--format", "yaml"], { encoding: "utf8" });
+  assert.equal(execution.status, 1);
+  assert.match(execution.stderr, /Unsupported format: yaml\. Use json\./);
+});
+
+test("identifies Atlas as a publishable Digital Threads package", async () => {
   const packageJson = JSON.parse(await readFile(resolve(here, "../package.json"), "utf8"));
   assert.equal(packageJson.name, "@dthreads/atlas");
   assert.equal(packageJson.bin.atlas, "./dist/cli/index.js");
   assert.equal(packageJson.author, "Digital Threads");
   assert.equal(packageJson.license, "MIT");
+  assert.equal(packageJson.private, false);
 });

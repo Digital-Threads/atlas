@@ -13,8 +13,16 @@ export interface AdapterResult {
   warnings: string[];
 }
 
+export interface AdapterDetectionResult {
+  detected: boolean;
+  confidence: number;
+  evidence: string[];
+}
+
 export interface ArchitectureAdapter {
   readonly name: string;
-  detect(context: AdapterContext): Promise<boolean>;
+  detect(context: AdapterContext): Promise<AdapterDetectionResult>;
   scan(context: AdapterContext): Promise<AdapterResult>;
+  buildNodes(result: AdapterResult): Promise<GraphNode[]>;
+  buildEdges(result: AdapterResult): Promise<AdapterResult["edges"]>;
 }
