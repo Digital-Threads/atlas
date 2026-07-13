@@ -491,6 +491,7 @@ a:focus-visible {
 }
 
 .explorer {
+  min-width: 0;
   height: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -498,12 +499,14 @@ a:focus-visible {
 }
 
 .explorer-header {
+  min-width: 0;
   min-height: 76px;
   padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
+  overflow: hidden;
   border-bottom: 1px solid var(--line);
 }
 
@@ -514,6 +517,7 @@ a:focus-visible {
 }
 
 .type-filters {
+  min-width: 0;
   max-width: 62%;
   display: flex;
   align-items: center;
@@ -555,7 +559,9 @@ a:focus-visible {
 }
 
 .explorer-grid {
+  width: 100%;
   min-height: 0;
+  min-width: 0;
   display: grid;
   grid-template-columns: 282px minmax(0, 1fr);
 }
@@ -566,6 +572,18 @@ a:focus-visible {
 
 .app-shell.details-open .explorer-grid {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell.map-mode .catalog {
+  display: none;
+}
+
+.app-shell.map-mode .explorer-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell.map-mode .explorer-header {
+  min-height: 64px;
 }
 
 .catalog {
@@ -1119,6 +1137,10 @@ export const viewerLayoutCss = `
   .explorer-grid {
     grid-template-columns: 1fr;
     grid-template-rows: 154px minmax(0, 1fr);
+  }
+
+  .app-shell.map-mode .explorer-grid {
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .catalog,
