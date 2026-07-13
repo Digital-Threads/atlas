@@ -1,47 +1,119 @@
 # Atlas
 
-Atlas is an architecture intelligence project for NestJS codebases. Its goal is
-to turn static analysis into an explorable graph of modules, routes, services,
-database access, external APIs, tests, and architectural risks.
+Architecture intelligence for NestJS codebases, maintained by
+[Digital Threads](https://github.com/Digital-Threads).
 
-This repository currently contains the public Atlas product website. The CLI
-scanner, graph generator, interactive viewer, and MCP server described on the
-site are the next implementation milestones and are not yet available in this
-repository.
+Atlas is designed to answer the questions that are usually expensive to answer
+in an unfamiliar backend:
 
-## Product principles
+- Which route calls which controller and service?
+- Where does a request read or write data?
+- Which modules depend on each other?
+- Which environment variables and external APIs are involved?
+- Where are the missing tests, circular dependencies, and risky shortcuts?
 
-- Static analysis first.
-- The graph is the source of truth.
-- AI explains evidence from the graph instead of inventing architecture.
-- Source code and generated artifacts stay local by default.
+Atlas will scan a NestJS project locally, build a typed architecture graph, and
+open that graph in a searchable browser interface. The graph is the source of
+truth; optional AI features explain evidence already present in the graph
+instead of guessing how the code works.
 
-## Local development
+## Current status
 
-Requirements: Node.js 22.13 or newer.
+Atlas is in early development. This repository currently contains the public
+product website and the technical direction for the project. The scanner, CLI,
+interactive graph viewer, and MCP server are not yet published as an npm
+package.
+
+You can run and contribute to the website today. The Atlas codebase scanner is
+still being built.
+
+## First release scope
+
+- NestJS modules, controllers, services, providers, DTOs, guards, pipes, and
+  interceptors.
+- HTTP routes, including controller prefixes and handler methods.
+- Dependency injection and method-call relationships.
+- Prisma models, TypeORM entities, environment variables, external APIs, and
+  test relationships.
+- Risk reports for circular imports, missing tests, direct database access,
+  incomplete route flows, and oversized services.
+- Local JSON and Markdown reports plus a static graph viewer.
+- MCP tools for querying the generated graph from compatible developer tools.
+
+## Run the website locally
+
+### Requirements
+
+- Node.js 22.13 or newer.
+- npm 10 or newer.
+
+### Installation
 
 ```bash
+git clone https://github.com/Digital-Threads/atlas.git
+cd atlas
 npm install
+```
+
+### Development server
+
+```bash
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Verification
+### Production build
+
+```bash
+npm run build
+npm start
+```
+
+## Verify changes
+
+Run all local checks before opening a pull request:
+
+```bash
+npm run check
+```
+
+This runs ESLint, project tests, and a production Next.js build. Each check can
+also be run separately:
 
 ```bash
 npm run lint
-npm run build
 npm test
+npm run build
 ```
 
-## Project status
+## Planned CLI usage
 
-Atlas is at the public product-prototype stage. The website communicates the
-planned MVP, while implementation of the scanner and graph tooling is still in
-progress.
+The npm package is **not yet published**. Once the first scanner release is
+ready, the intended workflow will look like this:
 
-## License
+```bash
+npx @dthreads/atlas scan ./path/to/nest-project
+npx @dthreads/atlas view ./path/to/nest-project
+```
 
-No open-source license has been selected yet. Until a license is added, the
-source is publicly visible but normal copyright rules apply.
+The scan will create a local `.atlas` directory containing the graph, metadata,
+risk report, Markdown summary, and static viewer. Source code will remain local
+by default.
+
+## Repository structure
+
+```text
+app/       Next.js website and styles
+public/    Static assets
+tests/     Project-level tests
+```
+
+## Contributing
+
+Issues and pull requests are welcome. Describe the problem being solved, keep
+changes focused, and run `npm run check` before submitting a pull request.
+
+## Ownership
+
+Atlas is developed and maintained by Digital Threads.

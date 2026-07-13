@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Atlas - Architecture Intelligence Engine",
+  title: "Architecture Intelligence Engine",
   description:
     "A local architecture intelligence engine for NestJS projects that turns static analysis into an explorable codebase graph.",
 };

@@ -13,9 +13,6 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    "https://atlas-architecture-intelligence.shahinyanm.chatgpt.site",
-  ),
   title: {
     default: "Atlas - Architecture Intelligence Engine",
     template: "%s | Atlas",
