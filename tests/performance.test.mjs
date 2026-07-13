@@ -1,0 +1,52 @@
+import assert from "node:assert/strict";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { performance } from "node:perf_hooks";
+import test from "node:test";
+import cytoscape from "cytoscape";
+import { scanProject } from "../dist/index.js";
+
+test("scans the documented upper-bound NestJS fixture in under 30 seconds", async () => {
+  const project = await mkdtemp(resolve(tmpdir(), "atlas-scale-"));
+  const src = resolve(project, "src");
+  await mkdir(src, { recursive: true });
+  await writeFile(resolve(project, "package.json"), JSON.stringify({ name: "atlas-scale", dependencies: { "@nestjs/common": "11.0.0", "@nestjs/core": "11.0.0" } }));
+  await writeFile(resolve(project, "tsconfig.json"), JSON.stringify({ compilerOptions: { experimentalDecorators: true } }));
+  await writeFile(resolve(src, "app.module.ts"), "import { Module } from '@nestjs/common'; @Module({}) export class AppModule {}\n");
+
+  const writes = [];
+  for (let index = 0; index < 100; index += 1) {
+    const methods = Array.from({ length: 10 }, (_, method) => "@Get('r" + method + "') route" + method + "() { return " + method + "; }").join("\n");
+    writes.push(writeFile(resolve(src, "controller-" + index + ".ts"), "import { Controller, Get } from '@nestjs/common'; @Controller('c" + index + "') export class Controller" + index + " { " + methods + " }\n"));
+  }
+  for (let index = 0; index < 300; index += 1) {
+    writes.push(writeFile(resolve(src, "service-" + index + ".ts"), "import { Injectable } from '@nestjs/common'; @Injectable() export class Service" + index + "Service { first(){} second(){} }\n"));
+  }
+  for (let index = 0; index < 599; index += 1) writes.push(writeFile(resolve(src, "file-" + index + ".ts"), "export const value" + index + " = " + index + ";\n"));
+  await Promise.all(writes);
+
+  const started = performance.now();
+  const result = await scanProject({ projectPath: project });
+  const duration = performance.now() - started;
+  assert.ok(duration < 30_000, `scan took ${Math.round(duration)}ms`);
+  assert.equal(result.graph.stats.byNodeType.controller, 100);
+  assert.equal(result.graph.stats.byNodeType.service, 300);
+  assert.equal(result.graph.stats.byNodeType.route, 1000);
+  assert.ok(result.graph.stats.totalNodes >= 4000);
+
+  const parseStarted = performance.now();
+  JSON.parse(await readFile(resolve(project, ".atlas/viewer/graph.json"), "utf8"));
+  assert.ok(performance.now() - parseStarted < 3000, "viewer graph JSON should parse in under 3 seconds");
+
+  const elements = [];
+  for (let index = 0; index < 5000; index += 1) {
+    elements.push({ data: { id: `node-${index}`, label: `Node ${index}` }, position: { x: index % 100, y: Math.floor(index / 100) } });
+    if (index > 0) elements.push({ data: { id: `edge-${index}`, source: `node-${index - 1}`, target: `node-${index}` } });
+  }
+  const viewerStarted = performance.now();
+  const cy = cytoscape({ headless: true, elements, layout: { name: "preset" } });
+  assert.equal(cy.nodes().length, 5000);
+  assert.ok(performance.now() - viewerStarted < 3000, "Cytoscape should initialize a 5,000-node graph in under 3 seconds");
+  cy.destroy();
+});
