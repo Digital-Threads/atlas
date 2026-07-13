@@ -641,12 +641,13 @@ function findGlobalPrefix(sourceFiles: SourceFile[]): string {
 }
 
 function parseBootstrapGlobals(sourceFile: SourceFile, file: string, classes: Map<string, ClassInfo>, addNode: NodeAdder, addEdge: EdgeAdder) {
-  const globals: Record<string, GraphNodeType> = {
-    useGlobalGuards: "guard", useGlobalPipes: "pipe", useGlobalInterceptors: "interceptor", use: "middleware",
-  };
+  const globals = new Map<string, GraphNodeType>([
+    ["useGlobalGuards", "guard"], ["useGlobalPipes", "pipe"],
+    ["useGlobalInterceptors", "interceptor"], ["use", "middleware"],
+  ]);
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const method = call.getExpression().getText().split(".").at(-1) ?? "";
-    const type = globals[method];
+    const type = globals.get(method);
     if (!type) continue;
     for (const argument of call.getArguments()) {
       const name = argument.getText().match(/[A-Z][A-Za-z0-9_$]*/)?.[0];
