@@ -86,6 +86,11 @@ relative to the project root. Use `--debug` to print non-fatal analyzer warnings
 When you choose a custom output directory, pass the same `--output` value to
 `open`, `serve`, `report`, and `mcp`.
 
+The scanner respects rules from the project's root `.gitignore`. It also skips
+dependencies, generated output, caches, temporary directories, Git worktrees,
+symbolic links, and its own output directory. Nested `.gitignore` files are not
+currently evaluated separately.
+
 ### `atlas open`
 
 Opens `<project>/.atlas/viewer/index.html` in the default browser.

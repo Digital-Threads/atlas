@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 import { NestAdapter } from "./adapters/nest-adapter.js";
 import { GraphBuilder } from "./core/graph.js";
 import type { ArchitectureGraph, ArchitectureRisk, ScanOptions, ScanResult } from "./core/types.js";
@@ -15,6 +15,8 @@ export { detectRisks } from "./risks/risk-detector.js";
 export { generateReport } from "./output/report.js";
 export { getBrowserLaunch, openBrowser } from "./server/open-browser.js";
 export { serveViewer } from "./server/viewer-server.js";
+export { scanFiles } from "./scanner/file-scanner.js";
+export type { FileScanOptions, FileScanResult } from "./scanner/file-scanner.js";
 
 export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const started = Date.now();
@@ -23,8 +25,10 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const packageJson = await readJson(resolve(projectRoot, "package.json"));
   const projectName = String(packageJson?.name ?? basename(projectRoot));
   const outputPath = resolve(projectRoot, options.outputPath ?? ".atlas");
+  const relativeOutput = relative(projectRoot, outputPath).replaceAll("\\", "/");
+  const ignoredPaths = relativeOutput && relativeOutput !== "." && !relativeOutput.startsWith("../") ? [relativeOutput] : [];
   options.onProgress?.({ stage: "scan_files", message: "Scanning files..." });
-  const fileScan = await scanFiles(projectRoot);
+  const fileScan = await scanFiles(projectRoot, { ignoredPaths });
   options.onProgress?.({ stage: "scan_files", message: `${fileScan.files.length} files found` });
   options.onProgress?.({ stage: "detect_stack", message: "Detecting project stack..." });
   const detectedStacks = await detectStacks(projectRoot, fileScan.files);

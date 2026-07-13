@@ -8,7 +8,7 @@ import test from "node:test";
 import { Script } from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { GraphQuery, loadGraph, scanProject } from "../dist/index.js";
+import { GraphQuery, loadGraph, scanFiles, scanProject } from "../dist/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = resolve(here, "fixtures/nest-app");
@@ -185,17 +185,24 @@ test("handles unsupported projects and sensitive files without crashing or leaki
   const project = await mkdtemp(resolve(tmpdir(), "atlas-plain-"));
   await mkdir(resolve(project, "src"), { recursive: true });
   await mkdir(resolve(project, "node_modules/hidden"), { recursive: true });
+  await mkdir(resolve(project, ".worktrees/feature/src"), { recursive: true });
+  await mkdir(resolve(project, "generated/cache"), { recursive: true });
   await writeFile(resolve(project, "package.json"), JSON.stringify({ name: "plain-typescript" }));
+  await writeFile(resolve(project, ".gitignore"), "generated/\n");
   await writeFile(resolve(project, "src/index.ts"), "export const value = 1;\n");
   await writeFile(resolve(project, ".env"), "JWT_SECRET=do-not-store-this\n");
   await writeFile(resolve(project, "private.pem"), "PRIVATE KEY VALUE\n");
   await writeFile(resolve(project, "node_modules/hidden/secret.ts"), "export const secret = 'hidden';\n");
+  await writeFile(resolve(project, ".worktrees/feature/src/ignored.ts"), "export const worktree = true;\n");
+  await writeFile(resolve(project, "generated/cache/ignored.js"), "export const generated = true;\n");
 
   const result = await scanProject({ projectPath: project });
   assert.equal(result.metadata.detectedStacks.length, 0);
   assert.ok(result.graph.nodes.some((node) => node.id === "project:root"));
   const serialized = JSON.stringify(result.graph);
-  assert.doesNotMatch(serialized, /do-not-store-this|PRIVATE KEY VALUE|node_modules\/hidden/);
+  assert.doesNotMatch(serialized, /do-not-store-this|PRIVATE KEY VALUE|node_modules\/hidden|\.worktrees|generated\/cache/);
+  const fileScan = await scanFiles(project);
+  assert.deepEqual(fileScan.files.map((file) => file.path).sort(), [".env", "package.json", "src/index.ts"]);
   const report = await readFile(resolve(project, ".atlas/report.md"), "utf8");
   assert.match(report, /No supported framework architecture was detected/);
 });
@@ -210,6 +217,9 @@ test("uses a custom output directory across CLI, report, server, and MCP", async
   const scan = spawnSync(process.execPath, [cli, "scan", "--path", project, "--output", output], { encoding: "utf8" });
   assert.equal(scan.status, 0, scan.stderr);
   assert.equal((await loadGraph(project, output)).project.name, "custom-output-project");
+  const rescan = spawnSync(process.execPath, [cli, "scan", "--path", project, "--output", output], { encoding: "utf8" });
+  assert.equal(rescan.status, 0, rescan.stderr);
+  assert.doesNotMatch(JSON.stringify(await loadGraph(project, output)), /file:\.architecture\//);
   const report = spawnSync(process.execPath, [cli, "report", "--path", project, "--output", output], { encoding: "utf8" });
   assert.equal(report.status, 0, report.stderr);
   assert.match(await readFile(resolve(project, output, "report.md"), "utf8"), /Atlas Architecture Report/);
