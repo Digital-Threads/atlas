@@ -73,6 +73,11 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     assert.ok(createFlow.nodes.some((node) => node.id === id), `flow is missing ${id}`);
   }
   assert.ok(createFlow.edges.some((edge) => edge.from === "method:PrismaService.user.create" && edge.to === "table:User" && edge.type === "writes"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:UsersController.remove" && edge.to === "method:UsersController.removeUser" && edge.type === "calls"));
+  const removeFlow = query.findFlowFromRoute("route:DELETE:/api/users/:id");
+  for (const id of ["method:UsersController.remove", "method:UsersController.removeUser", "method:UsersService.findAll"]) {
+    assert.ok(removeFlow.nodes.some((node) => node.id === id), `local method flow is missing ${id}`);
+  }
   assert.ok(query.getNeighbors("service:UsersService", 1).nodes.some((node) => node.id === "controller:UsersController"));
   assert.equal(query.search("UsersService")[0].node.id, "service:UsersService");
   assert.ok(query.search("UsersService")[0].matches.includes("label"));
