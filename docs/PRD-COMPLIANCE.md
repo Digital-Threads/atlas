@@ -8,7 +8,7 @@ verification or `npm run test:performance` for the scale target alone.
 
 | Requirement | Status | Evidence |
 | --- | --- | --- |
-| `scan`, `open`, `serve`, `report`, and `mcp` CLI commands | Complete | `src/cli/index.ts`, `tests/project.test.mjs` |
+| `scan`, `open`, `serve`, `report`, and `mcp` CLI commands with consistent custom output support | Complete | `src/cli/index.ts`, `tests/project.test.mjs` |
 | Recursive scanner, hashes, metadata, and ignore rules | Complete | `src/scanner/file-scanner.ts`, security integration test |
 | NestJS stack detection with confidence and evidence | Complete | `src/detector/stack-detector.ts`, fixture integration test |
 | Adapter contract supporting future and multiple stacks | Complete | `src/adapters/adapter.ts` |
@@ -32,7 +32,7 @@ verification or `npm run test:performance` for the scale target alone.
 | Clear scan progress and output summary | Complete | progress stage assertions and CLI output |
 | Graph and viewer contain no environment values or sensitive file contents | Complete | secret-leak assertions across serialized artifacts |
 | Local viewer has no CDN or cloud dependency | Complete | asset and HTML URL assertions |
-| Local server binds only to `127.0.0.1` and blocks path traversal | Complete | `src/server/viewer-server.ts`, server integration test |
+| Local server binds only to `127.0.0.1`, blocks traversal/symlinks, rejects malformed requests, and sends security headers | Complete | `src/server/viewer-server.ts`, `tests/server.test.mjs` |
 | No account system, telemetry, upload, or analyzer network request | Complete | implementation inspection and dependency-free scan tests |
 | 1,000 TS files, 100 controllers, 300 services, and 1,000 routes in under 30 seconds | Complete | `tests/performance.test.mjs` |
 | Viewer payload parses and Cytoscape initializes 5,000 nodes in under 3 seconds | Complete | `tests/performance.test.mjs` |

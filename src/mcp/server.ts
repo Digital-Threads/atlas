@@ -6,8 +6,8 @@ import * as z from "zod/v4";
 import { GraphQuery } from "../core/graph.js";
 import type { ArchitectureGraph } from "../core/types.js";
 
-export async function startMcpServer(projectPath: string): Promise<void> {
-  const graphPath = resolve(projectPath, ".atlas", "graph.json");
+export async function startMcpServer(projectPath: string, outputPath = ".atlas"): Promise<void> {
+  const graphPath = resolve(projectPath, outputPath, "graph.json");
   const graph = JSON.parse(await readFile(graphPath, "utf8")) as ArchitectureGraph;
   const query = new GraphQuery(graph);
   const server = new McpServer({ name: "atlas", version: graph.version });

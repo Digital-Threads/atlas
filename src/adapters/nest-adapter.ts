@@ -413,7 +413,7 @@ async function parseEnvironmentFiles(context: AdapterContext, addNode: NodeAdder
   for (const file of context.files.filter((item) => item.extension === ".env")) {
     const content = await readFile(file.absolutePath, "utf8").catch(() => "");
     for (const line of content.split(/\r?\n/)) {
-      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
       if (!match) continue;
       const id = `environment_variable:${match[1]}`;
       addNode({ id, type: "environment_variable", label: match[1], name: match[1], file: file.path, source: "config", confidence: 1, metadata: { valueStored: false } });
@@ -525,7 +525,14 @@ function inferType(name: string, fallback: GraphNodeType): GraphNodeType {
 function extractEnvNames(text: string): Set<string> {
   const names = new Set<string>();
   for (const match of text.matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) names.add(match[1]);
+  for (const match of text.matchAll(/process\.env\s*\[\s*["'`]([A-Z][A-Z0-9_]*)["'`]\s*\]/g)) names.add(match[1]);
   for (const match of text.matchAll(/(?:configService|this\.configService)\.get(?:<[^>]+>)?\s*\(\s*["'`]([A-Z][A-Z0-9_]*)["'`]/g)) names.add(match[1]);
+  for (const match of text.matchAll(/\{([^}]+)\}\s*=\s*process\.env/g)) {
+    for (const item of match[1].split(",")) {
+      const name = item.trim().match(/^([A-Z][A-Z0-9_]*)/)?.[1];
+      if (name) names.add(name);
+    }
+  }
   return names;
 }
 

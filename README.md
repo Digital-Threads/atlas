@@ -83,13 +83,15 @@ atlas scan [--path <project>] [--output <directory>] [--debug]
 
 `--path` defaults to the current directory. `--output` defaults to `.atlas`
 relative to the project root. Use `--debug` to print non-fatal analyzer warnings.
+When you choose a custom output directory, pass the same `--output` value to
+`open`, `serve`, `report`, and `mcp`.
 
 ### `atlas open`
 
 Opens `<project>/.atlas/viewer/index.html` in the default browser.
 
 ```bash
-atlas open [--path <project>]
+atlas open [--path <project>] [--output <directory>]
 ```
 
 ### `atlas serve`
@@ -97,7 +99,7 @@ atlas open [--path <project>]
 Serves the generated viewer on localhost. No files are sent to an external server.
 
 ```bash
-atlas serve [--path <project>] [--port 4317] [--open]
+atlas serve [--path <project>] [--output <directory>] [--port 4317] [--open]
 ```
 
 ### `atlas report`
@@ -105,7 +107,7 @@ atlas serve [--path <project>] [--port 4317] [--open]
 Regenerates `.atlas/report.md` from the current graph and risk data.
 
 ```bash
-atlas report [--path <project>]
+atlas report [--path <project>] [--output <directory>]
 ```
 
 ### `atlas mcp`
@@ -113,7 +115,7 @@ atlas report [--path <project>]
 Starts a Model Context Protocol server over standard input/output.
 
 ```bash
-atlas mcp [--path <project>]
+atlas mcp [--path <project>] [--output <directory>]
 ```
 
 ## What Atlas detects
