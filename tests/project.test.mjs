@@ -8,7 +8,7 @@ import test from "node:test";
 import { Script } from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { GraphQuery, loadGraph, scanFiles, scanProject } from "../dist/index.js";
+import { GraphQuery, graphNodeTypes, loadGraph, scanFiles, scanProject } from "../dist/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = resolve(here, "fixtures/nest-app");
@@ -49,6 +49,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.equal(query.findControllers().length, 1);
   assert.ok(query.findServices().length >= 3);
   assert.equal(query.findRoutes().length, 8);
+  assert.ok(result.graph.nodes.every((node) => graphNodeTypes.includes(node.type)), "graph contains an invalid node type");
 
   const dto = query.getNode("dto:CreateUserDto");
   assert.deepEqual(dto.metadata.fields.map((field) => field.name), ["email", "name"]);
@@ -98,8 +99,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerApp, /source:edge\.from,target:edge\.to/);
   assert.match(viewerApp, /Dependencies/);
   assert.match(viewerApp, /data-tab="source"/);
-  assert.match(viewerCss, /#empty\[hidden\]\{display:none\}/);
-  assert.match(viewerCss, /\.search-results\[hidden\]\{display:none\}/);
+  assert.match(viewerCss, /\[hidden\]\{display:none!important\}/);
+  assert.match(viewerApp, /renderModePreview/);
   assert.match(viewerHtml, /src="cytoscape\.min\.js"/);
   assert.doesNotMatch(viewerHtml, /https?:\/\//);
 

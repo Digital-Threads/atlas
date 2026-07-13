@@ -11,4 +11,8 @@ async function bootstrap() {
   await app.listen(3000);
 }
 
+export function formatInZone(value: Date, locale: string, timeZone: string) {
+  return value.toLocaleString(locale, { timeZone });
+}
+
 void bootstrap();

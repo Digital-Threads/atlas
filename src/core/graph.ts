@@ -7,6 +7,10 @@ import type {
   GraphStats,
   GraphSubgraph,
 } from "./types.js";
+import { graphEdgeTypes, graphNodeTypes } from "./types.js";
+
+const validNodeTypes = new Set<string>(graphNodeTypes);
+const validEdgeTypes = new Set<string>(graphEdgeTypes);
 
 export class GraphBuilder {
   readonly nodes = new Map<string, GraphNode>();
@@ -42,7 +46,11 @@ export class GraphBuilder {
 
   validate(): string[] {
     const errors: string[] = [];
+    for (const node of this.nodes.values()) {
+      if (!validNodeTypes.has(String(node.type))) errors.push(`${node.id}: invalid node type ${String(node.type)}`);
+    }
     for (const edge of this.edges.values()) {
+      if (!validEdgeTypes.has(String(edge.type))) errors.push(`${edge.id}: invalid edge type ${String(edge.type)}`);
       if (!this.nodes.has(edge.from)) errors.push(`${edge.id}: missing source ${edge.from}`);
       if (!this.nodes.has(edge.to)) errors.push(`${edge.id}: missing target ${edge.to}`);
     }
@@ -61,8 +69,8 @@ function increment<T extends string>(target: Partial<Record<T, number>>, key: T)
 }
 
 export function buildStats(nodes: GraphNode[], edges: GraphEdge[]): GraphStats {
-  const byNodeType: GraphStats["byNodeType"] = {};
-  const byEdgeType: GraphStats["byEdgeType"] = {};
+  const byNodeType: GraphStats["byNodeType"] = Object.create(null) as GraphStats["byNodeType"];
+  const byEdgeType: GraphStats["byEdgeType"] = Object.create(null) as GraphStats["byEdgeType"];
   for (const node of nodes) increment(byNodeType, node.type);
   for (const edge of edges) increment(byEdgeType, edge.type);
   return { totalNodes: nodes.length, totalEdges: edges.length, byNodeType, byEdgeType };

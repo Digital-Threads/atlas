@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ArchitectureGraph, ArchitectureRisk, ScanMetadata } from "../core/types.js";
-import { viewerCss, viewerHtml, viewerJs } from "../viewer/templates.js";
+import { viewerCss, viewerHtml, viewerJs, viewerLayoutCss } from "../viewer/templates.js";
 import { generateReport } from "./report.js";
 
 const require = createRequire(import.meta.url);
@@ -22,7 +22,7 @@ export async function writeOutputs(
     writeFile(resolve(outputPath, "risks.json"), `${JSON.stringify(risks, null, 2)}\n`),
     writeFile(resolve(outputPath, "report.md"), generateReport(graph, risks)),
     writeFile(resolve(viewerPath, "index.html"), viewerHtml),
-    writeFile(resolve(viewerPath, "style.css"), viewerCss),
+    writeFile(resolve(viewerPath, "style.css"), viewerCss + viewerLayoutCss),
     writeFile(resolve(viewerPath, "app.js"), viewerJs),
     writeFile(resolve(viewerPath, "graph.json"), graphJson),
     writeFile(resolve(viewerPath, "graph-data.js"), `window.__ATLAS_GRAPH__=${JSON.stringify(graph)};\n`),
