@@ -20,6 +20,6 @@ export class AuditService {
   }
 
   sendAudit() {
-    return this.httpService.post(process.env.AUDIT_API_URL + "/events", {});
+    return this.httpService.post(process.env["AUDIT_API_URL"] + "/events", {});
   }
 }

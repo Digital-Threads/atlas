@@ -84,7 +84,7 @@ export interface ScannedFile {
   path: string;
   extension: string;
   size: number;
-  hash: string;
+  hash?: string;
   lastModified: string;
 }
 

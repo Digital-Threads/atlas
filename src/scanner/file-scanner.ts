@@ -19,8 +19,15 @@ export async function scanFiles(projectRoot: string): Promise<FileScanResult> {
   const files: ScannedFile[] = [];
   let ignored = 0;
 
-  async function walk(directory: string): Promise<void> {
-    const entries = await readdir(directory, { withFileTypes: true });
+  async function walk(directory: string, isRoot = false): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (isRoot) throw new Error(`Cannot read project directory: ${root}`, { cause: error });
+      ignored += 1;
+      return;
+    }
     for (const entry of entries) {
       const absolutePath = resolve(directory, entry.name);
       if (entry.isSymbolicLink()) {
@@ -41,19 +48,24 @@ export async function scanFiles(projectRoot: string): Promise<FileScanResult> {
         ignored += 1;
         continue;
       }
-      const [content, fileStat] = await Promise.all([readFile(absolutePath), stat(absolutePath)]);
-      files.push({
-        absolutePath,
-        path: relative(root, absolutePath).replaceAll("\\", "/"),
-        extension: isEnv ? ".env" : extension,
-        size: fileStat.size,
-        hash: createHash("sha256").update(content).digest("hex"),
-        lastModified: fileStat.mtime.toISOString(),
-      });
+      try {
+        const fileStat = await stat(absolutePath);
+        const hash = isEnv ? undefined : createHash("sha256").update(await readFile(absolutePath)).digest("hex");
+        files.push({
+          absolutePath,
+          path: relative(root, absolutePath).replaceAll("\\", "/"),
+          extension: isEnv ? ".env" : extension,
+          size: fileStat.size,
+          hash,
+          lastModified: fileStat.mtime.toISOString(),
+        });
+      } catch {
+        ignored += 1;
+      }
     }
   }
 
-  await walk(root);
+  await walk(root, true);
   files.sort((a, b) => a.path.localeCompare(b.path));
   return { files, ignored };
 }

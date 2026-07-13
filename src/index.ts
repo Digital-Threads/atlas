@@ -13,6 +13,8 @@ export * from "./core/types.js";
 export { GraphBuilder, GraphQuery } from "./core/graph.js";
 export { detectRisks } from "./risks/risk-detector.js";
 export { generateReport } from "./output/report.js";
+export { getBrowserLaunch, openBrowser } from "./server/open-browser.js";
+export { serveViewer } from "./server/viewer-server.js";
 
 export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const started = Date.now();
@@ -89,12 +91,12 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   return { graph, metadata, risks, outputPath };
 }
 
-export async function loadGraph(projectPath: string): Promise<ArchitectureGraph> {
-  return JSON.parse(await readFile(resolve(projectPath, ".atlas", "graph.json"), "utf8"));
+export async function loadGraph(projectPath: string, outputPath = ".atlas"): Promise<ArchitectureGraph> {
+  return JSON.parse(await readFile(resolve(projectPath, outputPath, "graph.json"), "utf8"));
 }
 
-export async function regenerateReport(projectPath: string): Promise<string> {
-  const output = resolve(projectPath, ".atlas");
+export async function regenerateReport(projectPath: string, outputPath = ".atlas"): Promise<string> {
+  const output = resolve(projectPath, outputPath);
   const [graph, risks] = await Promise.all([
     readFile(resolve(output, "graph.json"), "utf8").then((value) => JSON.parse(value) as ArchitectureGraph),
     readFile(resolve(output, "risks.json"), "utf8").then((value) => JSON.parse(value) as ArchitectureRisk[]),

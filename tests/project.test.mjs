@@ -8,7 +8,7 @@ import test from "node:test";
 import { Script } from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { GraphQuery, scanProject } from "../dist/index.js";
+import { GraphQuery, loadGraph, scanProject } from "../dist/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = resolve(here, "fixtures/nest-app");
@@ -198,6 +198,46 @@ test("handles unsupported projects and sensitive files without crashing or leaki
   assert.doesNotMatch(serialized, /do-not-store-this|PRIVATE KEY VALUE|node_modules\/hidden/);
   const report = await readFile(resolve(project, ".atlas/report.md"), "utf8");
   assert.match(report, /No supported framework architecture was detected/);
+});
+
+test("uses a custom output directory across CLI, report, server, and MCP", async () => {
+  const project = await mkdtemp(resolve(tmpdir(), "atlas-custom-output-"));
+  await mkdir(resolve(project, "src"), { recursive: true });
+  await writeFile(resolve(project, "package.json"), JSON.stringify({ name: "custom-output-project" }));
+  await writeFile(resolve(project, "src/index.ts"), "export const ready = true;\n");
+  const output = ".architecture";
+
+  const scan = spawnSync(process.execPath, [cli, "scan", "--path", project, "--output", output], { encoding: "utf8" });
+  assert.equal(scan.status, 0, scan.stderr);
+  assert.equal((await loadGraph(project, output)).project.name, "custom-output-project");
+  const report = spawnSync(process.execPath, [cli, "report", "--path", project, "--output", output], { encoding: "utf8" });
+  assert.equal(report.status, 0, report.stderr);
+  assert.match(await readFile(resolve(project, output, "report.md"), "utf8"), /Atlas Architecture Report/);
+
+  const port = 45000 + (process.pid % 1000);
+  const server = spawn(process.execPath, [cli, "serve", "--path", project, "--output", output, "--port", String(port)], { stdio: ["ignore", "pipe", "pipe"] });
+  await waitForOutput(server, `http://localhost:${port}`);
+  try {
+    assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
+  } finally {
+    server.kill();
+  }
+
+  const transport = new StdioClientTransport({ command: process.execPath, args: [cli, "mcp", "--path", project, "--output", output], stderr: "pipe" });
+  const client = new Client({ name: "atlas-custom-output-test", version: "1.0.0" });
+  await client.connect(transport);
+  try {
+    const summary = await client.callTool({ name: "atlas_project_summary", arguments: {} });
+    assert.match(JSON.stringify(summary), /custom-output-project/);
+  } finally {
+    await client.close();
+  }
+
+  for (const command of ["open", "serve", "report", "mcp"]) {
+    const help = spawnSync(process.execPath, [cli, command, "--help"], { encoding: "utf8" });
+    assert.equal(help.status, 0, help.stderr);
+    assert.match(help.stdout, /--output <path>/);
+  }
 });
 
 test("rejects unsupported output formats with a clear CLI error", () => {
