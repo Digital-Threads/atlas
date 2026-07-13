@@ -75,6 +75,15 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "module:AppModule" && edge.to === featureASettings && edge.type === "imports"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "module:WorkerModule" && edge.to === featureBSettings && edge.type === "imports"));
 
+  for (const node of result.graph.nodes.filter((item) => ["module", "controller", "service", "provider", "repository", "method", "function", "route"].includes(item.type))) {
+    assert.ok(node.metadata?.description, `missing architecture description for ${node.id}`);
+  }
+  assert.match(query.getNode("module:AppModule").metadata.description, /NestJS module/);
+  assert.match(query.getNode("service:UsersService").metadata.description, /writes User/);
+  assert.match(query.getNode("function:src/main.ts:bootstrap").metadata.description, /Top-level function/);
+  assert.match(query.getNode("route:DELETE:/api/users/:id").metadata.flowDescription, /enters the application through UsersController\.remove/);
+  assert.match(query.getNode("route:DELETE:/api/users/:id").metadata.flowDescription, /UsersService\.findAll/);
+
   const createFlow = query.findFlowFromRoute("route:POST:/api/users");
   for (const id of ["method:UsersController.create", "method:UsersService.create", "method:PrismaService.user.create", "table:User"]) {
     assert.ok(createFlow.nodes.some((node) => node.id === id), `flow is missing ${id}`);
@@ -118,6 +127,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerApp, /Used by/);
   assert.match(viewerApp, /Depends on/);
   assert.match(viewerApp, /Request flow/);
+  assert.match(viewerApp, /flowDescription/);
+  assert.match(viewerCss, /\.flow-purpose/);
   assert.match(viewerHtml, /id="graph-guide"/);
   assert.match(viewerHtml, /src="cytoscape\.min\.js"/);
   assert.doesNotMatch(viewerHtml, /https?:\/\//);
