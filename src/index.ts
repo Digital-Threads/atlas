@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import { NestAdapter } from "./adapters/nest-adapter.js";
+import { enrichGraphDescriptions } from "./core/descriptions.js";
 import { GraphBuilder } from "./core/graph.js";
 import type { ArchitectureGraph, ArchitectureRisk, ScanOptions, ScanResult } from "./core/types.js";
 import { detectStacks } from "./detector/stack-detector.js";
@@ -10,6 +11,7 @@ import { detectRisks } from "./risks/risk-detector.js";
 import { scanFiles } from "./scanner/file-scanner.js";
 
 export * from "./core/types.js";
+export { enrichGraphDescriptions } from "./core/descriptions.js";
 export { GraphBuilder, GraphQuery } from "./core/graph.js";
 export { detectRisks } from "./risks/risk-detector.js";
 export { generateReport } from "./output/report.js";
@@ -76,7 +78,7 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
     builder.addNode({ id: item.id, type: "risk", label: item.title, name: item.title, file: item.file, source: "static_analysis", confidence: 1, metadata: { severity: item.severity, riskType: item.type, description: item.description, recommendation: item.recommendation } });
   }
   for (const item of risks) if (item.nodeId && builder.hasNode(item.nodeId)) builder.addEdge({ from: item.id, to: item.nodeId, type: "references", source: "static_analysis", confidence: 1 });
-  graph = builder.toGraph(project);
+  graph = enrichGraphDescriptions(builder.toGraph(project));
 
   const finished = Date.now();
   const metadata = {
