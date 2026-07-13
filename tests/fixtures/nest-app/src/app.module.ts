@@ -6,9 +6,11 @@ import { PrismaService } from "./prisma.service";
 import { AuditService } from "./audit.service";
 import { LoggerMiddleware } from "./logger.middleware";
 import { UserEntity } from "./user.entity";
+import { SettingsModule } from "./feature-a/settings.module";
+import { WorkerModule } from "./worker.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEntity])],
+  imports: [TypeOrmModule.forFeature([UserEntity]), SettingsModule, WorkerModule],
   controllers: [UsersController],
   providers: [UsersService, PrismaService, AuditService, { provide: "MAILER", useClass: PrismaService }],
   exports: [UsersService],
