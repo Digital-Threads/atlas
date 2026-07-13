@@ -16,13 +16,20 @@ export function enrichGraphDescriptions(graph: ArchitectureGraph): ArchitectureG
   const nodes = graph.nodes.map((node) => {
     const description = String(node.metadata?.description ?? "") || describeNode(node, index);
     const flowDescription = node.type === "route" ? describeFlow(node, index) : "";
-    if (!description && !flowDescription) return node;
+    const plainDescription = String(node.metadata?.plainDescription ?? "") || describePlainNode(node, index);
+    const plainFlowDescription = node.type === "route" ? describePlainFlow(node, index) : "";
+    if (!description && !flowDescription && !plainDescription && !plainFlowDescription) return node;
     return {
       ...node,
       metadata: {
         ...node.metadata,
         ...(description ? { description } : {}),
         ...(flowDescription ? { flowDescription } : {}),
+        ...(plainDescription ? { plainDescription } : {}),
+        ...(plainFlowDescription ? { plainFlowDescription } : {}),
+        ...(plainDescription || plainFlowDescription
+          ? { plainDescriptionSource: "inferred_from_code_structure" }
+          : {}),
       },
     };
   });
@@ -48,6 +55,112 @@ function describeNode(node: GraphNode, index: GraphIndex): string {
   if (node.type === "function") return describeFunction(node, index);
   if (node.type === "route") return describeFlow(node, index);
   return "";
+}
+
+function describePlainNode(node: GraphNode, index: GraphIndex): string {
+  if (node.type === "module") return describePlainModule(node, index);
+  if (node.type === "controller") return describePlainController(node, index);
+  if (["service", "provider", "repository"].includes(node.type)) return describePlainProvider(node, index);
+  if (node.type === "method") return describePlainMethod(node, index);
+  if (node.type === "function") return describePlainFunction(node);
+  if (node.type === "route") return describePlainFlow(node, index);
+  return "";
+}
+
+function describePlainModule(node: GraphNode, index: GraphIndex): string {
+  const providers = relatedNodes(node.id, index, "out", ["provides"], ["service", "provider", "repository"]);
+  const consumers = relatedNodes(node.id, index, "in", ["imports", "exports"], ["module"]);
+  const sentences = ["Groups the parts of the application related to " + subjectFromNode(node) + "."];
+  if (providers.length) sentences.push("It makes " + countLabel(providers.length, "capability", "capabilities") + " available to the application.");
+  if (consumers.length) sentences.push("It is used by " + countLabel(consumers.length, "other area") + " of the system.");
+  return sentences.join(" ");
+}
+
+function describePlainController(node: GraphNode, index: GraphIndex): string {
+  const methods = relatedNodes(node.id, index, "out", ["has_method"], ["method"]);
+  const routes = uniqueNodes(methods.flatMap((method) => (index.incoming.get(method.id) ?? [])
+    .filter((edge) => edge.type === "handles")
+    .map((edge) => index.nodes.get(edge.from)))
+    .filter(isNode));
+  return "Receives API requests related to " + subjectFromNode(node)
+    + " and sends each request to the appropriate application operation. It exposes "
+    + countLabel(routes.length, "endpoint") + ".";
+}
+
+function describePlainProvider(node: GraphNode, index: GraphIndex): string {
+  const methods = relatedNodes(node.id, index, "out", ["has_method"], ["method"]);
+  const consumers = relatedNodes(node.id, index, "in", ["injects", "provides"], [
+    "module", "controller", "service", "provider", "repository",
+  ]);
+  const dependencies = relatedNodes(node.id, index, "out", ["injects"], [
+    "service", "provider", "repository",
+  ]);
+  const subject = subjectFromNode(node);
+  const lead = node.type === "repository"
+    ? "Handles stored data related to " + subject + "."
+    : node.type === "service"
+      ? "Contains the application's operations and rules related to " + subject + "."
+      : "Provides reusable application behavior related to " + subject + ".";
+  const sentences = [lead];
+  if (methods.length) sentences.push("It offers " + countLabel(methods.length, "operation") + ".");
+  if (consumers.length) sentences.push("It is used by " + countLabel(consumers.length, "part") + " of the system.");
+  if (dependencies.length) sentences.push("It relies on " + countLabel(dependencies.length, "supporting component") + ".");
+  return sentences.join(" ");
+}
+
+function describePlainMethod(node: GraphNode, index: GraphIndex): string {
+  const routes = relatedNodes(node.id, index, "in", ["handles"], ["route"]);
+  const calls = relatedNodes(node.id, index, "out", ["calls"], ["method", "service", "provider", "repository"]);
+  const sentences = [methodSentence(methodName(node), ownerSubject(node))];
+  if (routes.length) sentences.push("It is directly used by " + countLabel(routes.length, "API endpoint") + ".");
+  if (calls.length) sentences.push("It coordinates " + countLabel(calls.length, "following operation") + ".");
+  return sentences.join(" ");
+}
+
+function describePlainFunction(node: GraphNode): string {
+  const name = methodName(node);
+  if (/^(bootstrap|main|start)$/i.test(name)) return "Starts and configures the application.";
+  return methodSentence(name, subjectFromNode(node));
+}
+
+function describePlainFlow(route: GraphNode, index: GraphIndex): string {
+  const ids = flowIds(route.id, index);
+  const flowEdges = [...ids].flatMap((id) => index.outgoing.get(id) ?? [])
+    .filter((edge) => ids.has(edge.to) && flowEdgeTypes.has(edge.type));
+  const handlerEdge = flowEdges.find((edge) => edge.from === route.id && edge.type === "handles");
+  const handler = handlerEdge ? index.nodes.get(handlerEdge.to) : undefined;
+  const guards = nodesOfTypes(ids, index, ["guard", "pipe", "interceptor", "middleware"]);
+  const calls = nodesFromEdges(flowEdges, index, ["calls"], ["method", "service", "provider", "repository"])
+    .filter((node) => node.id !== handler?.id);
+  const reads = nodesFromEdges(flowEdges, index, ["reads"], ["table", "entity", "model", "database"]);
+  const writes = nodesFromEdges(flowEdges, index, ["writes"], ["table", "entity", "model", "database"]);
+  const external = nodesFromEdges(flowEdges, index, ["connects_to"], ["external_api"]);
+  const routeText = String(route.metadata?.path ?? route.label);
+  const handlerName = handler ? methodName(handler) : route.label;
+  const handlerSubject = handler ? ownerSubject(handler) : "request";
+  const requestSubject = /:[A-Za-z0-9_]*id\b/i.test(routeText)
+    ? "a " + singularize(handlerSubject)
+    : handlerSubject;
+  const actor = /(^|\/)admin(\/|$)|admin/i.test(routeText + " " + handlerName)
+    ? "An administrator"
+    : "A user or connected client";
+  const requestAction = actionPhrase(handlerName.replace(/Admin(istrator)?/gi, ""), requestSubject);
+  const sentences = [actor + " asks the system to " + requestAction + "."];
+  if (guards.length) {
+    const authorization = guards.some((node) => /auth|permission|role|access|jwt/i.test(node.label));
+    sentences.push(authorization
+      ? "The system checks that the caller is allowed to do this."
+      : "The system checks the request before continuing.");
+  }
+  const steps = uniqueStrings(calls.map(plainFlowStep)).slice(0, 4);
+  if (steps.length) sentences.push("It then " + naturalList(steps) + ".");
+  if (reads.length) sentences.push("It reads the required data from " + plainNameList(reads) + ".");
+  if (writes.length) sentences.push("It saves changes to " + plainNameList(writes) + ".");
+  if (external.length) sentences.push("It also communicates with " + plainNameList(external) + ".");
+  if (!steps.length && !reads.length && !writes.length && !external.length) {
+    sentences.push("Atlas did not detect any later processing steps in the static code path.");
+  }
+  return sentences.join(" ");
 }
 
 function describeModule(node: GraphNode, index: GraphIndex): string {
@@ -261,6 +374,141 @@ function signatureSentence(node: GraphNode): string {
   const parameters = Array.isArray(node.metadata?.parameters) ? node.metadata.parameters.length : 0;
   const returnType = String(node.metadata?.returnType ?? "").trim();
   return "It accepts " + countLabel(parameters, "parameter") + (returnType ? " and returns " + returnType : "") + ".";
+}
+
+function subjectFromNode(node: GraphNode): string {
+  const raw = String(node.name || node.label || "");
+  const stripped = raw
+    .replace(/^.*[./:#]/, "")
+    .replace(/(Controller|Repository|Provider|Service|Module|UseCase|Handler|Factory|Resolver|Gateway|Function)$/i, "");
+  const subject = humanWords(stripped || raw).toLowerCase();
+  return subject && !/^(app|application|main)$/.test(subject) ? subject : "the application as a whole";
+}
+
+function ownerSubject(node: GraphNode): string {
+  const label = String(node.label || "");
+  const owner = label.includes(".") ? label.slice(0, label.lastIndexOf(".")) : "";
+  if (!owner) return subjectFromNode(node);
+  return subjectFromNode({ ...node, name: owner, label: owner });
+}
+
+function methodName(node: GraphNode): string {
+  const metadataName = String(node.metadata?.method ?? node.metadata?.name ?? "").trim();
+  if (metadataName) return metadataName;
+  const raw = String(node.name || node.label || "operation");
+  return raw.includes(".") ? raw.slice(raw.lastIndexOf(".") + 1) : raw.replace(/^.*[:#/]/, "");
+}
+
+function methodSentence(name: string, fallbackSubject: string): string {
+  const phrase = actionPhrase(name, fallbackSubject);
+  return capitalize(conjugateAction(phrase)) + ".";
+}
+
+function actionPhrase(name: string, fallbackSubject: string): string {
+  const words = identifierWords(name)
+    .filter((word) => !/^(async|rest|handler|method)$/i.test(word));
+  const admin = words.some((word) => /^admin(istrator)?$/i.test(word));
+  const meaningful = words.filter((word) => !/^admin(istrator)?$/i.test(word));
+  let first = (meaningful.shift() || "process").toLowerCase();
+  const verbs: Record<string, string> = {
+    get: "retrieve", find: "find", fetch: "retrieve", load: "load", list: "list", read: "read",
+    create: "create", add: "add", build: "build", generate: "generate", make: "create",
+    update: "update", edit: "update", change: "change", set: "set", save: "save",
+    delete: "delete", remove: "remove", destroy: "delete", clear: "clear",
+    validate: "check", check: "check", can: "check", is: "check", has: "check",
+    calculate: "calculate", calc: "calculate", compute: "calculate", count: "count",
+    send: "send", publish: "publish", notify: "notify", emit: "publish",
+    process: "process", handle: "process", run: "run", execute: "run", start: "start", stop: "stop",
+    log: "record", record: "record", sync: "synchronize", import: "import", export: "export",
+  };
+  if (/^(run|execute|handle|process)$/.test(first) && meaningful[0] && verbs[meaningful[0].toLowerCase()]) {
+    first = String(meaningful.shift()).toLowerCase();
+  }
+  const verb = verbs[first] || "perform";
+  let object = meaningful.join(" ").toLowerCase();
+  object = object.replace(/\buser items\b/g, "a user's items");
+  if (!object) object = fallbackSubject && fallbackSubject !== "the application as a whole" ? fallbackSubject : "this operation";
+  if (object === "one" && fallbackSubject) object = "one " + singularize(fallbackSubject) + " record";
+  if (object === "many" && fallbackSubject) object = "many " + singularize(fallbackSubject) + " records";
+  if (object === "all" && fallbackSubject) object = "all " + pluralize(fallbackSubject);
+  if (/^by\b/.test(object) && fallbackSubject) object = fallbackSubject + " " + object;
+  if (!verbs[first]) object = humanWords(name).toLowerCase() + (fallbackSubject ? " for " + fallbackSubject : "");
+  return verb + " " + object + (admin ? " for an administrative task" : "");
+}
+
+function conjugateAction(phrase: string): string {
+  const [verb, ...rest] = phrase.split(" ");
+  const forms: Record<string, string> = {
+    retrieve: "retrieves", find: "finds", load: "loads", list: "lists", read: "reads",
+    create: "creates", add: "adds", build: "builds", generate: "generates", update: "updates",
+    change: "changes", set: "sets", save: "saves", delete: "deletes", remove: "removes",
+    clear: "clears", check: "checks", calculate: "calculates", count: "counts", send: "sends",
+    publish: "publishes", notify: "notifies", process: "processes", run: "runs", start: "starts",
+    stop: "stops", record: "records", synchronize: "synchronizes", import: "imports", export: "exports",
+    perform: "performs",
+  };
+  return (forms[verb] || verb) + (rest.length ? " " + rest.join(" ") : "");
+}
+
+function plainFlowStep(node: GraphNode): string {
+  const owner = ownerSubject(node);
+  const method = methodName(node);
+  if (/transaction/i.test(node.label + " " + method)) return "runs the change inside a database transaction";
+  if (/log|telemetry|audit/i.test(node.label + " " + method)) return "records what happened for monitoring";
+  let phrase = actionPhrase(method.replace(/Admin(istrator)?/gi, ""), owner);
+  if (/^(destroy|findOne|findMany|create|save)$/i.test(method) && !/\brecords?\b/.test(phrase)) phrase += " records";
+  return conjugateAction(phrase);
+}
+
+function humanWords(value: string): string {
+  return identifierWords(value).join(" ") || "this part of the application";
+}
+
+function identifierWords(value: string): string[] {
+  return String(value)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/[^A-Za-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function capitalize(value: string): string {
+  return value ? value[0].toUpperCase() + value.slice(1) : value;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function naturalList(values: string[]): string {
+  if (values.length <= 1) return values[0] ?? "continues processing the request";
+  return values.slice(0, -1).join(", ") + " and " + values.at(-1);
+}
+
+function plainNameList(nodes: GraphNode[], limit = 3): string {
+  const names = nodes.slice(0, limit).map((node) => {
+    const name = humanWords(node.label).toLowerCase();
+    if (["table", "entity", "model"].includes(node.type)) return singularize(name) + " records";
+    if (node.type === "database") return name + " database";
+    return name;
+  });
+  if (nodes.length > limit) names.push(String(nodes.length - limit) + " other data sources");
+  return naturalList(names);
+}
+
+function singularize(value: string): string {
+  if (/ies$/i.test(value)) return value.slice(0, -3) + "y";
+  if (/sses$/i.test(value)) return value.slice(0, -2);
+  if (/s$/i.test(value) && !/ss$/i.test(value)) return value.slice(0, -1);
+  return value;
+}
+
+function pluralize(value: string): string {
+  if (/s$/i.test(value)) return value;
+  if (/[^aeiou]y$/i.test(value)) return value.slice(0, -1) + "ies";
+  return value + "s";
 }
 
 function isNode(node: GraphNode | undefined): node is GraphNode {
