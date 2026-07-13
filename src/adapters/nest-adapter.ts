@@ -263,6 +263,17 @@ function parseMethodRelations(
 
   for (const call of method.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expression = call.getExpression().getText();
+    const localCall = expression.match(/^this\.([A-Za-z_$][\w$]*)$/);
+    if (localCall) {
+      const targetMethod = info.declaration.getMethod(localCall[1]);
+      if (targetMethod) {
+        const targetMethodId = `method:${info.name}.${targetMethod.getName()}`;
+        addNode(methodNode(info, targetMethod));
+        addEdge(info.id, targetMethodId, "has_method");
+        addEdge(methodId, targetMethodId, "calls", { via: "this" });
+      }
+    }
+
     const serviceCall = expression.match(/^this\.([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)$/);
     if (serviceCall) {
       const [, property, targetMethod] = serviceCall;
