@@ -2,7 +2,7 @@ import type { ArchitectureGraph, GraphEdge, GraphEdgeType, GraphNode, GraphNodeT
 
 const flowEdgeTypes = new Set<GraphEdgeType>([
   "handles", "calls", "reads", "writes", "uses", "connects_to",
-  "validates", "returns", "decorates",
+  "validates", "returns", "decorates", "publishes_to", "delivers_to", "enqueues",
 ]);
 
 interface GraphIndex {
@@ -18,7 +18,9 @@ export function enrichGraphDescriptions(graph: ArchitectureGraph): ArchitectureG
     const flowDescription = node.type === "route" ? describeFlow(node, index) : "";
     const plainDescription = String(node.metadata?.plainDescription ?? "") || describePlainNode(node, index);
     const plainFlowDescription = node.type === "route" ? describePlainFlow(node, index) : "";
-    if (!description && !flowDescription && !plainDescription && !plainFlowDescription) return node;
+    const asyncFlowDescription = ["message_topic", "queue"].includes(node.type) ? describeAsyncFlow(node, index) : "";
+    const plainAsyncFlowDescription = ["message_topic", "queue"].includes(node.type) ? describePlainAsyncFlow(node, index) : "";
+    if (!description && !flowDescription && !plainDescription && !plainFlowDescription && !asyncFlowDescription && !plainAsyncFlowDescription) return node;
     return {
       ...node,
       metadata: {
@@ -27,6 +29,8 @@ export function enrichGraphDescriptions(graph: ArchitectureGraph): ArchitectureG
         ...(flowDescription ? { flowDescription } : {}),
         ...(plainDescription ? { plainDescription } : {}),
         ...(plainFlowDescription ? { plainFlowDescription } : {}),
+        ...(asyncFlowDescription ? { asyncFlowDescription } : {}),
+        ...(plainAsyncFlowDescription ? { plainAsyncFlowDescription } : {}),
         ...(plainDescription || plainFlowDescription
           ? { plainDescriptionSource: "inferred_from_code_structure" }
           : {}),
@@ -54,6 +58,7 @@ function describeNode(node: GraphNode, index: GraphIndex): string {
   if (node.type === "method") return describeMethod(node, index);
   if (node.type === "function") return describeFunction(node, index);
   if (node.type === "route") return describeFlow(node, index);
+  if (["message_broker", "message_topic", "queue", "processor"].includes(node.type)) return describeAsyncNode(node, index);
   return "";
 }
 
@@ -64,6 +69,7 @@ function describePlainNode(node: GraphNode, index: GraphIndex): string {
   if (node.type === "method") return describePlainMethod(node, index);
   if (node.type === "function") return describePlainFunction(node);
   if (node.type === "route") return describePlainFlow(node, index);
+  if (["message_broker", "message_topic", "queue", "processor"].includes(node.type)) return describePlainAsyncNode(node, index);
   return "";
 }
 
@@ -110,8 +116,11 @@ function describePlainProvider(node: GraphNode, index: GraphIndex): string {
 
 function describePlainMethod(node: GraphNode, index: GraphIndex): string {
   const routes = relatedNodes(node.id, index, "in", ["handles"], ["route"]);
+  const asyncSources = relatedNodes(node.id, index, "in", ["delivers_to"], ["message_topic", "queue"]);
   const calls = relatedNodes(node.id, index, "out", ["calls"], ["method", "service", "provider", "repository"]);
-  const sentences = [methodSentence(methodName(node), ownerSubject(node))];
+  const sentences = asyncSources.length
+    ? ["Handles asynchronous work received from " + plainNameList(asyncSources) + ".", methodSentence(methodName(node), ownerSubject(node))]
+    : [methodSentence(methodName(node), ownerSubject(node))];
   if (routes.length) sentences.push("It is directly used by " + countLabel(routes.length, "API endpoint") + ".");
   if (calls.length) sentences.push("It coordinates " + countLabel(calls.length, "following operation") + ".");
   return sentences.join(" ");
@@ -135,6 +144,8 @@ function describePlainFlow(route: GraphNode, index: GraphIndex): string {
   const reads = nodesFromEdges(flowEdges, index, ["reads"], ["table", "entity", "model", "database"]);
   const writes = nodesFromEdges(flowEdges, index, ["writes"], ["table", "entity", "model", "database"]);
   const external = nodesFromEdges(flowEdges, index, ["connects_to"], ["external_api"]);
+  const published = nodesFromEdges(flowEdges, index, ["publishes_to"], ["message_topic"]);
+  const queued = nodesFromEdges(flowEdges, index, ["enqueues"], ["queue"]);
   const routeText = String(route.metadata?.path ?? route.label);
   const handlerName = handler ? methodName(handler) : route.label;
   const handlerSubject = handler ? ownerSubject(handler) : "request";
@@ -157,9 +168,76 @@ function describePlainFlow(route: GraphNode, index: GraphIndex): string {
   if (reads.length) sentences.push("It reads the required data from " + plainNameList(reads) + ".");
   if (writes.length) sentences.push("It saves changes to " + plainNameList(writes) + ".");
   if (external.length) sentences.push("It also communicates with " + plainNameList(external) + ".");
-  if (!steps.length && !reads.length && !writes.length && !external.length) {
+  if (published.length) sentences.push("It publishes an asynchronous message to " + plainNameList(published) + ".");
+  if (queued.length) sentences.push("It schedules background work in " + plainNameList(queued) + ".");
+  if (!steps.length && !reads.length && !writes.length && !external.length && !published.length && !queued.length) {
     sentences.push("Atlas did not detect any later processing steps in the static code path.");
   }
+  return sentences.join(" ");
+}
+
+function describePlainAsyncNode(node: GraphNode, index: GraphIndex): string {
+  if (node.type === "message_broker") {
+    const topics = relatedNodes(node.id, index, "out", ["contains"], ["message_topic"]);
+    return "Carries asynchronous messages between parts of the system through " + countLabel(topics.length, "topic") + ".";
+  }
+  if (node.type === "message_topic" || node.type === "queue") return describePlainAsyncFlow(node, index);
+  const queues = relatedNodes(node.id, index, "in", ["processes"], ["queue"]);
+  const methods = relatedNodes(node.id, index, "out", ["has_method"], ["method"]);
+  return "Runs background work from " + (queues.length ? plainNameList(queues) : "a configured queue")
+    + ". It contains " + countLabel(methods.length, "processing operation") + ".";
+}
+
+function describePlainAsyncFlow(root: GraphNode, index: GraphIndex): string {
+  const topic = root.type === "message_topic";
+  const transport = String(root.metadata?.transport ?? "kafka");
+  const publishers = relatedNodes(root.id, index, "in", [topic ? "publishes_to" : "enqueues"], ["method", "service", "provider", "controller", "processor"]);
+  const handlers = relatedNodes(root.id, index, "out", ["delivers_to"], ["method"]);
+  const processors = relatedNodes(root.id, index, "out", ["processes"], ["processor"]);
+  const handlerIds = new Set(handlers.map((handler) => handler.id));
+  const next = operationTargets(handlerIds, index, ["calls"], ["method", "service", "provider", "repository"]);
+  const sentences: string[] = [];
+  if (publishers.length) {
+    sentences.push(nameList(publishers, 3) + (publishers.length === 1 ? " sends" : " send") + " asynchronous work to " + root.label + ".");
+  } else {
+    sentences.push("Asynchronous work arrives at " + root.label + " from outside the detected code path.");
+  }
+  if (handlers.length) {
+    sentences.push((topic ? (transport === "kafka" ? "Kafka delivers the message to " : "The message transport delivers it to ") : "The queue delivers the job to ") + nameList(handlers, 4) + ".");
+  } else {
+    sentences.push("No consumer was detected for this " + (topic ? "topic" : "queue") + ".");
+  }
+  if (processors.length) sentences.push("Background processing is owned by " + nameList(processors, 4) + ".");
+  if (next.length) sentences.push("Processing continues through " + nameList(next, 4) + ".");
+  return sentences.join(" ");
+}
+
+function describeAsyncNode(node: GraphNode, index: GraphIndex): string {
+  if (node.type === "message_broker") {
+    const topics = relatedNodes(node.id, index, "out", ["contains"], ["message_topic"]);
+    const transport = String(node.metadata?.transport ?? "messaging");
+    return (transport === "kafka" ? "Kafka message broker" : "NestJS message transport") + " with " + countLabel(topics.length, "detected topic") + ".";
+  }
+  if (node.type === "message_topic" || node.type === "queue") return describeAsyncFlow(node, index);
+  const queues = relatedNodes(node.id, index, "in", ["processes"], ["queue"]);
+  const methods = relatedNodes(node.id, index, "out", ["has_method"], ["method"]);
+  return "NestJS Bull processor" + sourceClause(node) + " with " + countLabel(methods.length, "detected method")
+    + (queues.length ? ". It processes " + nameList(queues) + "." : ".");
+}
+
+function describeAsyncFlow(root: GraphNode, index: GraphIndex): string {
+  const topic = root.type === "message_topic";
+  const transport = String(root.metadata?.transport ?? "kafka");
+  const publishers = relatedNodes(root.id, index, "in", [topic ? "publishes_to" : "enqueues"], ["method", "service", "provider", "controller", "processor"]);
+  const handlers = relatedNodes(root.id, index, "out", ["delivers_to"], ["method"]);
+  const processors = relatedNodes(root.id, index, "out", ["processes"], ["processor"]);
+  const sentences = [
+    (topic ? (transport === "kafka" ? "Kafka topic " : "Message pattern ") : "Bull queue ") + root.label + sourceClause(root) + ".",
+    "It has " + countLabel(publishers.length, "detected publisher") + ", " + countLabel(handlers.length, "detected consumer") + ", and " + countLabel(processors.length, "processor") + ".",
+  ];
+  if (publishers.length) sentences.push("Published by " + nameList(publishers, 5) + ".");
+  if (handlers.length) sentences.push("Delivered to " + nameList(handlers, 5) + ".");
+  if (processors.length) sentences.push("Processed by " + nameList(processors, 5) + ".");
   return sentences.join(" ");
 }
 
@@ -223,6 +301,9 @@ function describeMethod(node: GraphNode, index: GraphIndex): string {
   const reads = relatedNodes(node.id, index, "out", ["reads"], ["table", "entity", "model", "database"]);
   const writes = relatedNodes(node.id, index, "out", ["writes"], ["table", "entity", "model", "database"]);
   const external = relatedNodes(node.id, index, "out", ["connects_to"], ["external_api"]);
+  const asyncSources = relatedNodes(node.id, index, "in", ["delivers_to"], ["message_topic", "queue"]);
+  const published = relatedNodes(node.id, index, "out", ["publishes_to"], ["message_topic"]);
+  const queued = relatedNodes(node.id, index, "out", ["enqueues"], ["queue"]);
   const sentences = [
     owners.length
       ? "Method of " + nameList(owners, 2) + sourceClause(node) + "."
@@ -233,6 +314,9 @@ function describeMethod(node: GraphNode, index: GraphIndex): string {
   if (reads.length) sentences.push("It reads " + nameList(reads) + ".");
   if (writes.length) sentences.push("It writes " + nameList(writes) + ".");
   if (external.length) sentences.push("It connects to " + nameList(external) + ".");
+  if (asyncSources.length) sentences.push("It handles asynchronous work from " + nameList(asyncSources) + ".");
+  if (published.length) sentences.push("It publishes to " + nameList(published) + ".");
+  if (queued.length) sentences.push("It enqueues work in " + nameList(queued) + ".");
   if (sentences.length === 1) sentences.push(signatureSentence(node));
   return sentences.join(" ");
 }
