@@ -1517,18 +1517,15 @@ class Component extends DCLogic {
       onHoverOut: () => this.setState({ hover: null }),
       tipVisible: !!hover && !panning, tipX: hover ? hover.x + 'px' : '0px', tipY: hover ? hover.y + 'px' : '0px',
       tipTitle: hover ? hover.title : '', tipBody: hover ? hover.body : '',
-      onWheel: (e) => { e.preventDefault(); const f = e.deltaY > 0 ? 1.12 : 0.9; this.zoom(f); },
+      onWheel: (e) => { const f = e.deltaY > 0 ? 1.12 : 0.9; this.zoom(f); },
       onPanStart: (e) => {
         if (e.button !== 0 || (e.target.closest && e.target.closest('button, input'))) return;
-        e.preventDefault();
         const vb = this.state.vb || this.parseVb(vbStr);
         const rect = e.currentTarget.getBoundingClientRect();
         this._pan = {
           id: e.pointerId, sx: e.clientX, sy: e.clientY, vb, moved: false,
           scale: Math.max(vb.w / Math.max(rect.width, 1), vb.h / Math.max(rect.height, 1)),
         };
-        e.currentTarget.setPointerCapture?.(e.pointerId);
-        this.setState({ panning: true, hover: null });
       },
       onPanMove: (e) => {
         if (!this._pan || this._pan.id !== e.pointerId) return;
@@ -1536,7 +1533,11 @@ class Component extends DCLogic {
         const dy = e.clientY - this._pan.sy;
         if (!this._pan.moved && Math.hypot(dx, dy) < 3) return;
         e.preventDefault();
-        this._pan.moved = true;
+        if (!this._pan.moved) {
+          this._pan.moved = true;
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+          this.setState({ panning: true, hover: null });
+        }
         this._nextPanVb = {
           x: this._pan.vb.x - dx * this._pan.scale,
           y: this._pan.vb.y - dy * this._pan.scale,
@@ -1551,6 +1552,7 @@ class Component extends DCLogic {
       onPanEnd: (e) => {
         if (!this._pan || (e.pointerId !== undefined && this._pan.id !== e.pointerId)) return;
         const moved = this._pan.moved;
+        if (e.currentTarget.hasPointerCapture?.(this._pan.id)) e.currentTarget.releasePointerCapture(this._pan.id);
         if (this._panFrame) cancelAnimationFrame(this._panFrame);
         this._panFrame = null;
         if (this._nextPanVb) this.setState({ vb: this._nextPanVb, panning: false });
