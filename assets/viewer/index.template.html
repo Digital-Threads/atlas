@@ -235,7 +235,7 @@
           <section aria-label="Map" style="flex: 1; min-width: 0; min-height: 0; position: relative; background: #f7f9f8; overflow: hidden;">
             <div style="position: absolute; inset: 0; background-image: radial-gradient(#d3dad6 1px, transparent 1px); background-size: 22px 22px; opacity: 0.5; pointer-events: none;"></div>
 
-            <svg ref="{{ svgRef }}" sc-camel-view-box="{{ vbStr }}" preserveAspectRatio="xMidYMid meet" onWheel="{{ onWheel }}" onPointerDown="{{ onPanStart }}" onPointerMove="{{ onPanMove }}" onPointerUp="{{ onPanEnd }}" onPointerLeave="{{ onPanEnd }}" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: {{ svgCursor }}; touch-action: none;">
+            <svg ref="{{ svgRef }}" sc-camel-view-box="{{ vbStr }}" preserveAspectRatio="xMidYMid meet" onWheel="{{ onWheel }}" onPointerDown="{{ onPanStart }}" onPointerMove="{{ onPanMove }}" onPointerUp="{{ onPanEnd }}" onPointerCancel="{{ onPanEnd }}" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: {{ svgCursor }}; touch-action: none; user-select: none; -webkit-user-select: none;">
               <defs>
                 <marker id="arr-sync" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7d8a84"></path></marker>
                 <marker id="arr-async" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#0f7895"></path></marker>
@@ -625,7 +625,7 @@ class Component extends DCLogic {
     this.select(id, { mode, flow });
   }
 
-  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, hist: [], vb: null, hover: null, catQ: '', domainFilter: null }); }
+  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, hist: [], vb: null, hover: null, catQ: '', domainFilter: null, mapExpanded: false }); }
 
   // ---------- code highlighting ----------
   highlight(code) {
@@ -690,6 +690,7 @@ class Component extends DCLogic {
   mkNode(n, x, y, w, h, extra = {}) {
     const sel = this.state.sel === n.id;
     const accent = this.color(n.type);
+    const activate = extra.onClick || (() => this.reveal(n.id));
     return Object.assign({
       id: n.id, x, y, w, h, tw: w - 18, th: h - 8,
       label: n.label, sub: extra.sub !== undefined ? extra.sub : '', typeLabel: this.tLabel(n.type),
@@ -697,7 +698,15 @@ class Component extends DCLogic {
       fs: n.label.length > 26 ? '10.5px' : '11.5px',
       font: (n.type === 'route' || n.type === 'topic' || n.type === 'queue' || n.type === 'table' || n.type === 'env') ? "'IBM Plex Mono', monospace" : "'IBM Plex Sans', sans-serif",
       op: extra.dim ? 0.3 : 1, step: extra.step || false, expandLabel: extra.expandLabel || false,
-      onClick: extra.onClick || (() => this.reveal(n.id)),
+      onClick: (ev) => {
+        if (this._suppressClick) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this._suppressClick = false;
+          return;
+        }
+        activate(ev);
+      },
       onEnter: (ev) => this.hoverNode(ev, n),
     }, extra.over || {});
   }
@@ -744,16 +753,36 @@ class Component extends DCLogic {
     const pos = {}; // id -> box
     const domainNodeIds = {}; // domain id -> synthetic id 'd.x'
 
-    const runtime = D.nodes.filter((n) => ['broker', 'topic', 'queue', 'processor'].includes(n.type)).map((n) => n.id);
+    const relationCounts = new Map();
+    D.edges.forEach((e) => {
+      relationCounts.set(e.from, (relationCounts.get(e.from) || 0) + 1);
+      relationCounts.set(e.to, (relationCounts.get(e.to) || 0) + 1);
+    });
+    const relationCount = (id) => relationCounts.get(id) || 0;
+    const keyIds = (types, limit) => D.nodes.filter((n) => types.includes(n.type))
+      .sort((a, b) => relationCount(b.id) - relationCount(a.id) || a.label.localeCompare(b.label))
+      .map((n) => n.id).slice(0, limit);
+    const runtimeTotal = D.nodes.filter((n) => ['broker', 'topic', 'queue', 'processor'].includes(n.type)).length;
+    const runtime = keyIds(['broker', 'topic', 'queue', 'processor'], 14);
     const dataIds = D.nodes.filter((n) => n.type === 'database').map((n) => n.id);
-    const visibleDataIds = dataIds.length ? dataIds : D.nodes.filter((n) => ['table', 'entity', 'model'].includes(n.type)).slice(0, 12).map((n) => n.id);
-    const extIds = D.nodes.filter((n) => n.type === 'external').map((n) => n.id);
+    const dataTotal = dataIds.length || D.nodes.filter((n) => ['table', 'entity', 'model'].includes(n.type)).length;
+    const visibleDataIds = (dataIds.length ? dataIds : keyIds(['table', 'entity', 'model'], 5)).slice(0, 5);
+    const extTotal = D.nodes.filter((n) => n.type === 'external').length;
+    const extIds = keyIds(['external'], 5);
 
     const cardW = 296, chipH = 44;
     const detailed = D.domains.filter((d) => !d.light);
     const lights = D.domains.filter((d) => d.light);
     const lightModCount = lights.reduce((s, d) => s + (d.allModules || d.modules).length, 0);
     const expanded = !!this.state.mapExpanded;
+    const moreNode = lights.length ? { id: 'd.more', type: 'module', label: `${lights.length} more areas`, desc: `Grouped for readability: ${lights.map((d) => d.name).join(', ')}.` } : null;
+    if (moreNode) {
+      this._syn = this._syn || {};
+      this._syn['d.more'] = moreNode;
+    }
+    const visibleDomainIds = expanded
+      ? D.domains.map((d) => 'd.' + d.id)
+      : detailed.map((d) => 'd.' + d.id).concat(moreNode ? ['d.more'] : []);
     let runtimeY = 40 + Math.max(1, Math.ceil(detailed.length / 4)) * 230 + 10;
     if (variant === 'clusters') {
       // Top domain cards in 2 rows, aggregated "more areas" card, runtime band below
@@ -777,9 +806,6 @@ class Component extends DCLogic {
       // remaining areas: aggregated card (never hidden silently) or expanded compact grid
       const aggX = 40 + 3 * (cardW + 56), aggY = 40 + 230;
       if (!expanded && lights.length) {
-        const moreNode = { id: 'd.more', type: 'module', label: lights.slice(0, 3).map((d) => d.name).join(' · ') + ' …', desc: `Aggregated: ${lights.map((d) => d.name).join(', ')}.` };
-        this._syn = this._syn || {};
-        this._syn['d.more'] = moreNode;
         G.push({
           x: aggX, y: aggY, w: cardW, h: 128, fill: '#fafbfa', stroke: '#c9d1cd',
           label: `${lights.length} more areas`, sub: `${lightModCount} modules`, footY: aggY + 96,
@@ -810,7 +836,7 @@ class Component extends DCLogic {
       const ry = runtimeY;
       const runtimeRows = Math.max(1, Math.ceil(runtime.length / 7));
       const runtimeH = 50 + runtimeRows * 54;
-      G.push({ x: 40, y: ry, w: 4 * (cardW + 56) - 56, h: runtimeH, fill: '#f2f7f9', stroke: '#c3d6dd', label: 'Async runtime — topics, queues, processors', sub: `${D.project.stats.topics} topics · ${D.project.stats.queues} queues · ${D.project.stats.processors} processors — all shown`, footY: 0 });
+      G.push({ x: 40, y: ry, w: 4 * (cardW + 56) - 56, h: runtimeH, fill: '#f2f7f9', stroke: '#c3d6dd', label: 'Async runtime — topics, queues, processors', sub: runtimeTotal > runtime.length ? `${runtime.length} key components of ${runtimeTotal}` : `${runtimeTotal} components — all shown`, footY: 0 });
       runtime.forEach((rid, i) => {
         const n = this.node(rid);
         const col = i % 7, row = Math.floor(i / 7);
@@ -821,18 +847,22 @@ class Component extends DCLogic {
       // data + external column
       const dx = 40 + 4 * (cardW + 56) + 10;
       const dataH = 48 + Math.max(1, visibleDataIds.length) * 60;
-      G.push({ x: dx, y: 40, w: 230, h: dataH, fill: '#f1f8f5', stroke: '#bcd8cd', label: 'Data', sub: `${D.project.stats.tables} data structures`, footY: 0 });
+      G.push({ x: dx, y: 40, w: 230, h: dataH, fill: '#f1f8f5', stroke: '#bcd8cd', label: 'Data', sub: dataTotal > visibleDataIds.length ? `${visibleDataIds.length} key structures of ${dataTotal}` : `${dataTotal} data structures`, footY: 0 });
       visibleDataIds.forEach((id, i) => { const b = { x: dx + 12, y: 78 + i * 60, w: 206, h: 46 }; pos[id] = b; N.push(this.mkNode(this.node(id), b.x, b.y, b.w, b.h)); });
       const extY = 60 + dataH;
       const extH = 48 + Math.max(1, extIds.length) * 60;
-      G.push({ x: dx, y: extY, w: 230, h: extH, fill: '#fbf1f1', stroke: '#e0c2c2', label: 'External systems', sub: `${extIds.length} APIs — all shown`, footY: 0 });
+      G.push({ x: dx, y: extY, w: 230, h: extH, fill: '#fbf1f1', stroke: '#e0c2c2', label: 'External systems', sub: extTotal > extIds.length ? `${extIds.length} key APIs of ${extTotal}` : `${extTotal} APIs — all shown`, footY: 0 });
       extIds.forEach((id, i) => { const b = { x: dx + 12, y: extY + 38 + i * 60, w: 206, h: 46 }; pos[id] = b; N.push(this.mkNode(this.node(id), b.x, b.y, b.w, b.h)); });
     } else if (variant === 'layers') {
       const laneW = 7 * 210;
+      const domainRows = Math.max(1, Math.ceil(visibleDomainIds.length / 7));
+      const runtimeLaneY = 40 + domainRows * 66 + 80;
+      const runtimeRows = Math.max(1, Math.ceil(runtime.length / 7));
+      const dataLaneY = runtimeLaneY + runtimeRows * 66 + 80;
       const lanes = [
-        { label: 'DOMAIN MODULES', y: 40, ids: D.domains.map((d) => 'd.' + d.id) },
-        { label: 'ASYNC RUNTIME — TOPICS · QUEUES · PROCESSORS', y: 300, ids: runtime },
-        { label: 'DATA & EXTERNAL', y: 560, ids: visibleDataIds.concat(extIds) },
+        { label: 'DOMAIN MODULES', y: 40, ids: visibleDomainIds },
+        { label: 'ASYNC RUNTIME — TOPICS · QUEUES · PROCESSORS', y: runtimeLaneY, ids: runtime },
+        { label: 'DATA & EXTERNAL', y: dataLaneY, ids: visibleDataIds.concat(extIds) },
       ];
       lanes.forEach((lane) => {
         C.push({ x: 40, y: lane.y - 12, x2: 40 + laneW, ly: lane.y - 6, label: lane.label, fill: '#8b9793' });
@@ -842,9 +872,10 @@ class Component extends DCLogic {
           if (id.startsWith('d.')) {
             const dm = D.domains.find((d) => 'd.' + d.id === id);
             pos[id] = { x: bx, y: by, w: 196, h: 56 };
-            domainNodeIds[dm.id] = id;
-            N.push(this.mkNode({ id, type: 'module', label: dm.name, desc: dm.desc + ' — ' + dm.counts }, bx, by, 196, 56, {
-              sub: dm.counts, onClick: () => this.setState({ mode: 'modules', sel: null, domainFilter: dm.id, vb: null, hist: [] }),
+            if (dm) domainNodeIds[dm.id] = id;
+            const dn = dm ? { id, type: 'module', label: dm.name, desc: dm.desc + ' — ' + dm.counts } : moreNode;
+            N.push(this.mkNode(dn, bx, by, 196, 56, {
+              sub: dm ? dm.counts : `${lightModCount} modules grouped`, onClick: dm ? () => this.setState({ mode: 'modules', sel: null, domainFilter: dm.id, vb: null, hist: [] }) : () => this.setState({ mapExpanded: true, vb: null }),
             }));
           } else {
             pos[id] = { x: bx, y: by, w: 196, h: 48 };
@@ -855,7 +886,7 @@ class Component extends DCLogic {
     } else {
       // 'columns' — three semantic columns: domains | events & jobs | data & external
       const colDefs = [
-        { label: 'DOMAINS', sub: 'the business areas of the app', x: 40, ids: D.domains.map((d) => 'd.' + d.id) },
+        { label: 'DOMAINS', sub: 'the business areas of the app', x: 40, ids: visibleDomainIds },
         { label: 'EVENTS & BACKGROUND JOBS', sub: 'work that happens later, after the response', x: 460, ids: runtime },
         { label: 'DATA & EXTERNAL', sub: 'what gets stored or sent outside', x: 880, ids: visibleDataIds.concat(extIds) },
       ];
@@ -866,9 +897,10 @@ class Component extends DCLogic {
           if (id.startsWith('d.')) {
             const dm = D.domains.find((d) => 'd.' + d.id === id);
             pos[id] = { x: cd.x, y: by, w: 300, h: 52 };
-            domainNodeIds[dm.id] = id;
-            N.push(this.mkNode({ id, type: 'module', label: dm.name, desc: dm.desc + ' — ' + dm.counts }, cd.x, by, 300, 52, {
-              sub: dm.counts, onClick: () => this.setState({ mode: 'modules', sel: null, domainFilter: dm.id, vb: null, hist: [] }),
+            if (dm) domainNodeIds[dm.id] = id;
+            const dn = dm ? { id, type: 'module', label: dm.name, desc: dm.desc + ' — ' + dm.counts } : moreNode;
+            N.push(this.mkNode(dn, cd.x, by, 300, 52, {
+              sub: dm ? dm.counts : `${lightModCount} modules grouped`, onClick: dm ? () => this.setState({ mode: 'modules', sel: null, domainFilter: dm.id, vb: null, hist: [] }) : () => this.setState({ mapExpanded: true, vb: null }),
             }));
           } else {
             pos[id] = { x: cd.x, y: by, w: 300, h: 52 };
@@ -895,17 +927,19 @@ class Component extends DCLogic {
       E.push(this.linkEdge(a, b, e, false, false, showLabels && variant !== 'clusters'));
     });
     const aggNote = lights.length ? (expanded ? `all ${D.domains.length} areas shown` : `${detailed.length} areas in detail · ${lights.length} aggregated (${lightModCount} modules — click to expand)`) : `all ${D.domains.length} areas shown`;
-    return { nodes: N, edges: E, groups: G, cols: C, status: `${aggNote} · ${runtime.length} runtime components · ${visibleDataIds.length} data stores · ${extIds.length} external systems.` };
+    return { nodes: N, edges: E, groups: G, cols: C, status: `${aggNote} · ${runtime.length} of ${runtimeTotal} runtime components · ${visibleDataIds.length} of ${dataTotal} data stores · ${extIds.length} of ${extTotal} external systems. Full catalogs stay available in the sidebar.` };
   }
 
   sceneModuleGrid(domainFilter) {
     const { D } = this.state;
     const N = [], G = [];
-    const doms = domainFilter ? D.domains.filter((d) => d.id === domainFilter) : D.domains;
+    const allDoms = domainFilter ? D.domains.filter((d) => d.id === domainFilter) : D.domains;
+    const doms = allDoms.slice(0, domainFilter ? 1 : 9);
     doms.forEach((dm, i) => {
       const perRow = domainFilter ? 1 : 3;
       const col = i % perRow, row = Math.floor(i / perRow);
-      const moduleIds = dm.allModules || dm.modules;
+      const allModuleIds = dm.allModules || dm.modules;
+      const moduleIds = allModuleIds.slice(0, domainFilter ? 8 : 3);
       const h = 42 + moduleIds.length * 54 + 6;
       const x = 40 + col * 360, y = 40 + row * 260;
       const grp = { x, y, w: 320, h, fill: '#fff', stroke: '#ccd5d1', label: dm.name, sub: dm.counts, footY: y + h - 32 };
@@ -915,7 +949,10 @@ class Component extends DCLogic {
         N.push(this.mkNode(m, x + 10, y + 38 + j * 54, 300, 46, { sub: `${this.plural((m.metrics && m.metrics.routes) || 0, 'route')} · ${this.plural((m.metrics && m.metrics.services) || 0, 'service')} · ${this.plural((m.metrics && m.metrics.tests) || 0, 'test')}` }));
       });
     });
-    return { nodes: N, edges: [], groups: G, cols: [], status: domainFilter ? `Area “${doms[0] ? doms[0].name : ''}” — select a module to see how it works.` : 'Select a module to see what starts it, what it does, what it needs, and what it changes.' };
+    const shownModules = N.length;
+    const totalModules = allDoms.reduce((sum, dm) => sum + (dm.allModules || dm.modules).length, 0);
+    const scope = domainFilter ? `Area “${doms[0] ? doms[0].name : ''}”` : `${doms.length} key areas of ${D.domains.length}`;
+    return { nodes: N, edges: [], groups: G, cols: [], status: `${scope} · ${shownModules} representative modules of ${totalModules}. Select any module in the catalog to see its full story.` };
   }
 
   // Generic semantic profile for modules without a curated one — built from the graph.
@@ -1180,14 +1217,22 @@ class Component extends DCLogic {
   }
 
   sceneGrid(types, hint) {
-    const { D, catQ, sel } = this.state;
+    const { D, catQ } = this.state;
     const items = D.nodes.filter((n) => types.includes(n.type) && (!catQ || (n.label + ' ' + (n.file || '')).toLowerCase().includes(catQ.toLowerCase())));
+    const degrees = new Map();
+    D.edges.forEach((e) => {
+      degrees.set(e.from, (degrees.get(e.from) || 0) + 1);
+      degrees.set(e.to, (degrees.get(e.to) || 0) + 1);
+    });
+    const degree = (id) => degrees.get(id) || 0;
+    const visible = items.slice().sort((a, b) => degree(b.id) - degree(a.id) || a.label.localeCompare(b.label)).slice(0, 16);
     const N = [];
-    items.forEach((n, i) => {
+    visible.forEach((n, i) => {
       const perRow = 4, col = i % perRow, row = Math.floor(i / perRow);
       N.push(this.mkNode(n, 40 + col * 290, 40 + row * 76, 260, 58, { sub: n.file || n.desc && n.desc.slice(0, 42) || '' }));
     });
-    return { nodes: N, edges: [], groups: [], cols: [], status: hint, emptyOk: items.length === 0 };
+    const scope = items.length > visible.length ? ` Showing ${visible.length} key items of ${items.length}; the complete list is in the catalog.` : '';
+    return { nodes: N, edges: [], groups: [], cols: [], status: hint + scope, emptyOk: items.length === 0 };
   }
 
   // ---------- viewbox / zoom ----------
@@ -1225,7 +1270,7 @@ class Component extends DCLogic {
       { id: 'services', label: 'Services', count: loading ? '' : D.project.stats.services },
       { id: 'data', label: 'Data Model', count: loading ? '' : D.project.stats.tables },
       { h: 'Boundary' },
-      { id: 'external', label: 'External', count: loading ? '' : D.nodes.filter((n) => ['external', 'env'].includes(n.type)).length },
+      { id: 'external', label: 'External', count: loading ? '' : D.nodes.filter((n) => ['external', 'env', 'library'].includes(n.type)).length },
       { h: 'Quality' },
       { id: 'risks', label: 'Risks', count: loading ? '' : D.nodes.filter((n) => n.type === 'risk').length },
       { id: 'files', label: 'Files & Code', count: loading ? '' : D.project.stats.files },
@@ -1244,7 +1289,7 @@ class Component extends DCLogic {
 
     const titles = {
       overview: ['Overview', 'Project size, key domains, entry points, and architecture risks at a glance.'],
-      map: ['System Map', 'Every domain, runtime component, and data system in the project — grouped, counted, nothing hidden.'],
+      map: ['System Map', 'The project’s key domains, runtime components, and data systems — grouped for readability, with complete catalogs one click away.'],
       modules: ['Modules', 'Pick a module to see what starts it, what it does, what it needs, and what it changes.'],
       routes: ['Routes & Flows', 'Follow an HTTP request from its endpoint to the data it changes and the events it publishes.'],
       async: ['Async Flows', 'Kafka topics, queues, publishers, consumers and processors — who sends what, and what runs next.'],
@@ -1443,7 +1488,7 @@ class Component extends DCLogic {
       showGraphControls: mode !== 'overview',
       showVariantSwitch: mode === 'map',
       variantBtns: [['clusters', 'Clusters'], ['layers', 'Layers'], ['columns', 'Columns']].map(([id, label]) => ({
-        label, go: () => this.setState({ mapVariant: id, vb: null }),
+        label, go: () => this.setState({ mapVariant: id, mapExpanded: false, vb: null }),
         bg: variant === id ? '#16211d' : '#fff', fg: variant === id ? '#fff' : '#4e5a56',
         fw: variant === id ? 700 : 500, hoverBg: variant === id ? '#16211d' : '#f2f5f4',
       })),
@@ -1465,21 +1510,58 @@ class Component extends DCLogic {
       vbStr, svgCursor: panning ? 'grabbing' : 'grab',
       gNodes: scn.nodes, gEdges: scn.edges, gGroups: scn.groups, gCols: scn.cols,
       statusText: scn.status || '', graphEmpty: !!scn.emptyOk,
-      emptyTitle: 'Nothing matches the current filter', emptyHint: 'Clear the filter in the list on the left to see all elements.',
+      emptyTitle: catQ ? 'Nothing matches the current filter' : (mode === 'data' ? 'No data structures detected' : 'Nothing was detected in this section'),
+      emptyHint: catQ ? 'Clear the filter in the list on the left to see all elements.' : (mode === 'data' ? 'Atlas did not recognize database schemas, tables, entities, or models in this scan.' : 'This scan did not produce any elements for this view.'),
       showClearFocus: !!sel || !!activeFlow,
       clearFocus: () => this.setState({ sel: null, activeFlow: null, expandedOp: null, tech: false, vb: null, hist: [] }),
       onHoverOut: () => this.setState({ hover: null }),
       tipVisible: !!hover && !panning, tipX: hover ? hover.x + 'px' : '0px', tipY: hover ? hover.y + 'px' : '0px',
       tipTitle: hover ? hover.title : '', tipBody: hover ? hover.body : '',
-      onWheel: (e) => { const f = e.deltaY > 0 ? 1.12 : 0.9; this.zoom(f); },
-      onPanStart: (e) => { if (e.target.closest && e.target.closest('g')) return; this._pan = { sx: e.clientX, sy: e.clientY, vb: this.state.vb || this.parseVb(vbStr) }; this.setState({ panning: true }); },
-      onPanMove: (e) => {
-        if (!this._pan || !this._svgEl) return;
-        const r = this._svgEl.getBoundingClientRect();
-        const scale = this._pan.vb.w / r.width;
-        this.setState({ vb: { x: this._pan.vb.x - (e.clientX - this._pan.sx) * scale, y: this._pan.vb.y - (e.clientY - this._pan.sy) * scale, w: this._pan.vb.w, h: this._pan.vb.h } });
+      onWheel: (e) => { e.preventDefault(); const f = e.deltaY > 0 ? 1.12 : 0.9; this.zoom(f); },
+      onPanStart: (e) => {
+        if (e.button !== 0 || (e.target.closest && e.target.closest('button, input'))) return;
+        e.preventDefault();
+        const vb = this.state.vb || this.parseVb(vbStr);
+        const rect = e.currentTarget.getBoundingClientRect();
+        this._pan = {
+          id: e.pointerId, sx: e.clientX, sy: e.clientY, vb, moved: false,
+          scale: Math.max(vb.w / Math.max(rect.width, 1), vb.h / Math.max(rect.height, 1)),
+        };
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+        this.setState({ panning: true, hover: null });
       },
-      onPanEnd: () => { this._pan = null; if (this.state.panning) this.setState({ panning: false }); },
+      onPanMove: (e) => {
+        if (!this._pan || this._pan.id !== e.pointerId) return;
+        const dx = e.clientX - this._pan.sx;
+        const dy = e.clientY - this._pan.sy;
+        if (!this._pan.moved && Math.hypot(dx, dy) < 3) return;
+        e.preventDefault();
+        this._pan.moved = true;
+        this._nextPanVb = {
+          x: this._pan.vb.x - dx * this._pan.scale,
+          y: this._pan.vb.y - dy * this._pan.scale,
+          w: this._pan.vb.w,
+          h: this._pan.vb.h,
+        };
+        if (!this._panFrame) this._panFrame = requestAnimationFrame(() => {
+          this._panFrame = null;
+          if (this._nextPanVb) this.setState({ vb: this._nextPanVb });
+        });
+      },
+      onPanEnd: (e) => {
+        if (!this._pan || (e.pointerId !== undefined && this._pan.id !== e.pointerId)) return;
+        const moved = this._pan.moved;
+        if (this._panFrame) cancelAnimationFrame(this._panFrame);
+        this._panFrame = null;
+        if (this._nextPanVb) this.setState({ vb: this._nextPanVb, panning: false });
+        else if (this.state.panning) this.setState({ panning: false });
+        this._nextPanVb = null;
+        this._pan = null;
+        if (moved) {
+          this._suppressClick = true;
+          setTimeout(() => { this._suppressClick = false; }, 0);
+        }
+      },
 
       searchQ: q, searchOpen: searchOpen && !!q, searchResults, searchEmpty: !!q && !searchResults.length,
       onSearch: (e) => this.setState({ q: e.target.value, searchOpen: true }),

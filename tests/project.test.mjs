@@ -162,6 +162,15 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /@keyframes atlasFade/);
   assert.match(viewerHtml, /@keyframes atlasDash/);
   assert.match(viewerHtml, /animation: atlasDash/);
+  assert.match(viewerHtml, /setPointerCapture/);
+  assert.match(viewerHtml, /Math\.max\(vb\.w \/ Math\.max\(rect\.width, 1\), vb\.h \/ Math\.max\(rect\.height, 1\)\)/);
+  assert.match(viewerHtml, /Math\.hypot\(dx, dy\) < 3/);
+  assert.match(viewerHtml, /user-select: none; -webkit-user-select: none/);
+  assert.match(viewerHtml, /this\._suppressClick = true/);
+  assert.match(viewerHtml, /Showing \$\{visible\.length\} key items of \$\{items\.length\}/);
+  assert.match(viewerHtml, /const doms = allDoms\.slice\(0, domainFilter \? 1 : 9\)/);
+  assert.match(viewerHtml, /const runtime = keyIds\(\['broker', 'topic', 'queue', 'processor'\], 14\)/);
+  assert.match(viewerHtml, /No data structures detected/);
   assert.doesNotMatch(viewerHtml, /<(?:svg|g|rect|foreignObject|text|line|path)\b[^>]*\s(?:viewBox|x|y|width|height|x1|y1|x2|y2|d|transform|opacity)="\{\{/i);
   assert.doesNotMatch(viewerHtml, /shopcore|deleteUserItems|ItemsService/);
   assert.doesNotMatch(viewerHtml, /<(?:script|link)[^>]+https?:\/\//);
