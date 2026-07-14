@@ -14,9 +14,14 @@ The specification defines these interaction rules:
 - the System map exposes every detected module and all detected async runtime,
   data-store, and external-system components;
 - module scenes explain triggers, operations, dependencies, and effects;
+- selecting an operation isolates its dependency/effect chain and a second
+  selection opens its detected full flow;
 - request and async scenes use numbered steps and state where the flow ends;
 - service and data scenes separate incoming and outgoing relationships;
 - file scenes explain users, declarations, code dependencies, and effects;
+- risk scenes separate the finding, affected code, impact, and remediation;
+- semantic scenes can always switch to the underlying technical graph;
+- source previews include locations, line numbers, and syntax highlighting;
 - the inspector keeps plain-language purpose visible while technical metadata
   and source remain available on demand.
 
