@@ -177,6 +177,9 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /@keyframes atlasDash/);
   assert.match(viewerHtml, /animation: atlasDash/);
   assert.match(viewerHtml, /setPointerCapture/);
+  assert.match(viewerHtml, /if \(!this\._pan\.moved\) \{[\s\S]*setPointerCapture/);
+  assert.doesNotMatch(viewerHtml, /onPanStart:[\s\S]{0,700}setPointerCapture/);
+  assert.doesNotMatch(viewerHtml, /onWheel: \(e\) => \{ e\.preventDefault/);
   assert.match(viewerHtml, /Math\.max\(vb\.w \/ Math\.max\(rect\.width, 1\), vb\.h \/ Math\.max\(rect\.height, 1\)\)/);
   assert.match(viewerHtml, /Math\.hypot\(dx, dy\) < 3/);
   assert.match(viewerHtml, /user-select: none; -webkit-user-select: none/);
