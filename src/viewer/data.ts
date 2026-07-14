@@ -22,6 +22,25 @@ interface ViewerEdge {
   n?: number;
 }
 
+interface ViewerFlow {
+  title: string;
+  summary: string;
+  root: string;
+  steps: Array<{ id: string; col: number; row: number; stage: string }>;
+  links: ViewerEdge[];
+  ends: string;
+}
+
+interface ViewerFileRole {
+  role: string;
+  declares: Array<{ id: string; note: string }>;
+  usedBy: Array<{ id: string; verb: string }>;
+  flowsThrough: Array<{ flow: string; label: string }>;
+  calls: Array<{ id: string; verb: string }>;
+  dataAndExternal: Array<{ id: string; verb: string }>;
+  related: string[];
+}
+
 const typeColors: Record<string, string> = {
   project: "#17201d", module: "#bd4e86", controller: "#286aa6", service: "#7452a8",
   provider: "#765d97", repository: "#5068a4", route: "#df642d", method: "#56635e",
@@ -165,10 +184,10 @@ function inferDomains(graph: ArchitectureGraph): Map<string, string> {
   const result = new Map<string, string>();
   for (const node of graph.nodes) result.set(node.id, domainFromFile(node.file ?? node.sourceLocation?.file ?? ""));
   const modules = graph.nodes.filter((node) => node.type === "module");
-  for (const module of modules) {
-    const domain = domainFromFile(module.file ?? "") || slug(module.label.replace(/Module$/i, ""));
-    result.set(module.id, domain);
-    const related = graph.edges.filter((edge) => edge.from === module.id && ["contains", "provides", "declares"].includes(edge.type));
+  for (const moduleNode of modules) {
+    const domain = domainFromFile(moduleNode.file ?? "") || slug(moduleNode.label.replace(/Module$/i, ""));
+    result.set(moduleNode.id, domain);
+    const related = graph.edges.filter((edge) => edge.from === moduleNode.id && ["contains", "provides", "declares"].includes(edge.type));
     for (const edge of related) result.set(edge.to, domain);
   }
   return result;
@@ -192,9 +211,9 @@ function buildDomains(nodes: ViewerNode[], domainByNode: Map<string, string>) {
     if (["service", "provider", "repository"].includes(node.type)) serviceCounts.set(node.domain, (serviceCounts.get(node.domain) ?? 0) + 1);
   }
   const grouped = new Map<string, ViewerNode[]>();
-  for (const module of modules) {
-    const domain = domainByNode.get(module.id) ?? module.domain;
-    grouped.set(domain, [...(grouped.get(domain) ?? []), module]);
+  for (const moduleNode of modules) {
+    const domain = domainByNode.get(moduleNode.id) ?? moduleNode.domain;
+    grouped.set(domain, [...(grouped.get(domain) ?? []), moduleNode]);
   }
   return [...grouped.entries()].map(([id, domainModules]) => ({
     id,
@@ -229,10 +248,10 @@ function mapEndpoint(node: ViewerNode): string {
   return node.domain ? `d.${node.domain}` : "";
 }
 
-function buildFlows(nodes: ViewerNode[], edges: ViewerEdge[], mode: "route" | "async") {
+function buildFlows(nodes: ViewerNode[], edges: ViewerEdge[], mode: "route" | "async"): Record<string, ViewerFlow> {
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
   const roots = nodes.filter((node) => mode === "route" ? node.type === "route" : ["topic", "queue"].includes(node.type));
-  const result: Record<string, { title: string; summary: string; root: string; steps: Array<{ id: string; col: number; row: number; stage: string }>; links: ViewerEdge[]; ends: string }> = {};
+  const result: Record<string, ViewerFlow> = {};
   for (const root of roots) {
     const visited = new Map([[root.id, 0]]);
     const queue = [root.id];
@@ -284,9 +303,14 @@ function flowEnding(nodes: ViewerNode[]): string {
   return effects.length ? `The flow reaches ${effects.slice(0, 5).map((node) => node.label).join(", ")}.` : "The flow ends at the last detected operation in the static code path.";
 }
 
-function buildFileRoles(nodes: ViewerNode[], edges: ViewerEdge[], flows: Record<string, any>, asyncFlows: Record<string, any>) {
+function buildFileRoles(
+  nodes: ViewerNode[],
+  edges: ViewerEdge[],
+  flows: Record<string, ViewerFlow>,
+  asyncFlows: Record<string, ViewerFlow>,
+): Record<string, ViewerFileRole> {
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-  const roles: Record<string, any> = {};
+  const roles: Record<string, ViewerFileRole> = {};
   for (const file of nodes.filter((node) => node.type === "file")) {
     const declarations = nodes.filter((node) => node.file === file.file && node.id !== file.id && !["file", "risk"].includes(node.type));
     const declaredIds = new Set(declarations.map((node) => node.id));
@@ -295,8 +319,8 @@ function buildFileRoles(nodes: ViewerNode[], edges: ViewerEdge[], flows: Record<
     const calls = outgoing.filter((edge) => edge.kind === "sync");
     const effects = outgoing.filter((edge) => edge.kind !== "sync");
     const flowEntries = [...Object.entries(flows), ...Object.entries(asyncFlows)]
-      .filter(([, flow]: any) => flow.steps.some((step: any) => declaredIds.has(step.id)))
-      .map(([flow, data]: any) => ({ flow, label: data.title.split(" — ")[0] }));
+      .filter(([, flow]) => flow.steps.some((step) => declaredIds.has(step.id)))
+      .map(([flow, data]) => ({ flow, label: data.title.split(" — ")[0] }));
     roles[file.id] = {
       role: file.desc,
       declares: declarations.slice(0, 12).map((node) => ({ id: node.id, note: typeLabels[node.type] ?? node.type })),
