@@ -174,7 +174,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     const indexResponse = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(indexResponse.status, 200);
     assert.match(indexResponse.headers.get("content-type") ?? "", /text\/html/);
-    assert.match(await indexResponse.text(), /Atlas Architecture Map/);
+    assert.match(await indexResponse.text(), /data-screen-label="Atlas app"/);
     const traversalResponse = await fetch(`http://127.0.0.1:${port}/%2e%2e/%2e%2e/package.json`);
     assert.notEqual(traversalResponse.status, 200);
   } finally {
