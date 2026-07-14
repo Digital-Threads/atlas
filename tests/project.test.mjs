@@ -192,6 +192,12 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /const directOwnerIds = new Set/);
   assert.match(viewerHtml, /handledOperationIds\.size \? allOperationNodes\.filter/);
   assert.match(viewerHtml, /\['method', 'service', 'provider', 'repository', 'guard', 'pipe', 'library', 'env'\]\.includes\(target\.type\)/);
+  assert.match(viewerHtml, /const focusedOps = new Set\(expandedOp \? \[expandedOp\] : \[\]\)/);
+  assert.match(viewerHtml, /hover: \{ nodeId: n\.id/);
+  assert.match(viewerHtml, /window\.addEventListener\('keydown', this\._onKeyDown\)/);
+  assert.match(viewerHtml, /onClick="\{\{ onCanvasClick \}\}"/);
+  assert.match(viewerHtml, /const clickId = this\.node\(e\.to\) \? e\.to/);
+  assert.match(viewerHtml, /this\.reveal\(clickId\)/);
   assert.doesNotMatch(viewerHtml, /mod\.metrics\.routes/);
   assert.match(viewerHtml, /No data structures detected/);
   assert.doesNotMatch(viewerHtml, /<(?:svg|g|rect|foreignObject|text|line|path)\b[^>]*\s(?:viewBox|x|y|width|height|x1|y1|x2|y2|d|transform|opacity)="\{\{/i);

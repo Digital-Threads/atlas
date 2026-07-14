@@ -235,7 +235,7 @@
           <section aria-label="Map" style="flex: 1; min-width: 0; min-height: 0; position: relative; background: #f7f9f8; overflow: hidden;">
             <div style="position: absolute; inset: 0; background-image: radial-gradient(#d3dad6 1px, transparent 1px); background-size: 22px 22px; opacity: 0.5; pointer-events: none;"></div>
 
-            <svg ref="{{ svgRef }}" sc-camel-view-box="{{ vbStr }}" preserveAspectRatio="xMidYMid meet" onWheel="{{ onWheel }}" onPointerDown="{{ onPanStart }}" onPointerMove="{{ onPanMove }}" onPointerUp="{{ onPanEnd }}" onPointerCancel="{{ onPanEnd }}" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: {{ svgCursor }}; touch-action: none; user-select: none; -webkit-user-select: none;">
+            <svg ref="{{ svgRef }}" sc-camel-view-box="{{ vbStr }}" preserveAspectRatio="xMidYMid meet" onClick="{{ onCanvasClick }}" onWheel="{{ onWheel }}" onPointerDown="{{ onPanStart }}" onPointerMove="{{ onPanMove }}" onPointerUp="{{ onPanEnd }}" onPointerCancel="{{ onPanEnd }}" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: {{ svgCursor }}; touch-action: none; user-select: none; -webkit-user-select: none;">
               <defs>
                 <marker id="arr-sync" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7d8a84"></path></marker>
                 <marker id="arr-async" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#0f7895"></path></marker>
@@ -277,7 +277,7 @@
 
               <!-- edges -->
               <sc-for list="{{ gEdges }}" as="edge" hint-placeholder-count="0">
-                <g sc-camel-opacity="{{ edge.op }}" onMouseEnter="{{ edge.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: default;">
+                <g sc-camel-opacity="{{ edge.op }}" onClick="{{ edge.onClick }}" onMouseEnter="{{ edge.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: {{ edge.cursor }};">
                   <path sc-camel-d="{{ edge.d }}" fill="none" stroke="transparent" stroke-width="12"></path>
                   <path sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}" sc-camel-style="{{ edge.anim }}"></path>
                   <sc-if value="{{ edge.showLabel }}" hint-placeholder-val="{{ false }}">
@@ -551,6 +551,19 @@ class Component extends DCLogic {
     let seen = false;
     try { seen = localStorage.getItem('atlas_guide_seen') === '1'; } catch (e) {}
     if (!seen) this.setState({ guideOpen: true });
+    this._onKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
+      if (this.state.guideOpen) { this.closeGuide(); return; }
+      if (this.state.searchOpen) { this.setState({ q: '', searchOpen: false }); return; }
+      if (this.state.expandedOp) {
+        this.setState({ sel: this._profHost || this.state.sel, expandedOp: null, hover: null, panelHidden: false, vb: null });
+      }
+    };
+    window.addEventListener('keydown', this._onKeyDown);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('keydown', this._onKeyDown);
+    if (this._panFrame) cancelAnimationFrame(this._panFrame);
   }
   closeGuide() {
     try { localStorage.setItem('atlas_guide_seen', '1'); } catch (e) {}
@@ -677,6 +690,7 @@ class Component extends DCLogic {
     else if (b.y > a.y) { x1 = a.x + a.w / 2; y1 = a.y + a.h; x2 = b.x + b.w / 2; y2 = b.y; }
     else { x1 = a.x + a.w / 2; y1 = a.y; x2 = b.x + b.w / 2; y2 = b.y + b.h; }
     const st = this.edgeStyle(e.kind, hi);
+    const clickId = this.node(e.to) ? e.to : (this.node(e.from) ? e.from : null);
     const horizontal = Math.abs(x2 - x1) > Math.abs(y2 - y1);
     const d = horizontal ? this.bez(x1, y1, x2, y2) : `M ${x1} ${y1} C ${x1} ${y1 + (y2 - y1) * 0.45}, ${x2} ${y2 - (y2 - y1) * 0.45}, ${x2} ${y2 > y1 ? y2 - 8 : y2 + 8}`;
     return {
@@ -685,6 +699,8 @@ class Component extends DCLogic {
       showLabel: !!(showLabels && e.verb && !dim), verb: e.verb, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 7,
       anim: e.kind === 'async' && !dim ? `animation: atlasDash ${hi ? 1.1 : 2.2}s linear infinite;` : '',
       onEnter: (ev) => this.hoverEdge(ev, e),
+      cursor: clickId ? 'pointer' : 'default',
+      onClick: clickId ? (ev) => { ev.stopPropagation(); this.reveal(clickId); } : () => {},
     };
   }
   mkNode(n, x, y, w, h, extra = {}) {
@@ -712,13 +728,13 @@ class Component extends DCLogic {
   }
   hoverNode(ev, n) {
     const box = ev.currentTarget.ownerSVGElement.getBoundingClientRect();
-    this.setState({ hover: { x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: n.label, body: n.desc || this.tLabel(n.type) } });
+    this.setState({ hover: { nodeId: n.id, x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: n.label, body: n.desc || this.tLabel(n.type) } });
   }
   hoverEdge(ev, e) {
     const a = this.node(e.from), b = this.node(e.to); if (!a || !b) return;
     const box = ev.currentTarget.ownerSVGElement.getBoundingClientRect();
     const kindNote = { sync: 'synchronous call', async: 'event / queue — happens after the response', data: 'data read or write', external: 'call outside the system' }[e.kind] || '';
-    this.setState({ hover: { x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: `${a.label} → ${b.label}`, body: `${a.label} ${e.verb} ${b.label}. ${kindNote ? '(' + kindNote + ')' : ''}` } });
+    this.setState({ hover: { edgeFrom: e.from, edgeTo: e.to, x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: `${a.label} → ${b.label}`, body: `${a.label} ${e.verb} ${b.label}. ${kindNote ? '(' + kindNote + ')' : ''}` } });
   }
 
   // ---------- scenes ----------
@@ -1022,15 +1038,28 @@ class Component extends DCLogic {
     ];
     heads.forEach(([h, sub], i) => C.push({ x: colX[i], y: 36, subY: 49, x2: colX[i] + 230, ly: 58, label: h, sub, fill: i === 1 ? '#df642d' : '#8b9793' }));
 
-    const hiIds = new Set();
-    if (expandedOp) {
-      hiIds.add(expandedOp); hiIds.add(sel);
-      (prof.opLinks || []).filter((l) => l.from === expandedOp).forEach((l) => hiIds.add(l.to));
-      const operation = prof.operations.find((op) => op.id === expandedOp);
-      const starts = operation && operation.routes && operation.routes.length ? operation.routes : prof.starts.map((s) => s.id);
-      starts.forEach((id) => hiIds.add(id));
+    const hoverId = !expandedOp && this.state.hover
+      ? (this.state.hover.nodeId || this.state.hover.edgeFrom || this.state.hover.edgeTo)
+      : null;
+    const focusedOps = new Set(expandedOp ? [expandedOp] : []);
+    if (hoverId) {
+      prof.operations.forEach((op) => {
+        const touchesHover = op.id === hoverId
+          || (op.routes || []).includes(hoverId)
+          || (prof.opLinks || []).some((link) => link.from === op.id && link.to === hoverId);
+        if (touchesHover) focusedOps.add(op.id);
+      });
     }
-    const dimOf = (id) => expandedOp ? !hiIds.has(id) : false;
+    const hiIds = new Set();
+    focusedOps.forEach((opId) => {
+      hiIds.add(opId); hiIds.add(sel);
+      (prof.opLinks || []).filter((link) => link.from === opId).forEach((link) => hiIds.add(link.to));
+      const operation = prof.operations.find((op) => op.id === opId);
+      const starts = operation && operation.routes && operation.routes.length ? operation.routes : prof.starts.map((start) => start.id);
+      starts.forEach((id) => hiIds.add(id));
+    });
+    const hasFocus = focusedOps.size > 0;
+    const dimOf = (id) => hasFocus ? !hiIds.has(id) : false;
 
     prof.starts.forEach((st, i) => {
       const n = this.node(st.id);
@@ -1071,23 +1100,25 @@ class Component extends DCLogic {
     });
 
     prof.starts.forEach((st) => {
-      const hi = expandedOp && hiIds.has(st.id);
+      const hi = hasFocus && hiIds.has(st.id);
       E.push(this.linkEdge(pos[st.id], pos[sel], { from: st.id, to: sel, verb: st.note ? 'calls' : 'starts', kind: 'sync' }, hi, dimOf(st.id), false));
     });
     prof.operations.forEach((op) => {
-      const hi = expandedOp === op.id;
+      const hi = focusedOps.has(op.id);
       E.push(this.linkEdge(pos[sel], pos[op.id], { from: sel, to: op.id, verb: '', kind: 'sync' }, hi, dimOf(op.id), false));
     });
     const opEdges = (prof.opLinks || []).map((l) => [l.from, l.to, l.verb, l.kind]);
     opEdges.forEach(([f, t, verb, kind]) => {
       if (!pos[f] || !pos[t]) return;
-      const hi = expandedOp === f;
-      const dim = expandedOp ? expandedOp !== f : false;
+      const hi = focusedOps.has(f);
+      const dim = hasFocus ? !focusedOps.has(f) : false;
       E.push(this.linkEdge(pos[f], pos[t], { from: f, to: t, verb, kind }, hi, dim, showLabels));
     });
     const expanded = expandedOp ? prof.operations.find((op) => op.id === expandedOp) : null;
     const status = expandedOp
       ? `Operation expanded — the orange chain shows exactly what ${expanded ? expanded.name : 'this operation'} touches.${expanded && expanded.flow ? ' Click it again to open the full request flow.' : ''}`
+      : hasFocus
+        ? `Chain preview — orange shows everything connected to ${this.node(hoverId) ? this.node(hoverId).label : 'this item'}. Click an operation to keep the focus.`
       : `${mod.label}: ${this.plural(prof.starts.length, 'trigger')} · ${this.plural(prof.operations.length, 'operation')} · ${this.plural(prof.needs.length, 'dependency').replace('dependencys', 'dependencies')} · ${this.plural(prof.changes.length, 'effect')}. Click an operation to inspect its relationships.`;
     return { nodes: N, edges: E, groups: [], cols: C, status };
   }
@@ -1525,6 +1556,10 @@ class Component extends DCLogic {
       showClearFocus: !!sel || !!activeFlow,
       clearFocus: () => this.setState({ sel: null, activeFlow: null, expandedOp: null, tech: false, vb: null, hist: [] }),
       onHoverOut: () => this.setState({ hover: null }),
+      onCanvasClick: (e) => {
+        if (e.target !== e.currentTarget || this._suppressClick || !this.state.expandedOp) return;
+        this.setState({ sel: this._profHost || this.state.sel, expandedOp: null, hover: null, panelHidden: false, vb: null });
+      },
       tipVisible: !!hover && !panning, tipX: hover ? hover.x + 'px' : '0px', tipY: hover ? hover.y + 'px' : '0px',
       tipTitle: hover ? hover.title : '', tipBody: hover ? hover.body : '',
       onWheel: (e) => { const f = e.deltaY > 0 ? 1.12 : 0.9; this.zoom(f); },
