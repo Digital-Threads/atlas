@@ -15,13 +15,14 @@ verification or `npm run test:performance` for the scale target alone.
 | Typed graph, integrity validation, traversal, and structured search | Complete | `src/core/graph.ts`, `tests/graph.test.mjs` |
 | NestJS modules, controllers, services, providers, methods, DTOs, decorators, and routes | Complete | `src/adapters/nest-adapter.ts`, fixture integration test |
 | Constructor injection, imports/exports, calls, guards, pipes, interceptors, and middleware | Complete | fixture integration test |
+| Kafka topics, publishers, consumers, Bull queues, jobs, and processors | Complete | async flow fixture and real-project verification |
 | Prisma models, relations, operations, reads, and writes | Complete | fixture integration test |
 | Basic TypeORM entities, relations, repositories, reads, and writes | Complete | fixture integration test |
 | Environment variable names without values | Complete | secret-leak assertions in `tests/project.test.mjs` |
 | Supported HTTP client calls and unknown env-configured APIs | Complete | fixture integration test |
 | Package dependencies, libraries, scripts, version, and package manager metadata | Complete | fixture integration test |
 | Static local viewer with modes, filters, search, details, flows, source, dependencies, and dependents | Complete | generated viewer syntax/assertions and browser verification |
-| Ten read-only MCP graph tools | Complete | live MCP subprocess integration test |
+| Twelve read-only MCP graph tools, including async flow queries | Complete | live MCP subprocess integration test |
 | Markdown report and seven architecture risk rules | Complete | `tests/risks.test.mjs`, report integration test |
 | Unsupported projects produce a basic graph and warning without crashing | Complete | unsupported-project integration test |
 
