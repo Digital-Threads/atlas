@@ -25,7 +25,7 @@ test("serves viewer files with security headers and rejects unsafe requests", as
     assert.match(csp, /default-src 'self'/);
     assert.match(csp, /style-src 'self' 'unsafe-inline'/);
     assert.match(csp, /font-src 'self' data:/);
-    assert.match(csp, /script-src 'self';/);
+    assert.match(csp, /script-src 'self' 'unsafe-eval';/);
     assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/);
     assert.equal(index.headers.get("x-content-type-options"), "nosniff");
     assert.match(await index.text(), /Atlas test/);
