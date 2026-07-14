@@ -9,7 +9,7 @@ const mimeTypes: Record<string, string> = {
 };
 const securityHeaders = {
   "cache-control": "no-store",
-  "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
   "cross-origin-opener-policy": "same-origin",
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
