@@ -158,7 +158,8 @@ function viewerType(type: GraphNode["type"]): string {
 }
 
 function toViewerEdge(edge: GraphEdge): ViewerEdge {
-  return { from: edge.from, to: edge.to, verb: edge.label || edgeVerb(edge.type), kind: edgeKind(edge.type) };
+  const customLabel = edge.label && edge.label !== edge.type ? edge.label : "";
+  return { from: edge.from, to: edge.to, verb: customLabel || edgeVerb(edge.type), kind: edgeKind(edge.type) };
 }
 
 function edgeKind(type: GraphEdge["type"]): ViewerKind {
