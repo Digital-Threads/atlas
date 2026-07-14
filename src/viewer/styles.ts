@@ -165,7 +165,12 @@ a:focus-visible {
 }
 
 .graph-guide.semantic > * {
+  min-width: 0;
+  padding: 0 5px;
   display: block;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
   text-align: center;
 }
 
