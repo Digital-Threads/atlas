@@ -1542,9 +1542,37 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
+.source-toolbar {
+  margin-bottom: 8px;
+  padding: 8px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.source-toolbar code {
+  min-width: 0;
+  color: var(--muted);
+  font: 10px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-toolbar .command {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+}
+
 .source {
   max-height: 360px;
-  padding: 11px;
+  margin: 0;
+  padding: 8px 0;
   overflow: auto;
   color: #e8efec;
   background: #17201d;
@@ -1552,6 +1580,45 @@ a:focus-visible {
   font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
   white-space: pre-wrap;
 }
+
+.source > code,
+.source-line {
+  display: block;
+}
+
+.source-line {
+  min-height: 17px;
+  padding: 0 12px 0 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+}
+
+.source-line:hover {
+  background: rgb(255 255 255 / 5%);
+}
+
+.source-line > i {
+  padding-right: 11px;
+  color: #64736d;
+  font-style: normal;
+  text-align: right;
+  user-select: none;
+}
+
+.source-line > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.source-line b {
+  font-weight: 500;
+}
+
+.syntax-comment { color: #81958d; font-style: italic; }
+.syntax-decorator { color: #e6af68; }
+.syntax-string { color: #9bd0a8; }
+.syntax-number { color: #e5a7a7; }
+.syntax-keyword { color: #83b8e8; }
 
 .notice {
   padding: 10px;
