@@ -960,11 +960,21 @@ class Component extends DCLogic {
     const { D } = this.state;
     const m = this.node(mid);
     const dom = m.domain;
-    const owners = D.nodes.filter((n) => ['controller', 'service', 'provider', 'repository', 'processor'].includes(n.type) && n.domain === dom);
+    const ownerTypes = ['controller', 'service', 'provider', 'repository', 'processor'];
+    const directOwnerIds = new Set(D.edges
+      .filter((e) => e.from === mid && ['contains', 'provides'].includes(e.verb))
+      .map((e) => e.to));
+    const directOwners = D.nodes.filter((n) => ownerTypes.includes(n.type) && directOwnerIds.has(n.id));
+    const owners = directOwners.length ? directOwners : D.nodes.filter((n) => ownerTypes.includes(n.type) && n.domain === dom);
     const ownerIds = new Set(owners.map((n) => n.id));
     const operationIds = new Set(D.edges.filter((e) => ownerIds.has(e.from) && e.verb === 'declares').map((e) => e.to));
-    const operationsNodes = D.nodes.filter((n) => operationIds.has(n.id) && n.type === 'method');
-    const routes = D.nodes.filter((n) => n.type === 'route' && n.domain === dom);
+    const allOperationNodes = D.nodes.filter((n) => operationIds.has(n.id) && n.type === 'method');
+    const routes = D.nodes.filter((n) => n.type === 'route' && D.edges.some((e) => e.from === n.id && e.verb === 'handled by' && operationIds.has(e.to)));
+    const handledOperationIds = new Set(D.edges.filter((e) => routes.some((route) => route.id === e.from) && e.verb === 'handled by').map((e) => e.to));
+    const operationScore = (node) => D.edges.filter((e) => e.from === node.id && ['calls', 'reads', 'writes', 'publishes', 'enqueues'].includes(e.verb)).length;
+    const operationsNodes = (handledOperationIds.size ? allOperationNodes.filter((node) => handledOperationIds.has(node.id)) : allOperationNodes)
+      .sort((a, b) => operationScore(b) - operationScore(a) || a.label.localeCompare(b.label))
+      .slice(0, 18);
     const starts = routes.map((r) => ({ id: r.id }));
     D.edges.forEach((e) => {
       if ((ownerIds.has(e.to) || operationIds.has(e.to)) && !ownerIds.has(e.from) && !operationIds.has(e.from)) {
@@ -977,13 +987,13 @@ class Component extends DCLogic {
       const flow = opRoutes.map((route) => D.routeFlowIndex[route.id]).find(Boolean) || null;
       return { id: op.id, name: op.label, desc: (op.desc || 'Detected operation').split('.')[0].slice(0, 72), routes: opRoutes.map((route) => route.id), flow };
     });
-    if (!operations.length) owners.forEach((owner) => operations.push({ id: owner.id, name: owner.label, desc: (owner.desc || this.tLabel(owner.type)).split('.')[0].slice(0, 72), routes: [], flow: null }));
+    if (!operations.length) owners.slice(0, 18).forEach((owner) => operations.push({ id: owner.id, name: owner.label, desc: (owner.desc || this.tLabel(owner.type)).split('.')[0].slice(0, 72), routes: [], flow: null }));
     const operationSet = new Set(operations.map((op) => op.id));
     const needs = [], changes = [], opLinks = [], seenN = new Set(), seenC = new Set();
     operations.forEach((op) => {
       D.edges.filter((e) => e.from === op.id).forEach((e) => {
         const target = this.node(e.to); if (!target || operationSet.has(target.id)) return;
-        if (e.kind === 'sync' && ['service', 'provider', 'repository', 'guard', 'pipe', 'library', 'env'].includes(target.type)) {
+        if (e.kind === 'sync' && ['method', 'service', 'provider', 'repository', 'guard', 'pipe', 'library', 'env'].includes(target.type)) {
           if (!seenN.has(target.id)) { seenN.add(target.id); needs.push({ id: target.id, verb: e.verb }); }
           opLinks.push({ from: op.id, to: target.id, verb: e.verb, kind: e.kind });
         } else if (['data', 'async', 'external'].includes(e.kind)) {
@@ -992,7 +1002,7 @@ class Component extends DCLogic {
         }
       });
     });
-    return { summary: `How ${m.label} works — built from the scanned graph.`, starts, operations, needs, changes, opLinks, generic: true };
+    return { summary: `How ${m.label} works — built from the scanned graph.`, starts, operations, needs, changes, opLinks, ownerCount: owners.length, generic: true };
   }
 
   sceneModule(sel) {
@@ -1031,7 +1041,7 @@ class Component extends DCLogic {
     const mod = this.node(sel);
     const modB = { x: colX[1], y: 72 + (prof.starts.length * 60) / 2 - 60, w: 230, h: 76 };
     pos[sel] = modB;
-    N.push(this.mkNode(mod, modB.x, modB.y, modB.w, modB.h, { dim: false, sub: mod.metrics ? `${this.plural(mod.metrics.routes, 'route')} · ${this.plural(mod.metrics.services, 'service')}` : '' }));
+    N.push(this.mkNode(mod, modB.x, modB.y, modB.w, modB.h, { dim: false, sub: `${this.plural(prof.starts.length, 'route')} · ${this.plural(prof.ownerCount || 0, 'component')}` }));
 
     prof.operations.forEach((op, i) => {
       const b = { x: colX[2], y: 72 + i * 86, w: 230, h: 54 };
@@ -1078,7 +1088,7 @@ class Component extends DCLogic {
     const expanded = expandedOp ? prof.operations.find((op) => op.id === expandedOp) : null;
     const status = expandedOp
       ? `Operation expanded — the orange chain shows exactly what ${expanded ? expanded.name : 'this operation'} touches.${expanded && expanded.flow ? ' Click it again to open the full request flow.' : ''}`
-      : `${mod.label}: ${this.plural(prof.starts.length, 'trigger')} · ${this.plural(prof.operations.length, prof.generic ? 'service' : 'operation')} · ${this.plural(prof.needs.length, 'dependency').replace('dependencys', 'dependencies')} · ${this.plural(prof.changes.length, 'effect')}. ${prof.generic ? 'Click any element to inspect it.' : 'Click an operation to expand it.'}`;
+      : `${mod.label}: ${this.plural(prof.starts.length, 'trigger')} · ${this.plural(prof.operations.length, 'operation')} · ${this.plural(prof.needs.length, 'dependency').replace('dependencys', 'dependencies')} · ${this.plural(prof.changes.length, 'effect')}. Click an operation to inspect its relationships.`;
     return { nodes: N, edges: E, groups: [], cols: C, status };
   }
 

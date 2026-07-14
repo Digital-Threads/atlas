@@ -160,6 +160,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(Object.keys(viewerData.flows).length > 0);
   assert.ok(Object.keys(viewerData.asyncFlows).length > 0);
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "async"));
+  assert.ok(viewerData.edges.some((edge) => edge.from === "controller:UsersController" && edge.to === "method:UsersController.create" && edge.verb === "declares"));
+  assert.ok(viewerData.edges.some((edge) => edge.from === "route:POST:/api/users" && edge.to === "method:UsersController.create" && edge.verb === "handled by"));
   assert.ok(Object.keys(viewerData.fileRoles).length > 0);
   assert.equal(viewerData.domains.filter((domain) => !domain.light).length, Math.min(7, viewerData.domains.length));
   assert.ok(viewerData.domains.every((domain) => domain.modules.length <= 3));
@@ -187,6 +189,10 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /Showing \$\{visible\.length\} key items of \$\{items\.length\}/);
   assert.match(viewerHtml, /const doms = allDoms\.slice\(0, domainFilter \? 1 : 9\)/);
   assert.match(viewerHtml, /const runtime = keyIds\(\['broker', 'topic', 'queue', 'processor'\], 14\)/);
+  assert.match(viewerHtml, /const directOwnerIds = new Set/);
+  assert.match(viewerHtml, /handledOperationIds\.size \? allOperationNodes\.filter/);
+  assert.match(viewerHtml, /\['method', 'service', 'provider', 'repository', 'guard', 'pipe', 'library', 'env'\]\.includes\(target\.type\)/);
+  assert.doesNotMatch(viewerHtml, /mod\.metrics\.routes/);
   assert.match(viewerHtml, /No data structures detected/);
   assert.doesNotMatch(viewerHtml, /<(?:svg|g|rect|foreignObject|text|line|path)\b[^>]*\s(?:viewBox|x|y|width|height|x1|y1|x2|y2|d|transform|opacity)="\{\{/i);
   assert.doesNotMatch(viewerHtml, /shopcore|deleteUserItems|ItemsService/);
