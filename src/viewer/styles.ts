@@ -155,6 +155,36 @@ a:focus-visible {
   text-align: center;
 }
 
+.graph-guide > :nth-child(n + 4) {
+  display: none;
+}
+
+.graph-guide.semantic {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  color: #53605b;
+}
+
+.graph-guide.semantic > * {
+  display: block;
+  text-align: center;
+}
+
+.graph-guide.semantic > :nth-child(2) {
+  color: var(--ink);
+}
+
+.graph-guide.semantic > :nth-child(3) {
+  color: #6e4a9e;
+}
+
+.graph-guide.semantic > :nth-child(4) {
+  color: #a66708;
+}
+
+.graph-guide.semantic > :nth-child(5) {
+  color: #087f6d;
+}
+
 .icon-button {
   width: 34px;
   padding: 0 !important;
