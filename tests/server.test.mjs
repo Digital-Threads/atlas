@@ -21,7 +21,12 @@ test("serves viewer files with security headers and rejects unsafe requests", as
   try {
     const index = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(index.status, 200);
-    assert.match(index.headers.get("content-security-policy") ?? "", /default-src 'self'/);
+    const csp = index.headers.get("content-security-policy") ?? "";
+    assert.match(csp, /default-src 'self'/);
+    assert.match(csp, /style-src 'self' 'unsafe-inline'/);
+    assert.match(csp, /font-src 'self' data:/);
+    assert.match(csp, /script-src 'self';/);
+    assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/);
     assert.equal(index.headers.get("x-content-type-options"), "nosniff");
     assert.match(await index.text(), /Atlas test/);
 
