@@ -166,9 +166,16 @@ source and confidence so consumers can distinguish evidence from inference.
     graph-data.js
 ```
 
-The viewer works without a cloud backend. It supports search, node-type filters,
-architecture views, zoom, drag, dependency highlighting, HTTP and asynchronous flows, source
-previews, and incoming/outgoing relationship inspection.
+The viewer works without a cloud backend. Its System map shows every detected
+module together with Kafka topics, queues, processors, consumers, data stores,
+and external systems. Deterministic scenes explain module responsibilities,
+incoming and outgoing service relationships, file roles, numbered HTTP and
+asynchronous flows, source previews, risks, and where each detected flow ends.
+
+The interactive viewer UX reference is stored in
+[`docs/design/atlas-viewer-prototype.html`](docs/design/atlas-viewer-prototype.html).
+It uses demonstration data and serves as a design specification; generated
+viewers always use the real scan result from `graph-data.js`.
 
 ## MCP integration
 
