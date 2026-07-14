@@ -145,7 +145,11 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.equal(viewerData.nodes.filter((node) => node.type === "risk").length, result.risks.length);
   assert.ok(Object.keys(viewerData.flows).length > 0);
   assert.ok(Object.keys(viewerData.asyncFlows).length > 0);
+  assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "async"));
   assert.ok(Object.keys(viewerData.fileRoles).length > 0);
+  assert.equal(viewerData.domains.filter((domain) => !domain.light).length, Math.min(7, viewerData.domains.length));
+  assert.ok(viewerData.domains.every((domain) => domain.modules.length <= 3));
+  assert.ok(viewerData.domains.every((domain) => domain.allModules.length >= domain.modules.length));
   assert.match(viewerHtml, /data-screen-label="Atlas app"/);
   assert.match(viewerHtml, /data-screen-label="Details panel"/);
   assert.match(viewerHtml, /How to read this map/);
@@ -155,6 +159,10 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /Search routes, services, topics, files/);
   assert.match(viewerHtml, /src="\.\/atlas-data\.js"/);
   assert.match(viewerHtml, /src="\.\/react\.production\.min\.js"/);
+  assert.match(viewerHtml, /@keyframes atlasFade/);
+  assert.match(viewerHtml, /@keyframes atlasDash/);
+  assert.match(viewerHtml, /animation: atlasDash/);
+  assert.doesNotMatch(viewerHtml, /<(?:svg|g|rect|foreignObject|text|line|path)\b[^>]*\s(?:viewBox|x|y|width|height|x1|y1|x2|y2|d|transform|opacity)="\{\{/i);
   assert.doesNotMatch(viewerHtml, /shopcore|deleteUserItems|ItemsService/);
   assert.doesNotMatch(viewerHtml, /<(?:script|link)[^>]+https?:\/\//);
 
