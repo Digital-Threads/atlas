@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./react.production.min.js"></script>
+<script src="./react-dom.production.min.js"></script>
+<script src="./atlas-data.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { font-family: 'IBM Plex Sans', -apple-system, sans-serif; color: #1a2321; background: #f2f4f3; overflow: hidden; }
+    * { box-sizing: border-box; }
+    a { color: #1f6f5b; text-decoration: none; }
+    a:hover { color: #14503f; text-decoration: underline; }
+    input { font-family: inherit; }
+    button { font-family: inherit; cursor: pointer; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #c9d1cd; border-radius: 5px; border: 2px solid #f2f4f3; }
+    @keyframes atlasFade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes atlasDash { to { stroke-dashoffset: -20; } }
+  </style>
+</helmet>
+
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#16211d"></rect><rect x="30" y="30" width="40" height="40" rx="8" fill="#df642d"></rect><text x="50" y="58" text-anchor="middle" font-family="sans-serif" font-size="24" font-weight="700" fill="#fff">A</text></svg></template>
+<div data-screen-label="Atlas app" style="height: 100vh; display: flex; flex-direction: column; overflow: hidden;">
+
+  <!-- ======= Top bar ======= -->
+  <header style="height: 46px; flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: #16211d; color: #fff;">
+    <div style="display: flex; align-items: center; gap: 9px; flex: 0 0 auto;">
+      <div style="width: 22px; height: 22px; border-radius: 5px; background: #df642d; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff;">A</div>
+      <strong style="font-size: 14px; letter-spacing: 0.2px;">Atlas</strong>
+      <span style="color: #6f7d78;">/</span>
+      <span style="font-size: 13px; color: #d5ddd9; font-weight: 600;">{{ projectName }}</span>
+    </div>
+    <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; overflow: hidden; font-size: 12px; color: #93a29c; margin-left: 2px;">
+      <sc-for list="{{ crumbs }}" as="crumb" hint-placeholder-count="2">
+        <span style="color: #4e5c56;">›</span>
+        <button onClick="{{ crumb.go }}" style="border: 0; background: transparent; color: #b9c6c1; padding: 2px 4px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px;" style-hover="background: #24322c; color: #fff;">{{ crumb.label }}</button>
+      </sc-for>
+    </nav>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+      <div style="position: relative;">
+        <input value="{{ searchQ }}" onChange="{{ onSearch }}" onFocus="{{ onSearchFocus }}" onBlur="{{ onSearchBlur }}" placeholder="Search routes, services, topics, files…" aria-label="Search project" style="width: 300px; height: 30px; border: 1px solid #3a4843; border-radius: 6px; background: #1f2c27; color: #e9efec; padding: 0 10px 0 30px; font-size: 12px; outline: none;" style-focus="border-color: #6f8f84; background: #24332d;">
+        <svg viewBox="0 0 16 16" style="position: absolute; left: 9px; top: 8px; width: 14px; height: 14px; fill: none; stroke: #7d8d87; stroke-width: 1.6;"><circle cx="7" cy="7" r="4.4"></circle><line x1="10.4" y1="10.4" x2="14" y2="14"></line></svg>
+        <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position: absolute; top: 36px; right: 0; width: 380px; max-height: 420px; overflow: auto; background: #fff; border: 1px solid #d4dbd7; border-radius: 8px; box-shadow: 0 18px 44px rgba(22,33,29,0.22); z-index: 60; animation: atlasFade 0.12s ease;">
+            <sc-for list="{{ searchResults }}" as="hit" hint-placeholder-count="3">
+              <button onClick="{{ hit.go }}" style="display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 9px; width: 100%; border: 0; border-bottom: 1px solid #eef1ef; background: #fff; padding: 9px 12px; text-align: left;" style-hover="background: #f0f5f3;">
+                <i style="width: 8px; height: 8px; border-radius: 50%; background: {{ hit.color }};"></i>
+                <span style="min-width: 0;">
+                  <strong style="display: block; font-size: 12.5px; color: #1a2321; overflow-wrap: anywhere;">{{ hit.label }}</strong>
+                  <small style="display: block; font-size: 10.5px; color: #6b7873; overflow-wrap: anywhere;">{{ hit.sub }}</small>
+                </span>
+                <small style="font-size: 10px; color: #8b9793; text-transform: uppercase; font-weight: 600;">{{ hit.type }}</small>
+              </button>
+            </sc-for>
+            <sc-if value="{{ searchEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding: 14px; font-size: 12px; color: #6b7873;">Nothing matches “{{ searchQ }}”. Try a route path, service, topic, or file name.</div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+      <span style="font-size: 11px; color: #7d8d87; white-space: nowrap;">{{ scanned }}</span>
+    </div>
+  </header>
+
+  <!-- ======= Shell ======= -->
+  <div style="flex: 1; min-height: 0; display: flex;">
+
+    <!-- Sidebar: modes -->
+    <aside aria-label="Views" style="width: 196px; flex: 0 0 auto; background: #fff; border-right: 1px solid #dde3e0; display: flex; flex-direction: column; padding: 12px 8px 10px;">
+      <div style="flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 1px;">
+        <sc-for list="{{ navItems }}" as="nav" hint-placeholder-count="10">
+          <sc-if value="{{ nav.isHeading }}" hint-placeholder-val="{{ false }}">
+            <div style="margin: {{ nav.mt }} 0 4px; padding: 0 8px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: #8b9793;">{{ nav.label }}</div>
+          </sc-if>
+          <sc-if value="{{ nav.isItem }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ nav.go }}" aria-current="{{ nav.current }}" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 32px; border: 0; border-radius: 6px; background: {{ nav.bg }}; color: {{ nav.fg }}; font-weight: {{ nav.fw }}; font-size: 12.5px; padding: 0 9px; text-align: left;" style-hover="background: {{ nav.hoverBg }};">
+              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ nav.label }}</span>
+              <span style="font-size: 10.5px; color: {{ nav.countFg }}; font-variant-numeric: tabular-nums;">{{ nav.count }}</span>
+            </button>
+          </sc-if>
+        </sc-for>
+      </div>
+      <div style="flex: 0 0 auto; border-top: 1px solid #e6eae8; padding: 10px 8px 2px; display: grid; gap: 2px;">
+        <span style="font-size: 11.5px; font-weight: 600;">{{ stackName }}</span>
+        <small style="font-size: 10.5px; color: #8b9793;">{{ scanned }}</small>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #fff;">
+
+      <!-- View header -->
+      <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid #dde3e0; min-height: 58px;">
+        <div style="min-width: 0;">
+          <h1 style="margin: 0; font-size: 16.5px; line-height: 1.2; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ viewTitle }}</h1>
+          <p style="margin: 1px 0 0; font-size: 11.5px; color: #6b7873; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 640px;">{{ viewDesc }}</p>
+        </div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
+          <sc-if value="{{ showVariantSwitch }}" hint-placeholder-val="{{ false }}">
+            <div role="group" aria-label="Map layout" style="display: flex; border: 1px solid #d4dbd7; border-radius: 6px; overflow: hidden;">
+              <sc-for list="{{ variantBtns }}" as="vb" hint-placeholder-count="3">
+                <button onClick="{{ vb.go }}" style="height: 28px; border: 0; padding: 0 10px; font-size: 11.5px; background: {{ vb.bg }}; color: {{ vb.fg }}; font-weight: {{ vb.fw }}; border-right: 1px solid #e4e9e6;" style-hover="background: {{ vb.hoverBg }};">{{ vb.label }}</button>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ showTechToggle }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ toggleTech }}" aria-pressed="{{ techPressed }}" title="Show every raw relationship of the selected element" style="height: 28px; border: 1px solid {{ techBorder }}; border-radius: 6px; padding: 0 10px; font-size: 11.5px; font-weight: 600; background: {{ techBg }}; color: {{ techFg }};" style-hover="border-color: #9fb0a9;">{{ techLabel }}</button>
+          </sc-if>
+          <sc-if value="{{ showGraphControls }}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; gap: 6px;">
+              <button onClick="{{ goBack }}" disabled="{{ backDisabled }}" title="Back to previous selection" aria-label="Back" style="width: 30px; height: 28px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #3c4744; font-size: 14px; opacity: {{ backOpacity }};" style-hover="background: #f2f5f4;">←</button>
+              <button onClick="{{ doFit }}" title="Center the map at a readable scale" style="height: 28px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #3c4744; padding: 0 10px; font-size: 11.5px; font-weight: 600;" style-hover="background: #f2f5f4;">Fit</button>
+              <button onClick="{{ zoomOut }}" aria-label="Zoom out" style="width: 30px; height: 28px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #3c4744; font-size: 14px;" style-hover="background: #f2f5f4;">−</button>
+              <button onClick="{{ zoomIn }}" aria-label="Zoom in" style="width: 30px; height: 28px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #3c4744; font-size: 14px;" style-hover="background: #f2f5f4;">+</button>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <!-- Content row -->
+      <div style="flex: 1; min-height: 0; display: flex;">
+
+        <!-- ======= OVERVIEW ======= -->
+        <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="Overview" style="flex: 1; min-width: 0; overflow: auto; padding: 22px 26px 40px; background: #f7f9f8;">
+            <div style="display: grid; grid-template-columns: repeat(8, minmax(88px, 1fr)); gap: 1px; background: #dde3e0; border: 1px solid #dde3e0; border-radius: 8px; overflow: hidden;">
+              <sc-for list="{{ ovStats }}" as="st" hint-placeholder-count="8">
+                <button onClick="{{ st.go }}" style="border: 0; background: #fff; padding: 13px 12px; text-align: left; display: grid; gap: 2px;" style-hover="background: #f0f5f3;">
+                  <strong style="font-size: 21px; line-height: 1.1; font-variant-numeric: tabular-nums;">{{ st.value }}</strong>
+                  <span style="font-size: 10.5px; color: #6b7873; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">{{ st.label }}</span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-top: 18px; align-items: start;">
+              <section style="background: #fff; border: 1px solid #dde3e0; border-radius: 8px; padding: 16px 18px;">
+                <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+                  <h2 style="margin: 0; font-size: 13.5px;">Domains</h2>
+                  <button onClick="{{ goMap }}" style="border: 0; background: transparent; color: #1f6f5b; font-size: 11.5px; font-weight: 600; padding: 2px;" style-hover="text-decoration: underline;">Open system map →</button>
+                </div>
+                <div style="display: grid; margin-top: 6px;">
+                  <sc-for list="{{ ovDomains }}" as="dm" hint-placeholder-count="7">
+                    <button onClick="{{ dm.go }}" style="display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; border: 0; border-top: 1px solid #eef1ef; background: transparent; padding: 9px 2px; text-align: left;" style-hover="background: #f4f8f6;">
+                      <span style="min-width: 0;">
+                        <strong style="display: block; font-size: 12.5px;">{{ dm.name }}</strong>
+                        <small style="display: block; font-size: 11px; color: #6b7873; margin-top: 1px;">{{ dm.counts }}</small>
+                      </span>
+                      <span style="font-size: 11px; color: #8b9793;">{{ dm.desc }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </section>
+              <div style="display: grid; gap: 18px;">
+                <section style="background: #fff; border: 1px solid #dde3e0; border-radius: 8px; padding: 16px 18px;">
+                  <h2 style="margin: 0 0 6px; font-size: 13.5px;">Key request flows</h2>
+                  <sc-for list="{{ ovFlows }}" as="fl" hint-placeholder-count="2">
+                    <button onClick="{{ fl.go }}" style="display: grid; gap: 2px; width: 100%; border: 0; border-top: 1px solid #eef1ef; background: transparent; padding: 9px 2px; text-align: left;" style-hover="background: #f4f8f6;">
+                      <strong style="font-size: 12.5px; font-family: 'IBM Plex Mono', monospace;">{{ fl.label }}</strong>
+                      <small style="font-size: 11px; color: #6b7873;">{{ fl.desc }}</small>
+                    </button>
+                  </sc-for>
+                </section>
+                <section style="background: #fff; border: 1px solid #dde3e0; border-radius: 8px; padding: 16px 18px;">
+                  <div style="display: flex; align-items: baseline; justify-content: space-between;">
+                    <h2 style="margin: 0; font-size: 13.5px;">Architecture risks</h2>
+                    <button onClick="{{ goRisks }}" style="border: 0; background: transparent; color: #1f6f5b; font-size: 11.5px; font-weight: 600; padding: 2px;" style-hover="text-decoration: underline;">All risks →</button>
+                  </div>
+                  <sc-for list="{{ ovRisks }}" as="rk" hint-placeholder-count="3">
+                    <button onClick="{{ rk.go }}" style="display: grid; grid-template-columns: auto minmax(0,1fr); gap: 9px; align-items: start; width: 100%; border: 0; border-top: 1px solid #eef1ef; background: transparent; padding: 9px 2px; text-align: left;" style-hover="background: #f4f8f6;">
+                      <span style="margin-top: 2px; font-size: 9.5px; font-weight: 700; text-transform: uppercase; color: {{ rk.sevFg }}; background: {{ rk.sevBg }}; border-radius: 4px; padding: 2px 5px;">{{ rk.sev }}</span>
+                      <span style="min-width: 0;">
+                        <strong style="display: block; font-size: 12px; overflow-wrap: anywhere;">{{ rk.label }}</strong>
+                        <small style="display: block; font-size: 10.5px; color: #6b7873; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ rk.file }}</small>
+                      </span>
+                    </button>
+                  </sc-for>
+                </section>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ======= EXPLORER (all graph modes) ======= -->
+        <sc-if value="{{ isExplorer }}" hint-placeholder-val="{{ true }}">
+
+          <!-- Catalog -->
+          <sc-if value="{{ catalogVisible }}" hint-placeholder-val="{{ true }}">
+            <aside aria-label="Catalog" style="width: 236px; flex: 0 0 auto; border-right: 1px solid #dde3e0; background: #fafbfa; display: flex; flex-direction: column; min-height: 0;">
+              <div style="flex: 0 0 auto; padding: 10px 10px 8px; display: grid; gap: 7px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <strong style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #4e5a56;">{{ catalogTitle }}</strong>
+                  <span style="font-size: 10.5px; color: #8b9793;">{{ catalogCount }}</span>
+                </div>
+                <input value="{{ catQ }}" onChange="{{ onCatQ }}" placeholder="Filter…" aria-label="Filter list" style="height: 28px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 0 8px; font-size: 12px; outline: none;" style-focus="border-color: #77978c;">
+              </div>
+              <div style="flex: 1; min-height: 0; overflow: auto; border-top: 1px solid #e6eae8;">
+                <sc-for list="{{ catalogItems }}" as="item" hint-placeholder-count="8">
+                  <sc-if value="{{ item.isGroup }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding: 9px 12px 3px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8b9793;">{{ item.label }}</div>
+                  </sc-if>
+                  <sc-if value="{{ item.isNode }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ item.go }}" title="{{ item.tip }}" style="display: grid; grid-template-columns: auto minmax(0,1fr); gap: 8px; align-items: start; width: 100%; border: 0; border-bottom: 1px solid #eef1ef; background: {{ item.bg }}; padding: 8px 12px; text-align: left;" style-hover="background: #edf4f1;">
+                      <i style="width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; background: {{ item.color }};"></i>
+                      <span style="min-width: 0;">
+                        <strong style="display: block; font-size: 12px; font-weight: {{ item.fw }}; overflow-wrap: anywhere;">{{ item.label }}</strong>
+                        <small style="display: block; font-size: 10px; color: #77837e; margin-top: 1px; overflow-wrap: anywhere;">{{ item.sub }}</small>
+                      </span>
+                    </button>
+                  </sc-if>
+                </sc-for>
+                <sc-if value="{{ catalogEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 16px 12px; font-size: 12px; color: #6b7873;">
+                    No matches for “{{ catQ }}”.
+                    <button onClick="{{ clearCatQ }}" style="display: block; margin-top: 8px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 5px 9px; font-size: 11.5px;" style-hover="background: #f2f5f4;">Clear filter</button>
+                  </div>
+                </sc-if>
+              </div>
+            </aside>
+          </sc-if>
+
+          <!-- Graph pane -->
+          <section aria-label="Map" style="flex: 1; min-width: 0; min-height: 0; position: relative; background: #f7f9f8; overflow: hidden;">
+            <div style="position: absolute; inset: 0; background-image: radial-gradient(#d3dad6 1px, transparent 1px); background-size: 22px 22px; opacity: 0.5; pointer-events: none;"></div>
+
+            <svg ref="{{ svgRef }}" viewBox="{{ vbStr }}" preserveAspectRatio="xMidYMid meet" onWheel="{{ onWheel }}" onPointerDown="{{ onPanStart }}" onPointerMove="{{ onPanMove }}" onPointerUp="{{ onPanEnd }}" onPointerLeave="{{ onPanEnd }}" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: {{ svgCursor }}; touch-action: none;">
+              <defs>
+                <marker id="arr-sync" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7d8a84"></path></marker>
+                <marker id="arr-async" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#0f7895"></path></marker>
+                <marker id="arr-data" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#1e8068"></path></marker>
+                <marker id="arr-external" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#c94747"></path></marker>
+                <marker id="arr-hi" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#df642d"></path></marker>
+              </defs>
+
+              <!-- group / domain boxes -->
+              <sc-for list="{{ gGroups }}" as="grp" hint-placeholder-count="0">
+                <g style="animation: atlasFade 0.2s ease;">
+                  <rect x="{{ grp.x }}" y="{{ grp.y }}" width="{{ grp.w }}" height="{{ grp.h }}" rx="8" fill="{{ grp.fill }}" stroke="{{ grp.stroke }}" stroke-width="1"></rect>
+                  <foreignObject x="{{ grp.x }}" y="{{ grp.y }}" width="{{ grp.w }}" height="34">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 0; font-family: 'IBM Plex Sans', sans-serif;">
+                      <span style="font-size: 12px; font-weight: 700; color: #1a2321; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ grp.label }}</span>
+                      <span style="font-size: 10px; color: #77837e; white-space: nowrap;">{{ grp.sub }}</span>
+                    </div>
+                  </foreignObject>
+                  <sc-if value="{{ grp.moreLabel }}" hint-placeholder-val="{{ false }}">
+                    <foreignObject x="{{ grp.x }}" y="{{ grp.footY }}" width="{{ grp.w }}" height="30">
+                      <div style="padding: 0 8px; font-family: 'IBM Plex Sans', sans-serif;">
+                        <button onClick="{{ grp.onMore }}" style="width: 100%; height: 24px; border: 1px dashed #b8c4bf; border-radius: 5px; background: rgba(255,255,255,0.7); color: #1f6f5b; font-size: 10.5px; font-weight: 600;" style-hover="background: #fff; border-color: #1f6f5b;">{{ grp.moreLabel }}</button>
+                      </div>
+                    </foreignObject>
+                  </sc-if>
+                </g>
+              </sc-for>
+
+              <!-- column headers -->
+              <sc-for list="{{ gCols }}" as="col" hint-placeholder-count="0">
+                <g>
+                  <text x="{{ col.x }}" y="{{ col.y }}" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 1.4px; fill: {{ col.fill }};">{{ col.label }}</text>
+                  <sc-if value="{{ col.sub }}" hint-placeholder-val="{{ false }}">
+                    <text x="{{ col.x }}" y="{{ col.subY }}" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; fill: #9aa5a0;">{{ col.sub }}</text>
+                  </sc-if>
+                  <line x1="{{ col.x }}" y1="{{ col.ly }}" x2="{{ col.x2 }}" y2="{{ col.ly }}" stroke="#d4dbd7" stroke-width="1"></line>
+                </g>
+              </sc-for>
+
+              <!-- edges -->
+              <sc-for list="{{ gEdges }}" as="edge" hint-placeholder-count="0">
+                <g opacity="{{ edge.op }}" onMouseEnter="{{ edge.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: default;">
+                  <path d="{{ edge.d }}" fill="none" stroke="transparent" stroke-width="12"></path>
+                  <path d="{{ edge.d }}" fill="none" stroke="{{ edge.color }}" stroke-width="{{ edge.w }}" stroke-dasharray="{{ edge.dash }}" marker-end="{{ edge.marker }}" style="{{ edge.anim }}"></path>
+                  <sc-if value="{{ edge.showLabel }}" hint-placeholder-val="{{ false }}">
+                    <text x="{{ edge.lx }}" y="{{ edge.ly }}" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; font-weight: 600; fill: {{ edge.labelFill }}; paint-order: stroke; stroke: #f7f9f8; stroke-width: 4px; stroke-linejoin: round;">{{ edge.verb }}</text>
+                  </sc-if>
+                </g>
+              </sc-for>
+
+              <!-- nodes -->
+              <sc-for list="{{ gNodes }}" as="node" hint-placeholder-count="0">
+                <g transform="translate({{ node.x }} {{ node.y }})" opacity="{{ node.op }}" onClick="{{ node.onClick }}" onMouseEnter="{{ node.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: pointer; animation: atlasFade 0.18s ease;">
+                  <rect width="{{ node.w }}" height="{{ node.h }}" rx="7" fill="{{ node.fill }}" stroke="{{ node.stroke }}" stroke-width="{{ node.sw }}"></rect>
+                  <rect x="0" y="0" width="4" height="{{ node.h }}" rx="2" fill="{{ node.accent }}"></rect>
+                  <foreignObject x="10" y="5" width="{{ node.tw }}" height="{{ node.th }}">
+                    <div style="font-family: 'IBM Plex Sans', sans-serif; overflow: hidden; height: 100%;">
+                      <div style="font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: {{ node.accent }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ node.typeLabel }}</div>
+                      <div style="font-size: {{ node.fs }}; font-weight: 600; color: #1a2321; line-height: 1.25; margin-top: 1px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: {{ node.font }};">{{ node.label }}</div>
+                      <sc-if value="{{ node.sub }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size: 9px; color: #77837e; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ node.sub }}</div>
+                      </sc-if>
+                    </div>
+                  </foreignObject>
+                  <sc-if value="{{ node.step }}" hint-placeholder-val="{{ false }}">
+                    <g>
+                      <circle cx="0" cy="0" r="9" fill="#df642d"></circle>
+                      <text x="0" y="3.4" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 10px; font-weight: 700; fill: #fff;">{{ node.step }}</text>
+                    </g>
+                  </sc-if>
+                  <sc-if value="{{ node.expandLabel }}" hint-placeholder-val="{{ false }}">
+                    <foreignObject x="10" y="{{ node.h }}" width="{{ node.tw }}" height="24">
+                      <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; font-weight: 600; color: #1f6f5b; padding-top: 3px;">{{ node.expandLabel }} ↗</div>
+                    </foreignObject>
+                  </sc-if>
+                </g>
+              </sc-for>
+            </svg>
+
+            <!-- status bar -->
+            <div style="position: absolute; left: 12px; top: 10px; right: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; pointer-events: none;">
+              <span style="max-width: 72%; padding: 5px 9px; border: 1px solid #d4dbd7; border-radius: 6px; background: rgba(255,255,255,0.94); color: #57635e; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ statusText }}</span>
+              <sc-if value="{{ showClearFocus }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ clearFocus }}" style="pointer-events: auto; height: 27px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #3c4744; padding: 0 10px; font-size: 11.5px; font-weight: 600;" style-hover="background: #f2f5f4;">Clear selection</button>
+              </sc-if>
+            </div>
+
+            <!-- legend -->
+            <div style="position: absolute; left: 12px; bottom: 10px; display: flex; align-items: center; gap: 13px; padding: 6px 10px; border: 1px solid #d4dbd7; border-radius: 6px; background: rgba(255,255,255,0.94); font-size: 10px; color: #57635e; max-width: {{ legendMaxW }}; overflow: hidden; white-space: nowrap;">
+              <span style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#7d8a84" stroke-width="1.6"></line></svg>direct call — waits for result</span>
+              <span style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#0f7895" stroke-width="1.6" stroke-dasharray="4 3"></line></svg>event / queue — runs later</span>
+              <span style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#1e8068" stroke-width="1.6"></line></svg>reads / writes data</span>
+              <span style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#c94747" stroke-width="1.6"></line></svg>external service</span>
+              <button onClick="{{ openGuide }}" style="pointer-events: auto; border: 0; background: transparent; color: #1f6f5b; font-size: 10px; font-weight: 700; padding: 0;" style-hover="text-decoration: underline;">How to read this map?</button>
+            </div>
+
+            <!-- step-by-step story -->
+            <sc-if value="{{ storyAvailable }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; right: 12px; bottom: 10px; width: 318px; max-height: 60%; display: flex; flex-direction: column; border: 1px solid #d4dbd7; border-radius: 8px; background: rgba(255,255,255,0.97); box-shadow: 0 10px 30px rgba(22,33,29,0.12); animation: atlasFade 0.15s ease;">
+                <div style="flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px 7px;">
+                  <strong style="font-size: 11.5px;">What happens, step by step</strong>
+                  <button onClick="{{ toggleStory }}" style="border: 0; background: transparent; color: #1f6f5b; font-size: 10.5px; font-weight: 700; padding: 0;" style-hover="text-decoration: underline;">{{ storyToggleLabel }}</button>
+                </div>
+                <sc-if value="{{ storyOpen }}" hint-placeholder-val="{{ true }}">
+                  <div style="flex: 1; min-height: 0; overflow: auto; padding: 0 12px 10px;">
+                    <sc-for list="{{ storySteps }}" as="step" hint-placeholder-count="4">
+                      <button onClick="{{ step.go }}" style="display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 8px; align-items: start; width: 100%; border: 0; border-top: 1px solid #eef1ef; background: transparent; padding: 7px 0; text-align: left;" style-hover="background: #f4f8f6;">
+                        <span style="width: 18px; height: 18px; border-radius: 50%; background: #df642d; color: #fff; font-size: 10px; font-weight: 700; display: grid; place-items: center;">{{ step.n }}</span>
+                        <span style="font-size: 11px; line-height: 1.45; color: #333e3a; overflow-wrap: anywhere;">{{ step.text }}</span>
+                      </button>
+                    </sc-for>
+                    <sc-if value="{{ storyEnds }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: #eef5f2; font-size: 10.5px; line-height: 1.45; color: #2c4a40;"><strong style="font-weight: 700;">Where it ends: </strong>{{ storyEnds }}</div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- reading guide -->
+            <sc-if value="{{ guideOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(22,33,29,0.32); animation: atlasFade 0.15s ease;">
+                <div style="width: 430px; max-width: calc(100% - 40px); background: #fff; border-radius: 10px; box-shadow: 0 24px 60px rgba(0,0,0,0.3); padding: 18px 20px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong style="font-size: 14.5px;">How to read this map</strong>
+                    <button onClick="{{ onCloseGuide }}" aria-label="Close guide" style="width: 26px; height: 26px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #57635e;" style-hover="background: #f2f5f4;">✕</button>
+                  </div>
+                  <div style="display: grid; gap: 12px; margin-top: 14px;">
+                    <div style="display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 12px; align-items: center;">
+                      <svg width="46" height="30"><rect x="1" y="3" width="44" height="24" rx="6" fill="#fff" stroke="#ccd5d1"></rect><rect x="1" y="3" width="4" height="24" rx="2" fill="#7452a8"></rect></svg>
+                      <span style="font-size: 12px; line-height: 1.5;"><strong>Boxes are parts of the system.</strong> The color stripe shows what kind: route, service, data, event… Click a box — Atlas explains what it is and what it touches.</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 12px; align-items: center;">
+                      <svg width="46" height="20"><line x1="2" y1="10" x2="36" y2="10" stroke="#7d8a84" stroke-width="1.8"></line><path d="M36,5 L44,10 L36,15 Z" fill="#7d8a84"></path></svg>
+                      <span style="font-size: 12px; line-height: 1.5;"><strong>Arrows show who acts on whom.</strong> The word on the line says what happens: “calls”, “publishes”, “reads”…</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 12px; align-items: center;">
+                      <svg width="46" height="26"><line x1="2" y1="7" x2="44" y2="7" stroke="#7d8a84" stroke-width="1.8"></line><line x1="2" y1="19" x2="44" y2="19" stroke="#0f7895" stroke-width="1.8" stroke-dasharray="5 4"></line></svg>
+                      <span style="font-size: 12px; line-height: 1.5;"><strong>Solid line = happens right away</strong> (the caller waits). <strong>Moving dashed line = happens later</strong> — a message through Kafka or a queue. Green = data, red = an external service.</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 12px; align-items: center;">
+                      <svg width="46" height="26"><circle cx="12" cy="13" r="9" fill="#df642d"></circle><text x="12" y="17" text-anchor="middle" style="font-size: 11px; font-weight: 700; fill: #fff; font-family: 'IBM Plex Sans', sans-serif;">1</text></svg>
+                      <span style="font-size: 12px; line-height: 1.5;"><strong>Numbers show the order.</strong> Open a route or a Kafka topic and follow 1 → 2 → 3 to see how the process starts, what it does, and where it ends.</span>
+                    </div>
+                  </div>
+                  <button onClick="{{ onCloseGuide }}" style="margin-top: 16px; width: 100%; height: 32px; border: 0; border-radius: 6px; background: #16211d; color: #fff; font-size: 12px; font-weight: 600;" style-hover="opacity: 0.9;">Got it</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- empty state -->
+            <sc-if value="{{ graphEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; inset: 0; display: grid; place-items: center;">
+                <div style="text-align: center; max-width: 320px;">
+                  <div style="font-size: 13px; font-weight: 600; color: #4e5a56;">{{ emptyTitle }}</div>
+                  <div style="font-size: 11.5px; color: #8b9793; margin-top: 4px;">{{ emptyHint }}</div>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- tooltip -->
+            <sc-if value="{{ tipVisible }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; left: {{ tipX }}; top: {{ tipY }}; z-index: 40; max-width: 300px; padding: 9px 11px; border-radius: 7px; background: #14201c; color: #fff; font-size: 11px; line-height: 1.45; pointer-events: none; box-shadow: 0 10px 28px rgba(0,0,0,0.3);">
+                <strong style="display: block; font-size: 12px; margin-bottom: 2px; overflow-wrap: anywhere;">{{ tipTitle }}</strong>
+                <span style="color: #c3cfc9; overflow-wrap: anywhere;">{{ tipBody }}</span>
+              </div>
+            </sc-if>
+          </section>
+        </sc-if>
+
+        <!-- ======= Details panel ======= -->
+        <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ false }}">
+          <aside data-screen-label="Details panel" aria-label="Details" style="width: 348px; flex: 0 0 auto; border-left: 1px solid #dde3e0; background: #fff; display: flex; flex-direction: column; min-height: 0; animation: atlasFade 0.15s ease;">
+            <div style="flex: 0 0 auto; padding: 14px 16px 0; position: relative;">
+              <button onClick="{{ closePanel }}" aria-label="Close details" style="position: absolute; right: 12px; top: 12px; width: 26px; height: 26px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #57635e; font-size: 13px; line-height: 1;" style-hover="background: #f2f5f4;">✕</button>
+              <span title="{{ pTypeExplain }}" style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 5px; background: {{ pBadgeBg }}; color: {{ pBadgeFg }}; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; cursor: help;"><i style="width: 7px; height: 7px; border-radius: 50%; background: {{ pAccent }};"></i>{{ pType }}</span>
+              <h2 style="margin: 8px 24px 3px 0; font-size: 16.5px; line-height: 1.25; overflow-wrap: anywhere;">{{ pTitle }}</h2>
+              <sc-if value="{{ pPath }}" hint-placeholder-val="{{ false }}">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #6b7873; overflow-wrap: anywhere;">{{ pPath }}</div>
+              </sc-if>
+              <sc-if value="{{ pTypeExplain }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top: 7px; padding: 6px 9px; border-radius: 6px; background: #f4f7f6; font-size: 11px; line-height: 1.45; color: #57635e; font-style: italic;">{{ pTypeExplain }}</div>
+              </sc-if>
+              <p style="margin: 9px 0 0; font-size: 12.5px; line-height: 1.5; color: #333e3a;">{{ pDesc }}</p>
+              <sc-if value="{{ pRisks }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top: 10px; border: 1px solid #ecc9c9; border-radius: 7px; overflow: hidden;">
+                  <div style="padding: 5px 10px; background: #fbeaea; font-size: 9.5px; font-weight: 700; color: #a83a3a; text-transform: uppercase; letter-spacing: 0.06em;">⚠ Risks affecting this element</div>
+                  <sc-for list="{{ pRisks }}" as="prk" hint-placeholder-count="1">
+                    <button onClick="{{ prk.go }}" title="{{ prk.tip }}" style="display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; width: 100%; border: 0; border-top: 1px solid #f5e2e2; background: #fff; padding: 7px 10px; text-align: left;" style-hover="background: #fdf6f6;">
+                      <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: {{ prk.sevFg }}; background: {{ prk.sevBg }}; border-radius: 4px; padding: 2px 5px;">{{ prk.sev }}</span>
+                      <span style="font-size: 11.5px; line-height: 1.4; overflow-wrap: anywhere;">{{ prk.label }}</span>
+                      <span style="color: #c9a3a3; font-size: 12px;">→</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ pRecommendation }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top: 10px; padding: 9px 11px; border-left: 3px solid #b27a12; border-radius: 0 6px 6px 0; background: #fdf6e5; font-size: 11.5px; line-height: 1.45; color: #4d4128;">{{ pRecommendation }}</div>
+              </sc-if>
+              <sc-if value="{{ pMetrics }}" hint-placeholder-val="{{ false }}">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #e6eae8; border: 1px solid #e6eae8; border-radius: 7px; overflow: hidden; margin-top: 12px;">
+                  <sc-for list="{{ pMetrics }}" as="pm" hint-placeholder-count="4">
+                    <div style="background: #fafbfa; padding: 7px 10px;">
+                      <strong style="display: block; font-size: 14px; font-variant-numeric: tabular-nums;">{{ pm.value }}</strong>
+                      <span style="font-size: 9.5px; color: #77837e; text-transform: uppercase; letter-spacing: 0.05em;">{{ pm.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px;">
+                <sc-for list="{{ pActions }}" as="act" hint-placeholder-count="2">
+                  <button onClick="{{ act.go }}" style="height: 28px; border: 1px solid {{ act.border }}; border-radius: 6px; background: {{ act.bg }}; color: {{ act.fg }}; padding: 0 11px; font-size: 11.5px; font-weight: 600;" style-hover="opacity: 0.88;">{{ act.label }}</button>
+                </sc-for>
+              </div>
+              <div role="tablist" style="display: flex; gap: 2px; margin-top: 14px; border-bottom: 1px solid #dde3e0;">
+                <sc-for list="{{ pTabs }}" as="tab" hint-placeholder-count="5">
+                  <button onClick="{{ tab.go }}" role="tab" aria-selected="{{ tab.selected }}" style="height: 30px; border: 0; background: transparent; padding: 0 9px; font-size: 11.5px; font-weight: {{ tab.fw }}; color: {{ tab.fg }}; border-bottom: 2px solid {{ tab.line }}; margin-bottom: -1px;" style-hover="color: #1a2321;">{{ tab.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex: 1; min-height: 0; overflow: auto; padding: 12px 16px 20px;">
+
+              <sc-if value="{{ pShowRelations }}" hint-placeholder-val="{{ false }}">
+                <sc-for list="{{ pRelations }}" as="rel" hint-placeholder-count="4">
+                  <sc-if value="{{ rel.isHeading }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin: 10px 0 4px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8b9793;">{{ rel.label }}</div>
+                  </sc-if>
+                  <sc-if value="{{ rel.isItem }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ rel.go }}" title="{{ rel.tip }}" style="display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; width: 100%; border: 0; border-bottom: 1px solid #eef1ef; background: transparent; padding: 8px 2px; text-align: left;" style-hover="background: #f4f8f6;">
+                      <i style="width: 8px; height: 8px; border-radius: 50%; background: {{ rel.color }};"></i>
+                      <span style="min-width: 0;">
+                        <strong style="display: block; font-size: 12px; overflow-wrap: anywhere;">{{ rel.label }}</strong>
+                        <small style="display: block; font-size: 10.5px; color: #6b7873;">{{ rel.verb }}</small>
+                      </span>
+                      <span style="color: #b0bab5; font-size: 12px;">→</span>
+                    </button>
+                  </sc-if>
+                </sc-for>
+                <sc-if value="{{ pRelationsEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 12px; border: 1px solid #e6eae8; border-radius: 7px; background: #fafbfa; font-size: 11.5px; color: #6b7873;">{{ pRelationsEmptyText }}</div>
+                </sc-if>
+              </sc-if>
+
+              <sc-if value="{{ pShowSource }}" hint-placeholder-val="{{ false }}">
+                <sc-if value="{{ pSourceFile }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #6b7873; overflow-wrap: anywhere;">{{ pSourceFile }}</span>
+                    <span style="font-size: 9.5px; font-weight: 700; color: #8b9793; text-transform: uppercase;">TypeScript</span>
+                  </div>
+                  <div style="border-radius: 7px; overflow: hidden;">{{ pSourceEl }}</div>
+                </sc-if>
+                <sc-if value="{{ pSourceMissing }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 12px; border: 1px solid #e6eae8; border-radius: 7px; background: #fafbfa; font-size: 11.5px; color: #6b7873;">No source preview for this element. It is a runtime component detected from configuration, not a source file.</div>
+                </sc-if>
+              </sc-if>
+
+              <sc-if value="{{ pShowFlow }}" hint-placeholder-val="{{ false }}">
+                <sc-for list="{{ pFlows }}" as="pf" hint-placeholder-count="1">
+                  <button onClick="{{ pf.go }}" style="display: grid; gap: 2px; width: 100%; border: 1px solid #dde3e0; border-radius: 7px; background: #fafbfa; padding: 10px 12px; text-align: left; margin-bottom: 8px;" style-hover="border-color: #9fb0a9; background: #f0f5f3;">
+                    <strong style="font-size: 12px; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ pf.label }}</strong>
+                    <small style="font-size: 10.5px; color: #6b7873;">{{ pf.desc }}</small>
+                  </button>
+                </sc-for>
+                <sc-if value="{{ pFlowsEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 12px; border: 1px solid #e6eae8; border-radius: 7px; background: #fafbfa; font-size: 11.5px; color: #6b7873;">This element does not take part in any traced request or event flow.</div>
+                </sc-if>
+              </sc-if>
+
+              <sc-if value="{{ pShowOverviewTab }}" hint-placeholder-val="{{ false }}">
+                <sc-if value="{{ pFacts }}" hint-placeholder-val="{{ false }}">
+                  <sc-for list="{{ pFacts }}" as="fact" hint-placeholder-count="3">
+                    <div style="display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 10px; padding: 7px 0; border-bottom: 1px solid #eef1ef; font-size: 12px;">
+                      <span style="color: #77837e;">{{ fact.k }}</span>
+                      <span style="overflow-wrap: anywhere;">{{ fact.v }}</span>
+                    </div>
+                  </sc-for>
+                </sc-if>
+                <sc-if value="{{ pRelated }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin: 12px 0 4px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8b9793;">Related</div>
+                  <sc-for list="{{ pRelated }}" as="rl" hint-placeholder-count="3">
+                    <button onClick="{{ rl.go }}" style="display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; width: 100%; border: 0; border-bottom: 1px solid #eef1ef; background: transparent; padding: 8px 2px; text-align: left;" style-hover="background: #f4f8f6;">
+                      <i style="width: 8px; height: 8px; border-radius: 50%; background: {{ rl.color }};"></i>
+                      <span style="min-width: 0;">
+                        <strong style="display: block; font-size: 12px; overflow-wrap: anywhere;">{{ rl.label }}</strong>
+                        <small style="display: block; font-size: 10.5px; color: #6b7873;">{{ rl.verb }}</small>
+                      </span>
+                      <span style="color: #b0bab5; font-size: 12px;">→</span>
+                    </button>
+                  </sc-for>
+                </sc-if>
+              </sc-if>
+
+            </div>
+          </aside>
+        </sc-if>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 900}, &quot;mapVariant&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;clusters&quot;, &quot;layers&quot;, &quot;columns&quot;], &quot;default&quot;: &quot;clusters&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;System Map&quot;}, &quot;showEdgeLabels&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Graph&quot;}}">
+class Component extends DCLogic {
+  state = {
+    D: null, mode: 'map', sel: null, activeFlow: null, expandedOp: null,
+    tech: false, tab: 'overview', hist: [], q: '', catQ: '', searchOpen: false,
+    vb: null, hover: null, panning: false, domainFilter: null,
+  };
+
+  componentDidMount() {
+    this.setState({ D: window.__ATLAS_DATA__ });
+    let seen = false;
+    try { seen = localStorage.getItem('atlas_guide_seen') === '1'; } catch (e) {}
+    if (!seen) this.setState({ guideOpen: true });
+  }
+  closeGuide() {
+    try { localStorage.setItem('atlas_guide_seen', '1'); } catch (e) {}
+    this.setState({ guideOpen: false });
+  }
+
+  // ---------- helpers ----------
+  node(id) { const { D } = this.state; if (!D) return null; if (id && id.startsWith('op.')) return this._opNode(id); if (this._syn && this._syn[id]) return this._syn[id]; return D.nodes.find((n) => n.id === id) || null; }
+  _opNode(id) {
+    const prof = this.state.D.moduleProfiles['m.items'];
+    const op = prof.operations.find((o) => o.id === id);
+    return op ? { id, type: 'method', label: op.name, file: 'src/items/items.service.ts', desc: op.desc + '. Operation of ItemsModule.', op } : null;
+  }
+  color(type) { return this.state.D.typeColors[type] || '#56635e'; }
+  plural(n, w) { return `${n} ${w}${n === 1 ? '' : 's'}`; }
+  typeExplain(type) {
+    return {
+      route: 'An HTTP endpoint — the entry point of a request into the system.',
+      controller: 'Receives HTTP requests, validates input, and hands the work to services.',
+      service: 'Business logic — the rules of the application live here.',
+      repository: 'The only place in its area that talks to the database.',
+      module: 'A unit that groups related routes, services and providers into one area of the app.',
+      topic: 'A Kafka channel: code publishes events here, consumers react later — asynchronously.',
+      queue: 'A background queue: jobs wait here until a processor picks them up.',
+      processor: 'A background worker — handles queued jobs or consumed events after the response.',
+      consumer: 'Listens to Kafka topics and triggers logic when events arrive.',
+      broker: 'The event backbone that carries messages between modules.',
+      table: 'A database table — where data actually changes.',
+      database: 'A data store used by the application.',
+      external: 'A third-party API outside the system boundary — failures here are not under your control.',
+      env: 'A configuration value read at startup. Atlas never stores its value.',
+      guard: 'Runs before the controller and can reject the request (e.g. no valid token).',
+      dto: 'Describes and validates the shape of incoming data.',
+      file: 'A source file. Its role = what it declares, who uses it, and which flows pass through it.',
+      risk: 'A detected architecture concern with a suggested fix.',
+      method: 'One meaningful operation of a module.',
+    }[type] || '';
+  }
+  risksFor(n) {
+    const { D } = this.state;
+    if (!n || n.type === 'risk' || !D) return [];
+    const folder = n.file ? n.file.split('/').slice(0, -1).join('/') : null;
+    return D.nodes.filter((r) => r.type === 'risk' && r.file && (
+      r.file === n.file || (n.type === 'module' && folder && r.file.startsWith(folder + '/'))
+    ));
+  }
+  tLabel(type) { const m = { method: 'Operation' }; return this.state.D.typeLabels[type] || m[type] || type; }
+
+  select(id, opts = {}) {
+    this.setState((s) => {
+      const hist = s.sel && s.sel !== id ? s.hist.concat(s.sel) : s.hist;
+      return { sel: id, hist, tab: opts.tab || 'overview', tech: false, vb: null, hover: null,
+        mode: opts.mode || s.mode, activeFlow: opts.flow !== undefined ? opts.flow : s.activeFlow,
+        expandedOp: opts.expandedOp !== undefined ? opts.expandedOp : null, searchOpen: false,
+        panelHidden: !!opts.flow, storyOpen: !!opts.flow,
+        domainFilter: opts.domainFilter !== undefined ? opts.domainFilter : s.domainFilter };
+    });
+  }
+
+  reveal(id) {
+    const n = this.node(id); if (!n) return;
+    const { D } = this.state;
+    let mode = 'services', flow = null;
+    if (n.type === 'module') mode = 'modules';
+    else if (n.type === 'route') { mode = 'routes'; flow = D.routeFlowIndex[id] || null; }
+    else if (['topic', 'queue', 'processor', 'consumer', 'broker'].includes(n.type)) { mode = 'async'; flow = D.asyncFlows[id] ? id : null; }
+    else if (['table', 'database'].includes(n.type)) mode = 'data';
+    else if (['external', 'env', 'library'].includes(n.type)) mode = 'external';
+    else if (n.type === 'risk') mode = 'risks';
+    else if (n.type === 'file') mode = 'files';
+    else if (['controller', 'guard', 'dto'].includes(n.type)) mode = 'routes';
+    this.select(id, { mode, flow });
+  }
+
+  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, hist: [], vb: null, hover: null, catQ: '', domainFilter: null }); }
+
+  // ---------- code highlighting ----------
+  highlight(code) {
+    const rules = [
+      [/(\/\*[\s\S]*?\*\/|\/\/.*)/g, '#7d918a', 'normal', 'italic'],
+      [/('(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g, '#9ad2a9'],
+      [/(@[A-Za-z]+)/g, '#e8b168'],
+      [/\b(export|class|extends|constructor|private|readonly|async|await|return|const|if|new|this|import|from|public|implements)\b/g, '#7fb5e8'],
+      [/\b([A-Z][A-Za-z0-9]*)\b/g, '#c6a9e8'],
+      [/\b(\d+)\b/g, '#e8a9a9'],
+    ];
+    const out = []; let key = 0;
+    code.split('\n').forEach((line, li) => {
+      let segs = [{ t: line, c: null, s: 'normal' }];
+      rules.forEach(([re, color, , fstyle]) => {
+        const next = [];
+        segs.forEach((seg) => {
+          if (seg.c) { next.push(seg); return; }
+          let last = 0, m; re.lastIndex = 0;
+          while ((m = re.exec(seg.t))) {
+            if (m.index > last) next.push({ t: seg.t.slice(last, m.index), c: null });
+            next.push({ t: m[0], c: color, s: fstyle || 'normal' });
+            last = m.index + m[0].length;
+          }
+          if (last < seg.t.length) next.push({ t: seg.t.slice(last), c: null });
+        });
+        segs = next;
+      });
+      out.push(React.createElement('div', { key: 'l' + li, style: { display: 'flex', minHeight: '16px' } },
+        React.createElement('span', { style: { width: '28px', flex: '0 0 auto', color: '#4e5f58', fontSize: '10px', textAlign: 'right', paddingRight: '10px', userSelect: 'none' } }, li + 1),
+        React.createElement('span', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', flex: 1 } },
+          segs.map((seg) => React.createElement('span', { key: key++, style: { color: seg.c || '#e8efec', fontStyle: seg.s || 'normal' } }, seg.t)))));
+    });
+    return React.createElement('pre', { style: { margin: 0, padding: '10px 10px 12px 4px', background: '#14201c', font: "11px/1.5 'IBM Plex Mono', monospace", overflow: 'auto', maxHeight: '420px' } }, out);
+  }
+
+  // ---------- geometry ----------
+  edgeStyle(kind, hi) {
+    const map = { sync: ['#7d8a84', '', 'url(#arr-sync)', '#4f5a55'], async: ['#0f7895', '5 4', 'url(#arr-async)', '#0f6478'], data: ['#1e8068', '', 'url(#arr-data)', '#176a56'], external: ['#c94747', '', 'url(#arr-external)', '#a83a3a'] };
+    const [color, dash, marker, labelFill] = map[kind] || map.sync;
+    return hi ? { color: '#df642d', dash, marker: 'url(#arr-hi)', labelFill: '#b1481c' } : { color, dash, marker, labelFill };
+  }
+  bez(x1, y1, x2, y2) { const dx = Math.max(36, Math.abs(x2 - x1) * 0.45); return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2 - 8} ${y2}`; }
+  linkEdge(a, b, e, hi, dim, showLabels) {
+    // a, b: {x,y,w,h}
+    let x1, y1, x2, y2;
+    if (b.x >= a.x + a.w) { x1 = a.x + a.w; y1 = a.y + a.h / 2; x2 = b.x; y2 = b.y + b.h / 2; }
+    else if (a.x >= b.x + b.w) { x1 = a.x; y1 = a.y + a.h / 2; x2 = b.x + b.w; y2 = b.y + b.h / 2; }
+    else if (b.y > a.y) { x1 = a.x + a.w / 2; y1 = a.y + a.h; x2 = b.x + b.w / 2; y2 = b.y; }
+    else { x1 = a.x + a.w / 2; y1 = a.y; x2 = b.x + b.w / 2; y2 = b.y + b.h; }
+    const st = this.edgeStyle(e.kind, hi);
+    const horizontal = Math.abs(x2 - x1) > Math.abs(y2 - y1);
+    const d = horizontal ? this.bez(x1, y1, x2, y2) : `M ${x1} ${y1} C ${x1} ${y1 + (y2 - y1) * 0.45}, ${x2} ${y2 - (y2 - y1) * 0.45}, ${x2} ${y2 > y1 ? y2 - 8 : y2 + 8}`;
+    return {
+      id: 'e:' + e.from + '>' + e.to, d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
+      w: hi ? 2.2 : 1.5, op: dim ? 0.14 : (hi ? 1 : 0.82),
+      showLabel: !!(showLabels && e.verb && !dim), verb: e.verb, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 7,
+      anim: e.kind === 'async' && !dim ? `animation: atlasDash ${hi ? 1.1 : 2.2}s linear infinite;` : '',
+      onEnter: (ev) => this.hoverEdge(ev, e),
+    };
+  }
+  mkNode(n, x, y, w, h, extra = {}) {
+    const sel = this.state.sel === n.id;
+    const accent = this.color(n.type);
+    return Object.assign({
+      id: n.id, x, y, w, h, tw: w - 18, th: h - 8,
+      label: n.label, sub: extra.sub !== undefined ? extra.sub : '', typeLabel: this.tLabel(n.type),
+      accent, fill: sel ? '#fdf3ec' : '#fff', stroke: sel ? '#df642d' : '#ccd5d1', sw: sel ? 2 : 1,
+      fs: n.label.length > 26 ? '10.5px' : '11.5px',
+      font: (n.type === 'route' || n.type === 'topic' || n.type === 'queue' || n.type === 'table' || n.type === 'env') ? "'IBM Plex Mono', monospace" : "'IBM Plex Sans', sans-serif",
+      op: extra.dim ? 0.3 : 1, step: extra.step || false, expandLabel: extra.expandLabel || false,
+      onClick: extra.onClick || (() => this.reveal(n.id)),
+      onEnter: (ev) => this.hoverNode(ev, n),
+    }, extra.over || {});
+  }
+  hoverNode(ev, n) {
+    const box = ev.currentTarget.ownerSVGElement.getBoundingClientRect();
+    this.setState({ hover: { x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: n.label, body: n.desc || this.tLabel(n.type) } });
+  }
+  hoverEdge(ev, e) {
+    const a = this.node(e.from), b = this.node(e.to); if (!a || !b) return;
+    const box = ev.currentTarget.ownerSVGElement.getBoundingClientRect();
+    const kindNote = { sync: 'synchronous call', async: 'event / queue — happens after the response', data: 'data read or write', external: 'call outside the system' }[e.kind] || '';
+    this.setState({ hover: { x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: `${a.label} → ${b.label}`, body: `${a.label} ${e.verb} ${b.label}. ${kindNote ? '(' + kindNote + ')' : ''}` } });
+  }
+
+  // ---------- scenes ----------
+  scene() {
+    const { D, mode, sel, tech, activeFlow, expandedOp, domainFilter } = this.state;
+    if (!D) return { nodes: [], edges: [], groups: [], cols: [], status: 'Loading…' };
+    if (tech && sel) return this.sceneTech(sel);
+    if (mode === 'map') return this.sceneMap();
+    if (mode === 'modules') {
+      if (sel && sel.startsWith('op.') && this._profHost) return this.sceneModule(this._profHost);
+      if (!sel) return this.sceneModuleGrid(domainFilter);
+      const n = this.node(sel);
+      if (n && n.type === 'module') return this.sceneModule(sel);
+      if (this.state.expandedOp === sel && this._profHost) return this.sceneModule(this._profHost);
+      return this.sceneDirectional(sel);
+    }
+    if (mode === 'routes') return activeFlow && D.flows[activeFlow] ? this.sceneFlow(D.flows[activeFlow]) : (sel ? this.sceneDirectional(sel) : this.sceneGrid(['route'], 'Select a route on the left to trace its full request flow.'));
+    if (mode === 'async') return activeFlow && D.asyncFlows[activeFlow] ? this.sceneFlow(D.asyncFlows[activeFlow]) : (sel ? this.sceneDirectional(sel) : this.sceneGrid(['broker', 'topic', 'queue', 'processor'], 'Select a topic, queue or processor to follow the async flow.'));
+    if (mode === 'services') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['service', 'provider', 'repository'], 'Select a service to see who calls it and what it depends on.');
+    if (mode === 'data') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['database', 'table', 'entity', 'model'], 'Select a data structure to see who reads and writes it.');
+    if (mode === 'external') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['external', 'env', 'library'], 'Select an integration to see which code depends on it.');
+    if (mode === 'risks') return sel ? this.sceneRisk(sel) : this.sceneGrid(['risk'], 'Select a risk to see the affected code.');
+    if (mode === 'files') return sel ? this.sceneFile(sel) : this.sceneGrid(['file'], 'Select a file to understand its role in the architecture.');
+    return { nodes: [], edges: [], groups: [], cols: [], status: '' };
+  }
+
+  sceneMap() {
+    const { D } = this.state;
+    const variant = this.state.mapVariant ?? this.props.mapVariant ?? 'clusters';
+    const showLabels = this.props.showEdgeLabels ?? true;
+    const N = [], E = [], G = [], C = [];
+    const pos = {}; // id -> box
+    const domainNodeIds = {}; // domain id -> synthetic id 'd.x'
+
+    const runtime = D.nodes.filter((n) => ['broker', 'topic', 'queue', 'processor'].includes(n.type)).map((n) => n.id);
+    const dataIds = D.nodes.filter((n) => n.type === 'database').map((n) => n.id);
+    const visibleDataIds = dataIds.length ? dataIds : D.nodes.filter((n) => ['table', 'entity', 'model'].includes(n.type)).slice(0, 12).map((n) => n.id);
+    const extIds = D.nodes.filter((n) => n.type === 'external').map((n) => n.id);
+
+    const cardW = 296, chipH = 44;
+    const detailed = D.domains.filter((d) => !d.light);
+    const lights = D.domains.filter((d) => d.light);
+    const lightModCount = lights.reduce((s, d) => s + d.modules.length, 0);
+    const expanded = !!this.state.mapExpanded;
+    let runtimeY = 40 + Math.max(1, Math.ceil(detailed.length / 4)) * 230 + 10;
+    if (variant === 'clusters') {
+      // Top domain cards in 2 rows, aggregated "more areas" card, runtime band below
+      detailed.forEach((dm, i) => {
+        const col = i % 4, row = Math.floor(i / 4);
+        const mh = dm.modules.length * (chipH + 8);
+        const cardH = 40 + mh + (dm.hidden ? 34 : 8);
+        const x = 40 + col * (cardW + 56), y = 40 + row * 230;
+        const grp = { x, y, w: cardW, h: cardH, fill: '#ffffff', stroke: '#ccd5d1', label: dm.name, sub: dm.counts, footY: y + cardH - 32 };
+        if (dm.hidden) { grp.moreLabel = `+${dm.hidden} more module${dm.hidden > 1 ? 's' : ''} — open area`; grp.onMore = () => this.setState({ mode: 'modules', sel: null, domainFilter: dm.id, vb: null, activeFlow: null, hist: [] }); }
+        G.push(grp);
+        dm.modules.forEach((mid, j) => {
+          const m = this.node(mid);
+          const bx = x + 10, by = y + 38 + j * (chipH + 8);
+          pos[mid] = { x: bx, y: by, w: cardW - 20, h: chipH };
+          N.push(this.mkNode(m, bx, by, cardW - 20, chipH, { sub: `${this.plural((m.metrics && m.metrics.routes) || 0, 'route')} · ${this.plural((m.metrics && m.metrics.services) || 0, 'service')}` }));
+        });
+        pos['d.' + dm.id] = { x, y, w: cardW, h: cardH };
+        domainNodeIds[dm.id] = 'd.' + dm.id;
+      });
+      // remaining areas: aggregated card (never hidden silently) or expanded compact grid
+      const aggX = 40 + 3 * (cardW + 56), aggY = 40 + 230;
+      if (!expanded && lights.length) {
+        G.push({
+          x: aggX, y: aggY, w: cardW, h: 128, fill: '#fafbfa', stroke: '#c9d1cd',
+          label: `${lights.length} more areas`, sub: `${lightModCount} modules`, footY: aggY + 96,
+          moreLabel: `Show all ${D.domains.length} areas`, onMore: () => this.setState({ mapExpanded: true, vb: null }),
+        });
+        N.push(this.mkNode({ id: 'd.more', type: 'module', label: lights.slice(0, 3).map((d) => d.name).join(' · ') + ' …', desc: `Aggregated: ${lights.map((d) => d.name).join(', ')}.` }, aggX + 10, aggY + 38, cardW - 20, chipH, {
+          sub: 'grouped for readability — click to expand', onClick: () => this.setState({ mapExpanded: true, vb: null }),
+        }));
+      } else if (lights.length) {
+        const perRow = 4, rows = Math.ceil(lights.length / perRow);
+        const boxH = 46 + rows * 58 + 34;
+        G.push({
+          x: 40, y: runtimeY, w: 4 * (cardW + 56) - 56, h: boxH, fill: '#fafbfa', stroke: '#c9d1cd',
+          label: `More areas — ${lights.length} of ${D.domains.length}`, sub: `${lightModCount} modules`, footY: runtimeY + boxH - 32,
+          moreLabel: 'Show top areas only', onMore: () => this.setState({ mapExpanded: false, vb: null }),
+        });
+        lights.forEach((dm, i) => {
+          const bx = 56 + (i % perRow) * (cardW + 46), by = runtimeY + 40 + Math.floor(i / perRow) * 58;
+          pos['d.' + dm.id] = { x: bx, y: by, w: cardW - 20, h: 48 };
+          N.push(this.mkNode({ id: 'd.' + dm.id, type: 'module', label: dm.name, desc: dm.desc + ' — ' + dm.counts }, bx, by, cardW - 20, 48, {
+            sub: dm.counts, onClick: () => this.setState({ mode: 'modules', sel: null, domainFilter: dm.id, vb: null, hist: [] }),
+          }));
+        });
+        runtimeY += boxH + 24;
+      }
+      // runtime band
+      const ry = runtimeY;
+      const runtimeRows = Math.max(1, Math.ceil(runtime.length / 7));
+      const runtimeH = 50 + runtimeRows * 54;
+      G.push({ x: 40, y: ry, w: 4 * (cardW + 56) - 56, h: runtimeH, fill: '#f2f7f9', stroke: '#c3d6dd', label: 'Async runtime — topics, queues, processors', sub: `${D.project.stats.topics} topics · ${D.project.stats.queues} queues · ${D.project.stats.processors} processors — all shown`, footY: 0 });
+      runtime.forEach((rid, i) => {
+        const n = this.node(rid);
+        const col = i % 7, row = Math.floor(i / 7);
+        const bx = 56 + col * 194, by = ry + 36 + row * 54;
+        pos[rid] = { x: bx, y: by, w: 180, h: 44 };
+        N.push(this.mkNode(n, bx, by, 180, 44));
+      });
+      // data + external column
+      const dx = 40 + 4 * (cardW + 56) + 10;
+      const dataH = 48 + Math.max(1, visibleDataIds.length) * 60;
+      G.push({ x: dx, y: 40, w: 230, h: dataH, fill: '#f1f8f5', stroke: '#bcd8cd', label: 'Data', sub: `${D.project.stats.tables} data structures`, footY: 0 });
+      visibleDataIds.forEach((id, i) => { const b = { x: dx + 12, y: 78 + i * 60, w: 206, h: 46 }; pos[id] = b; N.push(this.mkNode(this.node(id), b.x, b.y, b.w, b.h)); });
+      const extY = 60 + dataH;
+      const extH = 48 + Math.max(1, extIds.length) * 60;
+      G.push({ x: dx, y: extY, w: 230, h: extH, fill: '#fbf1f1', stroke: '#e0c2c2', label: 'External systems', sub: `${extIds.length} APIs — all shown`, footY: 0 });
+      extIds.forEach((id, i) => { const b = { x: dx + 12, y: extY + 38 + i * 60, w: 206, h: 46 }; pos[id] = b; N.push(this.mkNode(this.node(id), b.x, b.y, b.w, b.h)); });
+    } else if (variant === 'layers') {
+      const laneW = 7 * 210;
+      const lanes = [
+        { label: 'DOMAIN MODULES', y: 40, ids: D.domains.map((d) => 'd.' + d.id) },
+        { label: 'ASYNC RUNTIME — TOPICS · QUEUES · PROCESSORS', y: 300, ids: runtime },
+        { label: 'DATA & EXTERNAL', y: 560, ids: visibleDataIds.concat(extIds) },
+      ];
+      lanes.forEach((lane) => {
+        C.push({ x: 40, y: lane.y - 12, x2: 40 + laneW, ly: lane.y - 6, label: lane.label, fill: '#8b9793' });
+        lane.ids.forEach((id, i) => {
+          const perRow = 7, col = i % perRow, row = Math.floor(i / perRow);
+          const bx = 40 + col * 210, by = lane.y + row * 66;
+          if (id.startsWith('d.')) {
+            const dm = D.domains.find((d) => 'd.' + d.id === id);
+            pos[id] = { x: bx, y: by, w: 196, h: 56 };
+            domainNodeIds[dm.id] = id;
+            N.push(this.mkNode({ id, type: 'module', label: dm.name, desc: dm.desc + ' — ' + dm.counts }, bx, by, 196, 56, {
+              sub: dm.counts, onClick: () => this.setState({ mode: 'modules', sel: null, domainFilter: dm.id, vb: null, hist: [] }),
+            }));
+          } else {
+            pos[id] = { x: bx, y: by, w: 196, h: 48 };
+            N.push(this.mkNode(this.node(id), bx, by, 196, 48));
+          }
+        });
+      });
+    } else {
+      // 'columns' — three semantic columns: domains | events & jobs | data & external
+      const colDefs = [
+        { label: 'DOMAINS', sub: 'the business areas of the app', x: 40, ids: D.domains.map((d) => 'd.' + d.id) },
+        { label: 'EVENTS & BACKGROUND JOBS', sub: 'work that happens later, after the response', x: 460, ids: runtime },
+        { label: 'DATA & EXTERNAL', sub: 'what gets stored or sent outside', x: 880, ids: visibleDataIds.concat(extIds) },
+      ];
+      colDefs.forEach((cd) => {
+        C.push({ x: cd.x, y: 28, subY: 41, x2: cd.x + 300, ly: 50, label: cd.label, sub: cd.sub, fill: '#8b9793' });
+        cd.ids.forEach((id, i) => {
+          const by = 64 + i * 62;
+          if (id.startsWith('d.')) {
+            const dm = D.domains.find((d) => 'd.' + d.id === id);
+            pos[id] = { x: cd.x, y: by, w: 300, h: 52 };
+            domainNodeIds[dm.id] = id;
+            N.push(this.mkNode({ id, type: 'module', label: dm.name, desc: dm.desc + ' — ' + dm.counts }, cd.x, by, 300, 52, {
+              sub: dm.counts, onClick: () => this.setState({ mode: 'modules', sel: null, domainFilter: dm.id, vb: null, hist: [] }),
+            }));
+          } else {
+            pos[id] = { x: cd.x, y: by, w: 300, h: 52 };
+            N.push(this.mkNode(this.node(id), cd.x, by, 300, 52));
+          }
+        });
+      });
+    }
+
+    D.mapEdges.forEach((e) => {
+      const a = pos[e.from], b = pos[e.to];
+      if (!a || !b) return;
+      E.push(this.linkEdge(a, b, e, false, false, showLabels && variant !== 'clusters'));
+    });
+    const aggNote = lights.length ? (expanded ? `all ${D.domains.length} areas shown` : `${detailed.length} areas in detail · ${lights.length} aggregated (${lightModCount} modules — click to expand)`) : `all ${D.domains.length} areas shown`;
+    return { nodes: N, edges: E, groups: G, cols: C, status: `${aggNote} · ${runtime.length} runtime components · ${visibleDataIds.length} data stores · ${extIds.length} external systems.` };
+  }
+
+  sceneModuleGrid(domainFilter) {
+    const { D } = this.state;
+    const N = [], G = [];
+    const doms = domainFilter ? D.domains.filter((d) => d.id === domainFilter) : D.domains;
+    doms.forEach((dm, i) => {
+      const perRow = domainFilter ? 1 : 3;
+      const col = i % perRow, row = Math.floor(i / perRow);
+      const h = 42 + dm.modules.length * 54 + (dm.hidden ? 34 : 6);
+      const x = 40 + col * 360, y = 40 + row * 260;
+      const grp = { x, y, w: 320, h, fill: '#fff', stroke: '#ccd5d1', label: dm.name, sub: dm.counts, footY: y + h - 32 };
+      if (dm.hidden) { grp.moreLabel = `+${dm.hidden} module${dm.hidden > 1 ? 's' : ''} not yet scanned in detail`; grp.onMore = () => {}; }
+      G.push(grp);
+      dm.modules.forEach((mid, j) => {
+        const m = this.node(mid);
+        N.push(this.mkNode(m, x + 10, y + 38 + j * 54, 300, 46, { sub: `${this.plural((m.metrics && m.metrics.routes) || 0, 'route')} · ${this.plural((m.metrics && m.metrics.services) || 0, 'service')} · ${this.plural((m.metrics && m.metrics.tests) || 0, 'test')}` }));
+      });
+    });
+    return { nodes: N, edges: [], groups: G, cols: [], status: domainFilter ? `Area “${doms[0] ? doms[0].name : ''}” — select a module to see how it works.` : 'Select a module to see what starts it, what it does, what it needs, and what it changes.' };
+  }
+
+  // Generic semantic profile for modules without a curated one — built from the graph.
+  buildProfile(mid) {
+    const { D } = this.state;
+    const m = this.node(mid);
+    const dom = m.domain;
+    const owners = D.nodes.filter((n) => ['controller', 'service', 'provider', 'repository', 'processor'].includes(n.type) && n.domain === dom);
+    const ownerIds = new Set(owners.map((n) => n.id));
+    const operationIds = new Set(D.edges.filter((e) => ownerIds.has(e.from) && e.verb === 'declares').map((e) => e.to));
+    const operationsNodes = D.nodes.filter((n) => operationIds.has(n.id) && n.type === 'method');
+    const routes = D.nodes.filter((n) => n.type === 'route' && n.domain === dom);
+    const starts = routes.map((r) => ({ id: r.id }));
+    D.edges.forEach((e) => {
+      if ((ownerIds.has(e.to) || operationIds.has(e.to)) && !ownerIds.has(e.from) && !operationIds.has(e.from)) {
+        const src = this.node(e.from);
+        if (src && ['service', 'provider', 'processor', 'topic', 'queue'].includes(src.type) && src.domain !== dom && !starts.some((s) => s.id === src.id)) starts.push({ id: src.id, note: e.verb });
+      }
+    });
+    const operations = operationsNodes.map((op) => {
+      const opRoutes = routes.filter((route) => D.edges.some((e) => e.from === route.id && e.to === op.id));
+      const flow = opRoutes.map((route) => D.routeFlowIndex[route.id]).find(Boolean) || null;
+      return { id: op.id, name: op.label, desc: (op.desc || 'Detected operation').split('.')[0].slice(0, 72), routes: opRoutes.map((route) => route.id), flow };
+    });
+    if (!operations.length) owners.forEach((owner) => operations.push({ id: owner.id, name: owner.label, desc: (owner.desc || this.tLabel(owner.type)).split('.')[0].slice(0, 72), routes: [], flow: null }));
+    const operationSet = new Set(operations.map((op) => op.id));
+    const needs = [], changes = [], opLinks = [], seenN = new Set(), seenC = new Set();
+    operations.forEach((op) => {
+      D.edges.filter((e) => e.from === op.id).forEach((e) => {
+        const target = this.node(e.to); if (!target || operationSet.has(target.id)) return;
+        if (e.kind === 'sync' && ['service', 'provider', 'repository', 'guard', 'pipe', 'library', 'env'].includes(target.type)) {
+          if (!seenN.has(target.id)) { seenN.add(target.id); needs.push({ id: target.id, verb: e.verb }); }
+          opLinks.push({ from: op.id, to: target.id, verb: e.verb, kind: e.kind });
+        } else if (['data', 'async', 'external'].includes(e.kind)) {
+          if (!seenC.has(target.id)) { seenC.add(target.id); changes.push({ id: target.id, verb: e.verb, kind: e.kind }); }
+          opLinks.push({ from: op.id, to: target.id, verb: e.verb, kind: e.kind });
+        }
+      });
+    });
+    return { summary: `How ${m.label} works — built from the scanned graph.`, starts, operations, needs, changes, opLinks, generic: true };
+  }
+
+  sceneModule(sel) {
+    const { D, expandedOp } = this.state;
+    this._profHost = sel;
+    const prof = D.moduleProfiles[sel] || this.buildProfile(sel);
+    const showLabels = this.props.showEdgeLabels ?? true;
+    const N = [], E = [], C = [];
+    const pos = {};
+    const colX = [40, 330, 620, 910, 1200];
+    const heads = [
+      ['WHAT STARTS IT', 'requests & events that trigger it'],
+      ['SELECTED MODULE', 'the part you picked'],
+      ['WHAT IT DOES', 'its operations — click one'],
+      ['WHAT IT NEEDS', 'helpers it depends on'],
+      ['WHAT CHANGES', 'data written & events published'],
+    ];
+    heads.forEach(([h, sub], i) => C.push({ x: colX[i], y: 36, subY: 49, x2: colX[i] + 230, ly: 58, label: h, sub, fill: i === 1 ? '#df642d' : '#8b9793' }));
+
+    const hiIds = new Set();
+    if (expandedOp) {
+      hiIds.add(expandedOp); hiIds.add(sel);
+      (prof.opLinks || []).filter((l) => l.from === expandedOp).forEach((l) => hiIds.add(l.to));
+      const operation = prof.operations.find((op) => op.id === expandedOp);
+      const starts = operation && operation.routes && operation.routes.length ? operation.routes : prof.starts.map((s) => s.id);
+      starts.forEach((id) => hiIds.add(id));
+    }
+    const dimOf = (id) => expandedOp ? !hiIds.has(id) : false;
+
+    prof.starts.forEach((st, i) => {
+      const n = this.node(st.id);
+      const b = { x: colX[0], y: 72 + i * 60, w: 230, h: 50 };
+      pos[st.id] = b;
+      N.push(this.mkNode(n, b.x, b.y, b.w, b.h, { dim: dimOf(st.id), sub: st.note || '' }));
+    });
+    const mod = this.node(sel);
+    const modB = { x: colX[1], y: 72 + (prof.starts.length * 60) / 2 - 60, w: 230, h: 76 };
+    pos[sel] = modB;
+    N.push(this.mkNode(mod, modB.x, modB.y, modB.w, modB.h, { dim: false, sub: mod.metrics ? `${this.plural(mod.metrics.routes, 'route')} · ${this.plural(mod.metrics.services, 'service')}` : '' }));
+
+    prof.operations.forEach((op, i) => {
+      const b = { x: colX[2], y: 72 + i * 86, w: 230, h: 54 };
+      pos[op.id] = b;
+      const isExp = expandedOp === op.id;
+      const opNode = prof.generic ? this.node(op.id) : { id: op.id, type: 'method', label: op.name, desc: op.desc };
+      N.push(this.mkNode(opNode, b.x, b.y, b.w, b.h, {
+        dim: dimOf(op.id), sub: op.desc,
+        expandLabel: op.flow ? (isExp ? 'Open full request flow' : 'Click to expand') : false,
+        onClick: () => op.flow
+          ? (isExp ? this.select(op.routes[0], { mode: 'routes', flow: op.flow }) : this.select(op.id, { expandedOp: op.id }))
+          : this.select(isExp ? sel : op.id, { expandedOp: isExp ? null : op.id }),
+        over: isExp ? { stroke: '#df642d', sw: 2, fill: '#fdf3ec' } : {},
+      }));
+    });
+    prof.needs.forEach((nd, i) => {
+      const n = this.node(nd.id);
+      const b = { x: colX[3], y: 72 + i * 78, w: 230, h: 52 };
+      pos[nd.id] = b;
+      N.push(this.mkNode(n, b.x, b.y, b.w, b.h, { dim: dimOf(nd.id) }));
+    });
+    prof.changes.forEach((ch, i) => {
+      const n = this.node(ch.id);
+      const b = { x: colX[4], y: 72 + i * 78, w: 230, h: 52 };
+      pos[ch.id] = b;
+      N.push(this.mkNode(n, b.x, b.y, b.w, b.h, { dim: dimOf(ch.id) }));
+    });
+
+    prof.starts.forEach((st) => {
+      const hi = expandedOp && hiIds.has(st.id);
+      E.push(this.linkEdge(pos[st.id], pos[sel], { from: st.id, to: sel, verb: st.note ? 'calls' : 'starts', kind: 'sync' }, hi, dimOf(st.id), false));
+    });
+    prof.operations.forEach((op) => {
+      const hi = expandedOp === op.id;
+      E.push(this.linkEdge(pos[sel], pos[op.id], { from: sel, to: op.id, verb: '', kind: 'sync' }, hi, dimOf(op.id), false));
+    });
+    const opEdges = (prof.opLinks || []).map((l) => [l.from, l.to, l.verb, l.kind]);
+    opEdges.forEach(([f, t, verb, kind]) => {
+      if (!pos[f] || !pos[t]) return;
+      const hi = expandedOp === f;
+      const dim = expandedOp ? expandedOp !== f : false;
+      E.push(this.linkEdge(pos[f], pos[t], { from: f, to: t, verb, kind }, hi, dim, showLabels));
+    });
+    const expanded = expandedOp ? prof.operations.find((op) => op.id === expandedOp) : null;
+    const status = expandedOp
+      ? `Operation expanded — the orange chain shows exactly what ${expanded ? expanded.name : 'this operation'} touches.${expanded && expanded.flow ? ' Click it again to open the full request flow.' : ''}`
+      : `${mod.label}: ${this.plural(prof.starts.length, 'trigger')} · ${this.plural(prof.operations.length, prof.generic ? 'service' : 'operation')} · ${this.plural(prof.needs.length, 'dependency').replace('dependencys', 'dependencies')} · ${this.plural(prof.changes.length, 'effect')}. ${prof.generic ? 'Click any element to inspect it.' : 'Click an operation to expand it.'}`;
+    return { nodes: N, edges: E, groups: [], cols: C, status };
+  }
+
+  sceneFlow(flow) {
+    const showLabels = this.props.showEdgeLabels ?? true;
+    const N = [], E = [], C = [];
+    const pos = {};
+    const colW = 285, rowH = 96;
+    const stages = {};
+    flow.steps.forEach((st) => {
+      const n = this.node(st.id);
+      const b = { x: 40 + st.col * colW, y: 76 + st.row * rowH, w: 225, h: 54 };
+      pos[st.id] = b;
+      if (!stages[st.col]) { stages[st.col] = st.stage; C.push({ x: b.x, y: 46, x2: b.x + 225, ly: 54, label: st.stage.toUpperCase(), fill: '#8b9793' }); }
+      N.push(this.mkNode(n, b.x, b.y, b.w, b.h, {
+        step: (flow.links.find((l) => l.to === st.id && l.n) || {}).n || (st.col === 0 ? 1 : false),
+        onClick: () => this.select(st.id),
+      }));
+    });
+    flow.links.forEach((l) => {
+      if (!pos[l.from] || !pos[l.to]) return;
+      E.push(this.linkEdge(pos[l.from], pos[l.to], l, false, false, showLabels));
+    });
+    return { nodes: N, edges: E, groups: [], cols: C, status: flow.ends ? 'Where it ends: ' + flow.ends : flow.summary, flowTitle: flow.title };
+  }
+
+  sceneDirectional(sel) {
+    const { D } = this.state;
+    const showLabels = this.props.showEdgeLabels ?? true;
+    const n = this.node(sel);
+    if (!n) return { nodes: [], edges: [], groups: [], cols: [], status: '' };
+    const inc = D.edges.filter((e) => e.to === sel).slice(0, 8);
+    const out = D.edges.filter((e) => e.from === sel).slice(0, 10);
+    const N = [], E = [], C = [];
+    C.push({ x: 40, y: 46, x2: 290, ly: 54, label: 'USED BY / TRIGGERED BY', fill: '#8b9793' });
+    C.push({ x: 380, y: 46, x2: 630, ly: 54, label: 'SELECTED', fill: '#df642d' });
+    C.push({ x: 720, y: 46, x2: 970, ly: 54, label: 'CALLS / CHANGES', fill: '#8b9793' });
+    const midY = 76 + Math.max(inc.length, out.length, 1) * 33;
+    const selB = { x: 380, y: midY - 34, w: 250, h: 68 };
+    N.push(this.mkNode(n, selB.x, selB.y, selB.w, selB.h, { sub: n.file || '' }));
+    inc.forEach((e, i) => {
+      const a = this.node(e.from);
+      const b = { x: 40, y: 76 + i * 66, w: 250, h: 52 };
+      N.push(this.mkNode(a, b.x, b.y, b.w, b.h));
+      E.push(this.linkEdge(b, selB, e, false, false, showLabels));
+    });
+    out.forEach((e, i) => {
+      const t = this.node(e.to);
+      const b = { x: 720, y: 76 + i * 66, w: 250, h: 52 };
+      N.push(this.mkNode(t, b.x, b.y, b.w, b.h));
+      E.push(this.linkEdge(selB, b, e, false, false, showLabels));
+    });
+    const incTotal = D.edges.filter((e) => e.to === sel).length, outTotal = D.edges.filter((e) => e.from === sel).length;
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${n.label} — used by ${incTotal} element${incTotal === 1 ? '' : 's'}, uses ${outTotal}. ${incTotal > inc.length || outTotal > out.length ? 'Showing the strongest links; open the panel tabs for the full lists.' : 'All direct relationships shown.'}` };
+  }
+
+  sceneTech(sel) {
+    const { D } = this.state;
+    const n = this.node(sel);
+    if (!n || sel.startsWith('op.')) return this.sceneDirectional(sel);
+    const rel = D.edges.filter((e) => e.from === sel || e.to === sel);
+    const others = Array.from(new Set(rel.map((e) => (e.from === sel ? e.to : e.from))));
+    const N = [], E = [];
+    const cx = 620, cy = 360, R = 270;
+    const selB = { x: cx - 115, y: cy - 32, w: 230, h: 64 };
+    N.push(this.mkNode(n, selB.x, selB.y, selB.w, selB.h, { sub: 'technical graph — every raw relationship' }));
+    const pos = {};
+    others.forEach((id, i) => {
+      const a = -Math.PI / 2 + (2 * Math.PI * i) / others.length;
+      const b = { x: cx + Math.cos(a) * R - 95, y: cy + Math.sin(a) * R * 0.72 - 24, w: 190, h: 48 };
+      pos[id] = b;
+      N.push(this.mkNode(this.node(id), b.x, b.y, b.w, b.h));
+    });
+    rel.forEach((e) => {
+      const from = e.from === sel ? selB : pos[e.from];
+      const to = e.to === sel ? selB : pos[e.to];
+      if (!from || !to) return;
+      E.push(this.linkEdge(from, to, e, false, false, true));
+    });
+    return { nodes: N, edges: E, groups: [], cols: [], status: `Technical graph: every detected relationship of ${n.label} — ${rel.length} edges. Switch back to the semantic view for the explained flow.` };
+  }
+
+  sceneRisk(sel) {
+    const n = this.node(sel);
+    const fileNode = this.state.D.nodes.find((x) => x.type !== 'risk' && x.file === n.file);
+    if (fileNode) {
+      const s = this.sceneDirectional(fileNode.id);
+      s.status = `${n.label} — showing the affected element ${fileNode.label} and its direct relationships.`;
+      return s;
+    }
+    return { nodes: [this.mkNode(n, 300, 200, 320, 64, {})], edges: [], groups: [], cols: [], status: n.label };
+  }
+
+  sceneFile(sel) {
+    const { D } = this.state;
+    const role = D.fileRoles[sel];
+    if (!role) return this.sceneDirectional(sel);
+    const showLabels = this.props.showEdgeLabels ?? true;
+    const n = this.node(sel);
+    const N = [], E = [], C = [];
+    const cols = [
+      { x: 40, label: 'WHO USES IT', items: role.usedBy.map((u) => ({ id: u.id, verb: u.verb, dir: 'in' })) },
+      { x: 340, label: 'THE FILE', items: [] },
+      { x: 640, label: 'WHAT IT CALLS', items: role.calls.map((u) => ({ id: u.id, verb: u.verb, dir: 'out' })) },
+      { x: 940, label: 'DATA · EVENTS · EXTERNAL', items: role.dataAndExternal.map((u) => ({ id: u.id, verb: u.verb, dir: 'out2' })) },
+    ];
+    cols.forEach((c) => C.push({ x: c.x, y: 46, x2: c.x + 250, ly: 54, label: c.label, fill: c.label === 'THE FILE' ? '#df642d' : '#8b9793' }));
+    const maxRows = Math.max(cols[0].items.length, cols[2].items.length, cols[3].items.length, 2);
+    const fileB = { x: 340, y: 76 + (maxRows * 33) - 52, w: 250, h: 66 };
+    N.push(this.mkNode(n, fileB.x, fileB.y, fileB.w, fileB.h, { sub: role.declares.map((d) => 'declares ' + (this.node(d.id) || {}).label).join(', ') }));
+    // declared entity chip under file
+    role.declares.forEach((d, i) => {
+      const en = this.node(d.id);
+      const b = { x: 340, y: fileB.y + 84 + i * 62, w: 250, h: 50 };
+      N.push(this.mkNode(en, b.x, b.y, b.w, b.h, { sub: d.note }));
+      E.push(this.linkEdge(fileB, b, { from: sel, to: d.id, verb: 'declares', kind: 'sync' }, false, false, showLabels));
+    });
+    cols[0].items.forEach((it, i) => {
+      const b = { x: 40, y: 76 + i * 66, w: 250, h: 52 };
+      N.push(this.mkNode(this.node(it.id), b.x, b.y, b.w, b.h));
+      E.push(this.linkEdge(b, fileB, { from: it.id, to: sel, verb: it.verb, kind: 'sync' }, false, false, showLabels));
+    });
+    cols[2].items.forEach((it, i) => {
+      const b = { x: 640, y: 76 + i * 66, w: 250, h: 52 };
+      N.push(this.mkNode(this.node(it.id), b.x, b.y, b.w, b.h));
+      E.push(this.linkEdge(fileB, b, { from: sel, to: it.id, verb: it.verb, kind: 'sync' }, false, false, showLabels));
+    });
+    cols[3].items.forEach((it, i) => {
+      const b = { x: 940, y: 76 + i * 66, w: 250, h: 52 };
+      const target = this.node(it.id);
+      const kind = target.type === 'table' ? 'data' : (['topic', 'queue'].includes(target.type) ? 'async' : 'external');
+      N.push(this.mkNode(target, b.x, b.y, b.w, b.h));
+      E.push(this.linkEdge(fileB, b, { from: sel, to: it.id, verb: it.verb, kind }, false, false, showLabels));
+    });
+    return { nodes: N, edges: E, groups: [], cols: C, status: role.role };
+  }
+
+  sceneGrid(types, hint) {
+    const { D, catQ, sel } = this.state;
+    const items = D.nodes.filter((n) => types.includes(n.type) && (!catQ || (n.label + ' ' + (n.file || '')).toLowerCase().includes(catQ.toLowerCase())));
+    const N = [];
+    items.forEach((n, i) => {
+      const perRow = 4, col = i % perRow, row = Math.floor(i / perRow);
+      N.push(this.mkNode(n, 40 + col * 290, 40 + row * 76, 260, 58, { sub: n.file || n.desc && n.desc.slice(0, 42) || '' }));
+    });
+    return { nodes: N, edges: [], groups: [], cols: [], status: hint, emptyOk: items.length === 0 };
+  }
+
+  // ---------- viewbox / zoom ----------
+  fitVb(scn) {
+    const boxes = scn.nodes.map((n) => [n.x, n.y, n.x + n.w, n.y + n.h]).concat(scn.groups.map((g) => [g.x, g.y, g.x + g.w, g.y + g.h]));
+    if (!boxes.length) return '0 0 1200 700';
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    boxes.forEach(([a, b, c, d]) => { x1 = Math.min(x1, a); y1 = Math.min(y1, b); x2 = Math.max(x2, c); y2 = Math.max(y2, d); });
+    const pad = 46;
+    return `${x1 - pad} ${y1 - pad - 20} ${x2 - x1 + pad * 2} ${y2 - y1 + pad * 2 + 20}`;
+  }
+  parseVb(str) { const [x, y, w, h] = str.split(' ').map(Number); return { x, y, w, h }; }
+  zoom(factor) {
+    const scn = this.scene();
+    const cur = this.state.vb || this.parseVb(this.fitVb(scn));
+    const nw = cur.w * factor, nh = cur.h * factor;
+    this.setState({ vb: { x: cur.x + (cur.w - nw) / 2, y: cur.y + (cur.h - nh) / 2, w: nw, h: nh } });
+  }
+
+  // ---------- render ----------
+  renderVals() {
+    const { D, mode, sel, tab, hist, q, catQ, searchOpen, hover, tech, activeFlow, domainFilter, panning } = this.state;
+    const loading = !D;
+    const scn = loading ? { nodes: [], edges: [], groups: [], cols: [], status: 'Loading project graph…' } : this.scene();
+    const vbStr = this.state.vb ? `${this.state.vb.x} ${this.state.vb.y} ${this.state.vb.w} ${this.state.vb.h}` : this.fitVb(scn);
+
+    const modeDefs = [
+      { h: 'Project' },
+      { id: 'overview', label: 'Overview', count: '' },
+      { id: 'map', label: 'System Map', count: '' },
+      { h: 'Architecture' },
+      { id: 'modules', label: 'Modules', count: loading ? '' : D.nodes.filter((n) => n.type === 'module').length },
+      { id: 'routes', label: 'Routes & Flows', count: loading ? '' : D.project.stats.routes },
+      { id: 'async', label: 'Async Flows', count: loading ? '' : D.nodes.filter((n) => ['broker', 'topic', 'queue', 'processor'].includes(n.type)).length },
+      { id: 'services', label: 'Services', count: loading ? '' : D.project.stats.services },
+      { id: 'data', label: 'Data Model', count: loading ? '' : D.project.stats.tables },
+      { h: 'Boundary' },
+      { id: 'external', label: 'External', count: loading ? '' : D.nodes.filter((n) => ['external', 'env'].includes(n.type)).length },
+      { h: 'Quality' },
+      { id: 'risks', label: 'Risks', count: loading ? '' : D.nodes.filter((n) => n.type === 'risk').length },
+      { id: 'files', label: 'Files & Code', count: loading ? '' : D.project.stats.files },
+    ];
+    let firstHeading = true;
+    const navItems = modeDefs.map((d) => {
+      if (d.h) { const it = { isHeading: true, isItem: false, label: d.h, mt: firstHeading ? '0px' : '14px' }; firstHeading = false; return it; }
+      const active = mode === d.id;
+      return {
+        isHeading: false, isItem: true, label: d.label, count: String(d.count),
+        bg: active ? '#fdeee5' : 'transparent', hoverBg: active ? '#fdeee5' : '#f1f4f2',
+        fg: active ? '#a34517' : '#333e3a', fw: active ? 700 : 500, countFg: active ? '#c97c53' : '#9aa5a0',
+        current: active ? 'page' : 'false', go: () => this.setMode(d.id),
+      };
+    });
+
+    const titles = {
+      overview: ['Overview', 'Project size, key domains, entry points, and architecture risks at a glance.'],
+      map: ['System Map', 'Every domain, runtime component, and data system in the project — grouped, counted, nothing hidden.'],
+      modules: ['Modules', 'Pick a module to see what starts it, what it does, what it needs, and what it changes.'],
+      routes: ['Routes & Flows', 'Follow an HTTP request from its endpoint to the data it changes and the events it publishes.'],
+      async: ['Async Flows', 'Kafka topics, queues, publishers, consumers and processors — who sends what, and what runs next.'],
+      services: ['Services', 'Business logic: who calls each service, and what it depends on.'],
+      data: ['Data Model', 'Tables and stores: who reads and writes each one.'],
+      external: ['External', 'APIs, libraries and environment variables used outside the application boundary.'],
+      risks: ['Risks', 'Detected architecture concerns, with the affected code.'],
+      files: ['Files & Code', 'Pick a file to understand its role: what it declares, who uses it, and which flows pass through it.'],
+    };
+    const flowObj = activeFlow ? (D && (D.flows[activeFlow] || D.asyncFlows[activeFlow])) : null;
+    const viewTitle = flowObj ? flowObj.title : titles[mode][0];
+    const viewDesc = flowObj ? flowObj.summary : titles[mode][1];
+
+    const selNode = sel ? this.node(sel) : null;
+    const crumbs = [{ label: titles[mode][0], go: () => this.setMode(mode) }];
+    if (domainFilter && D) { const dm = D.domains.find((d) => d.id === domainFilter); if (dm) crumbs.push({ label: dm.name, go: () => this.setState({ sel: null, activeFlow: null, vb: null }) }); }
+    const flowCrumb = flowObj ? flowObj.title.split(' — ')[0] : null;
+    if (flowCrumb && selNode && flowCrumb !== selNode.label) crumbs.push({ label: flowCrumb, go: () => {} });
+    if (selNode) crumbs.push({ label: selNode.label, go: () => {} });
+    else if (flowCrumb) crumbs.push({ label: flowCrumb, go: () => {} });
+
+    // catalog
+    const catDefs = {
+      map: null, overview: null,
+      modules: { title: 'Modules', types: ['module'], groupBy: 'domain' },
+      routes: { title: 'Routes', types: ['route'], groupBy: null },
+      async: { title: 'Topics · Queues · Processors', types: ['broker', 'topic', 'queue', 'processor'], groupBy: 'type' },
+      services: { title: 'Services', types: ['service', 'provider', 'repository'], groupBy: null },
+      data: { title: 'Tables & stores', types: ['database', 'table', 'entity', 'model'], groupBy: 'type' },
+      external: { title: 'Integrations', types: ['external', 'env', 'library'], groupBy: 'type' },
+      risks: { title: 'Findings', types: ['risk'], groupBy: null },
+      files: { title: 'Files', types: ['file'], groupBy: null },
+    };
+    const cd = catDefs[mode];
+    let catalogItems = [], catalogCount = '';
+    if (cd && D) {
+      let list = D.nodes.filter((n) => cd.types.includes(n.type));
+      const total = list.length;
+      if (catQ) list = list.filter((n) => (n.label + ' ' + (n.file || '')).toLowerCase().includes(catQ.toLowerCase()));
+      catalogCount = catQ ? `${list.length} of ${total}` : String(total);
+      let lastGroup = null;
+      list.forEach((n) => {
+        const g = cd.groupBy === 'domain' ? (D.domains.find((d) => d.id === n.domain) || { name: 'Other' }).name : cd.groupBy === 'type' ? this.tLabel(n.type) + 's' : null;
+        if (g && g !== lastGroup) { catalogItems.push({ isGroup: true, isNode: false, label: g }); lastGroup = g; }
+        catalogItems.push({
+          isGroup: false, isNode: true, label: n.label, sub: n.type === 'risk' ? (n.severity + ' severity — ' + (n.file || '')) : (n.file || n.desc || this.tLabel(n.type)),
+          color: this.color(n.type), bg: sel === n.id ? '#e8f2ee' : 'transparent', fw: sel === n.id ? 700 : 600,
+          tip: n.desc || this.typeExplain(n.type), go: () => this.reveal(n.id),
+        });
+      });
+    }
+
+    // search
+    const searchResults = (q && D) ? D.nodes
+      .filter((n) => (n.label + ' ' + (n.file || '') + ' ' + n.type).toLowerCase().includes(q.toLowerCase()))
+      .slice(0, 9)
+      .map((n) => ({ label: n.label, sub: n.file || n.desc || '', type: this.tLabel(n.type), color: this.color(n.type), go: () => { this.setState({ q: '', searchOpen: false }); this.reveal(n.id); } })) : [];
+
+    // panel
+    const panelOpen = !!selNode && !this.state.panelHidden;
+    let pVals = {};
+    if (panelOpen) {
+      const inc = D.edges.filter((e) => e.to === sel);
+      const out = D.edges.filter((e) => e.from === sel);
+      let srcKey = D.sources[sel] ? sel : D.fileSource[sel];
+      if (!srcKey && selNode.file) {
+        const owner = Object.keys(D.sources).find((k) => D.sources[k].file === selNode.file);
+        if (owner) srcKey = owner;
+      }
+      const src = srcKey ? D.sources[srcKey] : null;
+      const flowsOf = [];
+      Object.entries(D.flows).forEach(([fid, f]) => { if (f.steps.some((s) => s.id === sel)) flowsOf.push({ label: f.title.split(' — ')[0], desc: f.summary, go: () => this.select(f.root, { mode: 'routes', flow: fid }) }); });
+      Object.entries(D.asyncFlows).forEach(([fid, f]) => { if (f.steps.some((s) => s.id === sel)) flowsOf.push({ label: f.title.split(' — ')[0], desc: f.summary, go: () => this.select(fid, { mode: 'async', flow: fid }) }); });
+
+      const tabs = [
+        { id: 'overview', label: 'Overview' },
+        { id: 'incoming', label: `Incoming ${inc.length ? '· ' + inc.length : ''}` },
+        { id: 'outgoing', label: `Outgoing ${out.length ? '· ' + out.length : ''}` },
+        { id: 'source', label: 'Source' },
+        { id: 'flow', label: `Flow ${flowsOf.length ? '· ' + flowsOf.length : ''}` },
+      ];
+      const relList = (edgesArr, dir) => {
+        const items = [];
+        let lastKind = null;
+        const kindName = { sync: 'Calls', async: 'Events & jobs', data: 'Data', external: 'External' };
+        edgesArr.forEach((e) => {
+          const other = this.node(dir === 'in' ? e.from : e.to);
+          if (!other) return;
+          if (e.kind !== lastKind) { items.push({ isHeading: true, isItem: false, label: kindName[e.kind] || e.kind }); lastKind = e.kind; }
+          items.push({ isHeading: false, isItem: true, label: other.label, verb: dir === 'in' ? `${other.label} ${e.verb} ${selNode.label}` : `${selNode.label} ${e.verb} ${other.label}`, color: this.color(other.type), tip: other.desc || this.typeExplain(other.type), go: () => this.reveal(other.id) });
+        });
+        return items;
+      };
+      const facts = [];
+      facts.push({ k: 'Used by', v: inc.length ? `${inc.length} element${inc.length > 1 ? 's' : ''} (see Incoming)` : 'nothing directly' });
+      facts.push({ k: 'Uses', v: out.length ? `${out.length} element${out.length > 1 ? 's' : ''} (see Outgoing)` : 'nothing directly' });
+      if (flowsOf.length) facts.push({ k: 'In flows', v: flowsOf.map((f) => f.label).join(', ') });
+      if (selNode.metrics) Object.entries(selNode.metrics).forEach(([k, v]) => facts.push({ k: k[0].toUpperCase() + k.slice(1), v: String(v) }));
+      if (selNode.domain && D.domains.find((d) => d.id === selNode.domain)) facts.push({ k: 'Domain', v: D.domains.find((d) => d.id === selNode.domain).name });
+      const roleRelated = (D.fileRoles[sel] ? D.fileRoles[sel].related : []).map((rid) => {
+        const rn = this.node(rid);
+        return { label: rn.label, verb: rn.desc || '', color: this.color(rn.type), go: () => this.reveal(rid) };
+      });
+
+      const actions = [];
+      const flowForSel = D.routeFlowIndex[sel] || (D.asyncFlows[sel] ? sel : null);
+      if (flowForSel && !activeFlow) actions.push({ label: 'View full flow', bg: '#df642d', fg: '#fff', border: '#df642d', go: () => this.select(D.flows[flowForSel] ? (D.flows[flowForSel].root) : sel, { mode: D.flows[flowForSel] ? 'routes' : 'async', flow: flowForSel }) });
+      if (src) actions.push({ label: 'View source', bg: '#fff', fg: '#333e3a', border: '#d4dbd7', go: () => this.setState({ tab: 'source' }) });
+      if (selNode.file && selNode.type !== 'file') {
+        const fn = D.nodes.find((x) => x.type === 'file' && x.file === selNode.file);
+        if (fn) actions.push({ label: 'Open file role', bg: '#fff', fg: '#333e3a', border: '#d4dbd7', go: () => this.reveal(fn.id) });
+      }
+
+      const metricsArr = selNode.metrics ? Object.entries(selNode.metrics).slice(0, 4).map(([k, v]) => ({ label: k, value: String(v) })) : null;
+      pVals = {
+        pType: this.tLabel(selNode.type), pAccent: this.color(selNode.type),
+        pBadgeBg: '#f0f3f2', pBadgeFg: '#3b4742',
+        pTitle: selNode.label, pPath: selNode.file || '', pDesc: selNode.desc || '',
+        pRecommendation: selNode.type === 'risk' ? 'Recommendation: ' + selNode.desc : '',
+        pTypeExplain: this.typeExplain(selNode.type),
+        pRisks: (() => {
+          const sev = { critical: ['#7f1d1d', '#fee2e2'], high: ['#a83a3a', '#fbeaea'], medium: ['#8a6207', '#fdf4dd'], low: ['#4e5a56', '#eef1ef'] };
+          const list = this.risksFor(selNode).map((r) => ({
+            label: r.label, sev: r.severity, sevFg: sev[r.severity][0], sevBg: sev[r.severity][1],
+            tip: r.desc, go: () => this.reveal(r.id),
+          }));
+          return list.length ? list : null;
+        })(),
+        pMetrics: metricsArr, pActions: actions,
+        pTabs: tabs.map((t) => ({ label: t.label, selected: tab === t.id ? 'true' : 'false', fw: tab === t.id ? 700 : 500, fg: tab === t.id ? '#1a2321' : '#77837e', line: tab === t.id ? '#df642d' : 'transparent', go: () => this.setState({ tab: t.id }) })),
+        pShowRelations: tab === 'incoming' || tab === 'outgoing',
+        pRelations: tab === 'incoming' ? relList(inc, 'in') : relList(out, 'out'),
+        pRelationsEmpty: (tab === 'incoming' && !inc.length) || (tab === 'outgoing' && !out.length),
+        pRelationsEmptyText: tab === 'incoming' ? 'Nothing calls or triggers this element directly.' : 'This element does not call anything else.',
+        pShowSource: tab === 'source',
+        pSourceFile: src ? src.file : '',
+        pSourceEl: src ? this.highlight(src.code) : null,
+        pSourceMissing: !src,
+        pShowFlow: tab === 'flow', pFlows: flowsOf, pFlowsEmpty: !flowsOf.length,
+        pShowOverviewTab: tab === 'overview', pFacts: facts.length ? facts : null,
+        pRelated: roleRelated.length ? roleRelated : null,
+      };
+      if (selNode.type === 'risk') pVals.pRecommendation = 'Recommendation: ' + selNode.desc;
+    }
+
+    // overview vals
+    const sevColors = { critical: ['#7f1d1d', '#fee2e2'], high: ['#a83a3a', '#fbeaea'], medium: ['#8a6207', '#fdf4dd'], low: ['#4e5a56', '#eef1ef'] };
+    const ov = (D && mode === 'overview') ? {
+      ovStats: [
+        { label: 'Files', value: D.project.stats.files, go: () => this.setMode('files') },
+        { label: 'Modules', value: D.nodes.filter((n) => n.type === 'module').length, go: () => this.setMode('modules') },
+        { label: 'Routes', value: D.project.stats.routes, go: () => this.setMode('routes') },
+        { label: 'Services', value: D.project.stats.services, go: () => this.setMode('services') },
+        { label: 'Topics', value: D.project.stats.topics, go: () => this.setMode('async') },
+        { label: 'Queues', value: D.project.stats.queues, go: () => this.setMode('async') },
+        { label: 'Tables', value: D.project.stats.tables, go: () => this.setMode('data') },
+        { label: 'Risks', value: D.nodes.filter((n) => n.type === 'risk').length, go: () => this.setMode('risks') },
+      ].map((s) => ({ ...s, value: String(s.value) })),
+      ovDomains: D.domains.map((dm) => ({ name: dm.name, counts: dm.counts, desc: dm.desc, go: () => this.setState({ mode: 'modules', domainFilter: dm.id, sel: null, vb: null, hist: [] }) })),
+      ovFlows: Object.entries(D.flows).slice(0, 4).map(([fid, flow]) => ({ label: flow.title.split(' — ')[0], desc: flow.summary, go: () => this.select(flow.root, { mode: 'routes', flow: fid }) })),
+      ovRisks: D.nodes.filter((n) => n.type === 'risk').slice(0, 4).map((r) => ({ label: r.label, file: r.file, sev: r.severity, sevFg: sevColors[r.severity][0], sevBg: sevColors[r.severity][1], go: () => this.reveal(r.id) })),
+    } : { ovStats: [], ovDomains: [], ovFlows: [], ovRisks: [] };
+
+    // plain-English story for the visible flow / expanded operation
+    let story = null;
+    if (D) {
+      const fo = activeFlow ? (D.flows[activeFlow] || D.asyncFlows[activeFlow]) : null;
+      if (fo) {
+        const kindNote = { sync: '', async: ' — happens later, through Kafka / a queue', data: '', external: ' — call outside the system' };
+        story = {
+          steps: fo.links.filter((l) => l.n).sort((a, b) => a.n - b.n).map((l) => {
+            const a = this.node(l.from), b = this.node(l.to);
+            return { n: String(l.n), text: `${a.label} ${l.verb} ${b.label}${kindNote[l.kind] || ''}`, go: () => this.select(l.to) };
+          }),
+          ends: fo.ends || '',
+        };
+      }
+    }
+    // collapse the story to a header chip whenever the details panel is open,
+    // so the two never fight for graph space
+    const storyOpen = this.state.storyOpen ?? !(!!selNode && !this.state.panelHidden);
+
+    const variant = this.state.mapVariant ?? this.props.mapVariant ?? 'clusters';
+    return {
+      legendMaxW: story ? 'calc(100% - 360px)' : 'calc(100% - 24px)',
+      storyAvailable: !!story, storyOpen: !!story && storyOpen,
+      storySteps: story ? story.steps : [], storyEnds: story ? story.ends : '',
+      toggleStory: () => this.setState({ storyOpen: !storyOpen }),
+      storyToggleLabel: storyOpen ? 'Hide' : 'Show steps',
+      guideOpen: !!this.state.guideOpen,
+      openGuide: () => this.setState({ guideOpen: true }),
+      onCloseGuide: () => this.closeGuide(),
+      projectName: D ? D.project.name : '…', stackName: D ? D.project.stack : '', scanned: D ? D.project.scanned : '',
+      crumbs, navItems, viewTitle, viewDesc,
+      isOverview: mode === 'overview', isExplorer: mode !== 'overview',
+      showGraphControls: mode !== 'overview',
+      showVariantSwitch: mode === 'map',
+      variantBtns: [['clusters', 'Clusters'], ['layers', 'Layers'], ['columns', 'Columns']].map(([id, label]) => ({
+        label, go: () => this.setState({ mapVariant: id, vb: null }),
+        bg: variant === id ? '#16211d' : '#fff', fg: variant === id ? '#fff' : '#4e5a56',
+        fw: variant === id ? 700 : 500, hoverBg: variant === id ? '#16211d' : '#f2f5f4',
+      })),
+      showTechToggle: !!selNode && !sel?.startsWith('op.'),
+      toggleTech: () => this.setState((s) => ({ tech: !s.tech, vb: null })),
+      techPressed: tech ? 'true' : 'false', techLabel: tech ? '← Semantic view' : 'Technical graph',
+      techBg: tech ? '#16211d' : '#fff', techFg: tech ? '#fff' : '#4e5a56', techBorder: tech ? '#16211d' : '#d4dbd7',
+      goBack: () => this.setState((s) => { const h = s.hist.slice(); const prev = h.pop(); return prev ? { sel: prev, hist: h, vb: null, tech: false, expandedOp: null } : {}; }),
+      backDisabled: !hist.length, backOpacity: hist.length ? '1' : '0.4',
+      doFit: () => this.setState({ vb: null }),
+      zoomIn: () => this.zoom(0.78), zoomOut: () => this.zoom(1.28),
+
+      catalogVisible: !!cd && !panelOpen, catalogTitle: cd ? cd.title : '', catalogCount, catalogItems,
+      catalogEmpty: !!cd && !!catQ && catalogItems.length === 0, catQ,
+      onCatQ: (e) => this.setState({ catQ: e.target.value }),
+      clearCatQ: () => this.setState({ catQ: '' }),
+
+      svgRef: (el) => { this._svgEl = el; },
+      vbStr, svgCursor: panning ? 'grabbing' : 'grab',
+      gNodes: scn.nodes, gEdges: scn.edges, gGroups: scn.groups, gCols: scn.cols,
+      statusText: scn.status || '', graphEmpty: !!scn.emptyOk,
+      emptyTitle: 'Nothing matches the current filter', emptyHint: 'Clear the filter in the list on the left to see all elements.',
+      showClearFocus: !!sel || !!activeFlow,
+      clearFocus: () => this.setState({ sel: null, activeFlow: null, expandedOp: null, tech: false, vb: null, hist: [] }),
+      onHoverOut: () => this.setState({ hover: null }),
+      tipVisible: !!hover && !panning, tipX: hover ? hover.x + 'px' : '0px', tipY: hover ? hover.y + 'px' : '0px',
+      tipTitle: hover ? hover.title : '', tipBody: hover ? hover.body : '',
+      onWheel: (e) => { const f = e.deltaY > 0 ? 1.12 : 0.9; this.zoom(f); },
+      onPanStart: (e) => { if (e.target.closest && e.target.closest('g')) return; this._pan = { sx: e.clientX, sy: e.clientY, vb: this.state.vb || this.parseVb(vbStr) }; this.setState({ panning: true }); },
+      onPanMove: (e) => {
+        if (!this._pan || !this._svgEl) return;
+        const r = this._svgEl.getBoundingClientRect();
+        const scale = this._pan.vb.w / r.width;
+        this.setState({ vb: { x: this._pan.vb.x - (e.clientX - this._pan.sx) * scale, y: this._pan.vb.y - (e.clientY - this._pan.sy) * scale, w: this._pan.vb.w, h: this._pan.vb.h } });
+      },
+      onPanEnd: () => { this._pan = null; if (this.state.panning) this.setState({ panning: false }); },
+
+      searchQ: q, searchOpen: searchOpen && !!q, searchResults, searchEmpty: !!q && !searchResults.length,
+      onSearch: (e) => this.setState({ q: e.target.value, searchOpen: true }),
+      onSearchFocus: () => this.setState({ searchOpen: true }),
+      onSearchBlur: () => setTimeout(() => this.setState({ searchOpen: false }), 180),
+
+      panelOpen, closePanel: () => this.setState({ sel: null, tech: false, expandedOp: null, vb: null }),
+      ...pVals,
+      ...ov,
+      goMap: () => this.setMode('map'), goRisks: () => this.setMode('risks'),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

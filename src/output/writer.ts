@@ -1,12 +1,9 @@
-import { createRequire } from "node:module";
-import { copyFile, mkdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { access, copyFile, mkdir, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ArchitectureGraph, ArchitectureRisk, ScanMetadata } from "../core/types.js";
-import { viewerCss, viewerLayoutCss } from "../viewer/styles.js";
-import { viewerHtml, viewerJs } from "../viewer/templates.js";
+import { generateViewerData } from "../viewer/data.js";
 import { generateReport } from "./report.js";
-
-const require = createRequire(import.meta.url);
 
 export async function writeOutputs(
   outputPath: string,
@@ -15,6 +12,7 @@ export async function writeOutputs(
   risks: ArchitectureRisk[],
 ): Promise<void> {
   const viewerPath = resolve(outputPath, "viewer");
+  const viewerAssets = await findViewerAssets();
   await mkdir(viewerPath, { recursive: true });
   const graphJson = `${JSON.stringify(graph, null, 2)}\n`;
   await Promise.all([
@@ -22,12 +20,29 @@ export async function writeOutputs(
     writeFile(resolve(outputPath, "metadata.json"), `${JSON.stringify(metadata, null, 2)}\n`),
     writeFile(resolve(outputPath, "risks.json"), `${JSON.stringify(risks, null, 2)}\n`),
     writeFile(resolve(outputPath, "report.md"), generateReport(graph, risks)),
-    writeFile(resolve(viewerPath, "index.html"), viewerHtml),
-    writeFile(resolve(viewerPath, "style.css"), viewerCss + viewerLayoutCss),
-    writeFile(resolve(viewerPath, "app.js"), viewerJs),
     writeFile(resolve(viewerPath, "graph.json"), graphJson),
-    writeFile(resolve(viewerPath, "graph-data.js"), `window.__ATLAS_GRAPH__=${JSON.stringify(graph)};\n`),
+    writeFile(resolve(viewerPath, "atlas-data.js"), generateViewerData(graph, metadata, risks)),
+    copyFile(resolve(viewerAssets, "index.template.html"), resolve(viewerPath, "index.html")),
+    copyFile(resolve(viewerAssets, "support.js"), resolve(viewerPath, "support.js")),
+    copyFile(resolve(viewerAssets, "react.production.min.js"), resolve(viewerPath, "react.production.min.js")),
+    copyFile(resolve(viewerAssets, "react-dom.production.min.js"), resolve(viewerPath, "react-dom.production.min.js")),
   ]);
-  const cytoscapePath = require.resolve("cytoscape/dist/cytoscape.min.js");
-  await copyFile(cytoscapePath, resolve(viewerPath, "cytoscape.min.js"));
+}
+
+async function findViewerAssets(): Promise<string> {
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(moduleDir, "../assets/viewer"),
+    resolve(moduleDir, "../../assets/viewer"),
+    resolve(process.cwd(), "assets/viewer"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await access(resolve(candidate, "index.template.html"));
+      return candidate;
+    } catch {
+      // Try the next source or packaged asset location.
+    }
+  }
+  throw new Error("Atlas viewer assets are missing from the installed package.");
 }

@@ -4,10 +4,10 @@
 Atlas viewer. It works offline and contains demonstration data so design and
 product decisions can be reviewed without scanning a project.
 
-The production viewer is generated from `src/viewer/templates.ts` and
-`src/viewer/styles.ts`. Production scenes must use `graph-data.js`; identifiers,
-counts, relationships, descriptions, flows, and risks from the prototype must
-never be copied as real scan results.
+The production viewer uses the matching shell in `assets/viewer` and the data
+adapter in `src/viewer/data.ts`. Production scenes use `atlas-data.js` generated
+from the current scan; identifiers, counts, relationships, descriptions, flows,
+and risks from the prototype are never copied as real scan results.
 
 The specification defines these interaction rules:
 
