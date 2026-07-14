@@ -23,7 +23,7 @@ export const viewerCss = `
   --radius: 6px;
   --topbar: 56px;
   --sidebar: 236px;
-  --inspector: 380px;
+  --inspector: 410px;
 }
 
 * {
@@ -1020,25 +1020,38 @@ a:focus-visible {
   min-width: 0;
   width: auto;
   height: 100%;
-  padding: 20px;
+  padding: 0;
   overflow: auto;
-  background: #fff;
+  background: #fbfcfb;
   border-left: 1px solid var(--line);
   box-shadow: -8px 0 24px rgb(23 26 25 / 6%);
   z-index: 15;
 }
 
 .close-button {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+  position: sticky;
+  top: 12px;
+  float: right;
+  margin: 12px 12px -46px 0;
   color: var(--ink) !important;
-  background: #fff !important;
+  background: rgb(255 255 255 / 96%) !important;
   border-color: var(--line) !important;
+  box-shadow: 0 3px 10px rgb(23 26 25 / 8%);
+  z-index: 20;
+}
+
+#details-content {
+  min-width: 0;
+}
+
+.inspector-header {
+  padding: 22px 58px 18px 22px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
 }
 
 .details .badge {
-  max-width: calc(100% - 48px);
+  max-width: 100%;
   color: #34413c;
   background: #edf1ef;
   border-color: #d8dfdc;
@@ -1050,16 +1063,45 @@ a:focus-visible {
 }
 
 .details h1 {
-  margin: 10px 38px 5px 0;
-  font-size: 21px;
-  line-height: 1.18;
+  margin: 9px 0 11px;
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 760;
   overflow-wrap: anywhere;
 }
 
-.path {
+.path,
+.source-location code {
   color: var(--muted);
   font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
   overflow-wrap: anywhere;
+}
+
+.source-location {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.source-location span {
+  color: var(--subtle);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.source-location code {
+  min-width: 0;
+  padding: 3px 6px;
+  overflow: hidden;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .purpose {
@@ -1069,8 +1111,8 @@ a:focus-visible {
 
 .plain-purpose,
 .flow-purpose {
-  margin: 14px 0;
-  padding: 11px 12px;
+  margin: 16px 22px;
+  padding: 13px 14px;
   color: #253b34;
   background: #eef6f3;
   border-left: 3px solid var(--teal);
@@ -1102,7 +1144,7 @@ a:focus-visible {
 }
 
 .technical-purpose {
-  margin: 10px 0 14px;
+  margin: 10px 22px 14px;
   padding-block: 8px;
   color: var(--muted);
   border-block: 1px solid var(--line);
@@ -1122,7 +1164,7 @@ a:focus-visible {
 }
 
 .architecture-summary {
-  margin-top: 14px;
+  margin: 16px 22px 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   border-block: 1px solid var(--line);
@@ -1154,19 +1196,19 @@ a:focus-visible {
 }
 
 .recommendation {
-  padding: 10px;
+  margin: 14px 22px;
+  padding: 11px 12px;
   color: #62450e;
   background: #fff8e7;
   border-left: 3px solid var(--yellow);
 }
 
 .detail-grid {
-  margin: 14px 0;
-  padding: 11px 0;
+  margin: 0;
+  padding: 12px 14px 14px;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 7px;
-  border-block: 1px solid var(--line);
   font-size: 12px;
 }
 
@@ -1180,13 +1222,19 @@ a:focus-visible {
   flex-wrap: wrap;
 }
 
+.inspector-actions {
+  margin: 18px 22px 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
 .details .actions button,
 .details a.command {
   height: 31px;
   padding: 0 9px;
   color: var(--ink);
   background: #fff;
-  border-color: var(--line-strong);
+  border-color: var(--line);
   white-space: nowrap;
 }
 
@@ -1196,8 +1244,53 @@ a:focus-visible {
   border-color: var(--dark);
 }
 
+.details .actions button:hover,
+.details a.command:hover {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+
+.details .actions button:first-child:hover {
+  color: #fff;
+  background: #2c3834;
+}
+
+.metadata-disclosure {
+  margin: 12px 22px 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.metadata-disclosure summary {
+  min-height: 46px;
+  padding: 8px 11px;
+  display: grid;
+  align-content: center;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.metadata-disclosure summary span {
+  margin-left: 3px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.metadata-disclosure summary small {
+  margin: 2px 0 0 18px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.metadata-disclosure[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
 .tabs {
-  margin: 17px 0 12px;
+  margin: 18px 0 0;
+  padding: 0 18px;
   display: flex;
   overflow-x: auto;
   border-bottom: 1px solid var(--line);
@@ -1214,6 +1307,18 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+.tabs button span {
+  min-width: 18px;
+  margin-left: 4px;
+  padding: 1px 4px;
+  display: inline-block;
+  color: var(--subtle);
+  background: var(--surface);
+  border-radius: 8px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
 .tabs button.active {
   color: var(--ink);
   border-bottom: 2px solid var(--accent);
@@ -1223,12 +1328,17 @@ a:focus-visible {
   display: none;
 }
 
+.tab-panel {
+  padding: 13px 22px 28px;
+}
+
 .relations {
   display: grid;
 }
 
 .relation {
-  padding: 9px 2px;
+  position: relative;
+  padding: 10px 28px 10px 9px;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
   overflow-wrap: anywhere;
@@ -1236,6 +1346,17 @@ a:focus-visible {
 
 .relation:hover {
   color: var(--teal);
+  background: #f4f8f6;
+}
+
+.relation::after {
+  content: ">";
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  color: var(--subtle);
+  font-size: 12px;
+  transform: translateY(-50%);
 }
 
 .relation small {
@@ -1272,7 +1393,7 @@ a:focus-visible {
 }
 
 .details h2 {
-  margin: 20px 0 7px;
+  margin: 18px 0 7px;
   color: var(--muted);
   font-size: 10px;
   text-transform: uppercase;
