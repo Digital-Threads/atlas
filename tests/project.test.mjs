@@ -160,9 +160,15 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerApp, /modeDescriptions/);
   assert.match(viewerApp, /Show context/);
   assert.match(viewerApp, /positionUiTooltip/);
+  assert.match(viewerApp, /semanticModuleContext/);
+  assert.match(viewerApp, /renderSemanticModuleMap/);
+  assert.match(viewerApp, /Functional map/);
+  assert.match(viewerApp, /What starts it/);
+  assert.match(viewerApp, /Technical graph/);
   assert.match(viewerCss, /\.flow-purpose/);
   assert.match(viewerCss, /\.plain-purpose/);
   assert.match(viewerCss, /\.technical-purpose/);
+  assert.match(viewerCss, /\.graph-guide\.semantic/);
   assert.match(viewerHtml, /id="graph-guide"/);
   assert.match(viewerHtml, /id="graph-help-panel"/);
   assert.match(viewerHtml, /How to read this map/);
