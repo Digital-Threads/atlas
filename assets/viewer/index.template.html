@@ -235,7 +235,7 @@
           <section aria-label="Map" style="flex: 1; min-width: 0; min-height: 0; position: relative; background: #f7f9f8; overflow: hidden;">
             <div style="position: absolute; inset: 0; background-image: radial-gradient(#d3dad6 1px, transparent 1px); background-size: 22px 22px; opacity: 0.5; pointer-events: none;"></div>
 
-            <svg ref="{{ svgRef }}" viewBox="{{ vbStr }}" preserveAspectRatio="xMidYMid meet" onWheel="{{ onWheel }}" onPointerDown="{{ onPanStart }}" onPointerMove="{{ onPanMove }}" onPointerUp="{{ onPanEnd }}" onPointerLeave="{{ onPanEnd }}" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: {{ svgCursor }}; touch-action: none;">
+            <svg ref="{{ svgRef }}" sc-camel-view-box="{{ vbStr }}" preserveAspectRatio="xMidYMid meet" onWheel="{{ onWheel }}" onPointerDown="{{ onPanStart }}" onPointerMove="{{ onPanMove }}" onPointerUp="{{ onPanEnd }}" onPointerLeave="{{ onPanEnd }}" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: {{ svgCursor }}; touch-action: none;">
               <defs>
                 <marker id="arr-sync" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7d8a84"></path></marker>
                 <marker id="arr-async" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#0f7895"></path></marker>
@@ -247,15 +247,15 @@
               <!-- group / domain boxes -->
               <sc-for list="{{ gGroups }}" as="grp" hint-placeholder-count="0">
                 <g style="animation: atlasFade 0.2s ease;">
-                  <rect x="{{ grp.x }}" y="{{ grp.y }}" width="{{ grp.w }}" height="{{ grp.h }}" rx="8" fill="{{ grp.fill }}" stroke="{{ grp.stroke }}" stroke-width="1"></rect>
-                  <foreignObject x="{{ grp.x }}" y="{{ grp.y }}" width="{{ grp.w }}" height="34">
+                  <rect sc-camel-x="{{ grp.x }}" sc-camel-y="{{ grp.y }}" sc-camel-width="{{ grp.w }}" sc-camel-height="{{ grp.h }}" rx="8" sc-camel-fill="{{ grp.fill }}" sc-camel-stroke="{{ grp.stroke }}" stroke-width="1"></rect>
+                  <foreignObject sc-camel-x="{{ grp.x }}" sc-camel-y="{{ grp.y }}" sc-camel-width="{{ grp.w }}" height="34">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 0; font-family: 'IBM Plex Sans', sans-serif;">
                       <span style="font-size: 12px; font-weight: 700; color: #1a2321; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ grp.label }}</span>
                       <span style="font-size: 10px; color: #77837e; white-space: nowrap;">{{ grp.sub }}</span>
                     </div>
                   </foreignObject>
                   <sc-if value="{{ grp.moreLabel }}" hint-placeholder-val="{{ false }}">
-                    <foreignObject x="{{ grp.x }}" y="{{ grp.footY }}" width="{{ grp.w }}" height="30">
+                    <foreignObject sc-camel-x="{{ grp.x }}" sc-camel-y="{{ grp.footY }}" sc-camel-width="{{ grp.w }}" height="30">
                       <div style="padding: 0 8px; font-family: 'IBM Plex Sans', sans-serif;">
                         <button onClick="{{ grp.onMore }}" style="width: 100%; height: 24px; border: 1px dashed #b8c4bf; border-radius: 5px; background: rgba(255,255,255,0.7); color: #1f6f5b; font-size: 10.5px; font-weight: 600;" style-hover="background: #fff; border-color: #1f6f5b;">{{ grp.moreLabel }}</button>
                       </div>
@@ -267,31 +267,31 @@
               <!-- column headers -->
               <sc-for list="{{ gCols }}" as="col" hint-placeholder-count="0">
                 <g>
-                  <text x="{{ col.x }}" y="{{ col.y }}" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 1.4px; fill: {{ col.fill }};">{{ col.label }}</text>
+                  <text sc-camel-x="{{ col.x }}" sc-camel-y="{{ col.y }}" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 1.4px; fill: {{ col.fill }};">{{ col.label }}</text>
                   <sc-if value="{{ col.sub }}" hint-placeholder-val="{{ false }}">
-                    <text x="{{ col.x }}" y="{{ col.subY }}" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; fill: #9aa5a0;">{{ col.sub }}</text>
+                    <text sc-camel-x="{{ col.x }}" sc-camel-y="{{ col.subY }}" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; fill: #9aa5a0;">{{ col.sub }}</text>
                   </sc-if>
-                  <line x1="{{ col.x }}" y1="{{ col.ly }}" x2="{{ col.x2 }}" y2="{{ col.ly }}" stroke="#d4dbd7" stroke-width="1"></line>
+                  <line sc-camel-x1="{{ col.x }}" sc-camel-y1="{{ col.ly }}" sc-camel-x2="{{ col.x2 }}" sc-camel-y2="{{ col.ly }}" stroke="#d4dbd7" stroke-width="1"></line>
                 </g>
               </sc-for>
 
               <!-- edges -->
               <sc-for list="{{ gEdges }}" as="edge" hint-placeholder-count="0">
-                <g opacity="{{ edge.op }}" onMouseEnter="{{ edge.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: default;">
-                  <path d="{{ edge.d }}" fill="none" stroke="transparent" stroke-width="12"></path>
-                  <path d="{{ edge.d }}" fill="none" stroke="{{ edge.color }}" stroke-width="{{ edge.w }}" stroke-dasharray="{{ edge.dash }}" marker-end="{{ edge.marker }}" style="{{ edge.anim }}"></path>
+                <g sc-camel-opacity="{{ edge.op }}" onMouseEnter="{{ edge.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: default;">
+                  <path sc-camel-d="{{ edge.d }}" fill="none" stroke="transparent" stroke-width="12"></path>
+                  <path sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}" sc-camel-style="{{ edge.anim }}"></path>
                   <sc-if value="{{ edge.showLabel }}" hint-placeholder-val="{{ false }}">
-                    <text x="{{ edge.lx }}" y="{{ edge.ly }}" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; font-weight: 600; fill: {{ edge.labelFill }}; paint-order: stroke; stroke: #f7f9f8; stroke-width: 4px; stroke-linejoin: round;">{{ edge.verb }}</text>
+                    <text sc-camel-x="{{ edge.lx }}" sc-camel-y="{{ edge.ly }}" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; font-weight: 600; fill: {{ edge.labelFill }}; paint-order: stroke; stroke: #f7f9f8; stroke-width: 4px; stroke-linejoin: round;">{{ edge.verb }}</text>
                   </sc-if>
                 </g>
               </sc-for>
 
               <!-- nodes -->
               <sc-for list="{{ gNodes }}" as="node" hint-placeholder-count="0">
-                <g transform="translate({{ node.x }} {{ node.y }})" opacity="{{ node.op }}" onClick="{{ node.onClick }}" onMouseEnter="{{ node.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: pointer; animation: atlasFade 0.18s ease;">
-                  <rect width="{{ node.w }}" height="{{ node.h }}" rx="7" fill="{{ node.fill }}" stroke="{{ node.stroke }}" stroke-width="{{ node.sw }}"></rect>
-                  <rect x="0" y="0" width="4" height="{{ node.h }}" rx="2" fill="{{ node.accent }}"></rect>
-                  <foreignObject x="10" y="5" width="{{ node.tw }}" height="{{ node.th }}">
+                <g sc-camel-transform="translate({{ node.x }} {{ node.y }})" sc-camel-opacity="{{ node.op }}" onClick="{{ node.onClick }}" onMouseEnter="{{ node.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: pointer; animation: atlasFade 0.18s ease;">
+                  <rect sc-camel-width="{{ node.w }}" sc-camel-height="{{ node.h }}" rx="7" sc-camel-fill="{{ node.fill }}" sc-camel-stroke="{{ node.stroke }}" sc-camel-stroke-width="{{ node.sw }}"></rect>
+                  <rect x="0" y="0" width="4" sc-camel-height="{{ node.h }}" rx="2" sc-camel-fill="{{ node.accent }}"></rect>
+                  <foreignObject x="10" y="5" sc-camel-width="{{ node.tw }}" sc-camel-height="{{ node.th }}">
                     <div style="font-family: 'IBM Plex Sans', sans-serif; overflow: hidden; height: 100%;">
                       <div style="font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: {{ node.accent }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ node.typeLabel }}</div>
                       <div style="font-size: {{ node.fs }}; font-weight: 600; color: #1a2321; line-height: 1.25; margin-top: 1px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: {{ node.font }};">{{ node.label }}</div>
@@ -307,7 +307,7 @@
                     </g>
                   </sc-if>
                   <sc-if value="{{ node.expandLabel }}" hint-placeholder-val="{{ false }}">
-                    <foreignObject x="10" y="{{ node.h }}" width="{{ node.tw }}" height="24">
+                    <foreignObject x="10" sc-camel-y="{{ node.h }}" sc-camel-width="{{ node.tw }}" height="24">
                       <div style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; font-weight: 600; color: #1f6f5b; padding-top: 3px;">{{ node.expandLabel }} ↗</div>
                     </foreignObject>
                   </sc-if>
@@ -752,7 +752,7 @@ class Component extends DCLogic {
     const cardW = 296, chipH = 44;
     const detailed = D.domains.filter((d) => !d.light);
     const lights = D.domains.filter((d) => d.light);
-    const lightModCount = lights.reduce((s, d) => s + d.modules.length, 0);
+    const lightModCount = lights.reduce((s, d) => s + (d.allModules || d.modules).length, 0);
     const expanded = !!this.state.mapExpanded;
     let runtimeY = 40 + Math.max(1, Math.ceil(detailed.length / 4)) * 230 + 10;
     if (variant === 'clusters') {
@@ -777,12 +777,16 @@ class Component extends DCLogic {
       // remaining areas: aggregated card (never hidden silently) or expanded compact grid
       const aggX = 40 + 3 * (cardW + 56), aggY = 40 + 230;
       if (!expanded && lights.length) {
+        const moreNode = { id: 'd.more', type: 'module', label: lights.slice(0, 3).map((d) => d.name).join(' · ') + ' …', desc: `Aggregated: ${lights.map((d) => d.name).join(', ')}.` };
+        this._syn = this._syn || {};
+        this._syn['d.more'] = moreNode;
         G.push({
           x: aggX, y: aggY, w: cardW, h: 128, fill: '#fafbfa', stroke: '#c9d1cd',
           label: `${lights.length} more areas`, sub: `${lightModCount} modules`, footY: aggY + 96,
           moreLabel: `Show all ${D.domains.length} areas`, onMore: () => this.setState({ mapExpanded: true, vb: null }),
         });
-        N.push(this.mkNode({ id: 'd.more', type: 'module', label: lights.slice(0, 3).map((d) => d.name).join(' · ') + ' …', desc: `Aggregated: ${lights.map((d) => d.name).join(', ')}.` }, aggX + 10, aggY + 38, cardW - 20, chipH, {
+        pos['d.more'] = { x: aggX + 10, y: aggY + 38, w: cardW - 20, h: chipH };
+        N.push(this.mkNode(moreNode, aggX + 10, aggY + 38, cardW - 20, chipH, {
           sub: 'grouped for readability — click to expand', onClick: () => this.setState({ mapExpanded: true, vb: null }),
         }));
       } else if (lights.length) {
@@ -874,7 +878,18 @@ class Component extends DCLogic {
       });
     }
 
-    D.mapEdges.forEach((e) => {
+    const lightEndpoints = new Set(lights.map((dm) => 'd.' + dm.id));
+    const sceneEdges = new Map();
+    D.mapEdges.forEach((edge) => {
+      const from = !expanded && lightEndpoints.has(edge.from) ? 'd.more' : edge.from;
+      const to = !expanded && lightEndpoints.has(edge.to) ? 'd.more' : edge.to;
+      if (from === to) return;
+      const key = from + '>' + to + ':' + edge.kind;
+      const previous = sceneEdges.get(key);
+      if (previous) previous.count = (previous.count || 1) + (edge.count || 1);
+      else sceneEdges.set(key, { ...edge, from, to });
+    });
+    sceneEdges.forEach((e) => {
       const a = pos[e.from], b = pos[e.to];
       if (!a || !b) return;
       E.push(this.linkEdge(a, b, e, false, false, showLabels && variant !== 'clusters'));
@@ -890,12 +905,12 @@ class Component extends DCLogic {
     doms.forEach((dm, i) => {
       const perRow = domainFilter ? 1 : 3;
       const col = i % perRow, row = Math.floor(i / perRow);
-      const h = 42 + dm.modules.length * 54 + (dm.hidden ? 34 : 6);
+      const moduleIds = dm.allModules || dm.modules;
+      const h = 42 + moduleIds.length * 54 + 6;
       const x = 40 + col * 360, y = 40 + row * 260;
       const grp = { x, y, w: 320, h, fill: '#fff', stroke: '#ccd5d1', label: dm.name, sub: dm.counts, footY: y + h - 32 };
-      if (dm.hidden) { grp.moreLabel = `+${dm.hidden} module${dm.hidden > 1 ? 's' : ''} not yet scanned in detail`; grp.onMore = () => {}; }
       G.push(grp);
-      dm.modules.forEach((mid, j) => {
+      moduleIds.forEach((mid, j) => {
         const m = this.node(mid);
         N.push(this.mkNode(m, x + 10, y + 38 + j * 54, 300, 46, { sub: `${this.plural((m.metrics && m.metrics.routes) || 0, 'route')} · ${this.plural((m.metrics && m.metrics.services) || 0, 'service')} · ${this.plural((m.metrics && m.metrics.tests) || 0, 'test')}` }));
       });

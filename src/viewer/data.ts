@@ -215,15 +215,26 @@ function buildDomains(nodes: ViewerNode[], domainByNode: Map<string, string>) {
     const domain = domainByNode.get(moduleNode.id) ?? moduleNode.domain;
     grouped.set(domain, [...(grouped.get(domain) ?? []), moduleNode]);
   }
-  return [...grouped.entries()].map(([id, domainModules]) => ({
-    id,
-    name: titleCase(id),
-    desc: domainModules.map((node) => node.label.replace(/Module$/i, "")).slice(0, 3).join(", "),
-    modules: domainModules.map((node) => node.id),
-    hidden: 0,
-    light: false,
-    counts: `${domainModules.length} module${domainModules.length === 1 ? "" : "s"} · ${routeCounts.get(id) ?? 0} routes · ${serviceCounts.get(id) ?? 0} services`,
-  }));
+  return [...grouped.entries()]
+    .sort(([a, aModules], [b, bModules]) => {
+      const score = (id: string, domainModules: ViewerNode[]) => domainModules.length * 2
+        + (routeCounts.get(id) ?? 0) * 4 + (serviceCounts.get(id) ?? 0) * 3;
+      return score(b, bModules) - score(a, aModules) || a.localeCompare(b);
+    })
+    .map(([id, domainModules], index) => {
+      const allModules = domainModules.map((node) => node.id);
+      const modulesForMap = allModules.slice(0, 3);
+      return {
+        id,
+        name: titleCase(id),
+        desc: domainModules.map((node) => node.label.replace(/Module$/i, "")).slice(0, 3).join(", "),
+        modules: modulesForMap,
+        allModules,
+        hidden: allModules.length - modulesForMap.length,
+        light: index >= 7,
+        counts: `${domainModules.length} module${domainModules.length === 1 ? "" : "s"} · ${routeCounts.get(id) ?? 0} routes · ${serviceCounts.get(id) ?? 0} services`,
+      };
+    });
 }
 
 function buildMapEdges(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): ViewerEdge[] {
@@ -238,7 +249,10 @@ function buildMapEdges(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): Vie
     if (current) current.count = (current.count ?? 1) + 1;
     else grouped.set(key, { from: fromId, to: toId, verb: edge.verb, kind: edge.kind, count: 1 });
   }
-  return [...grouped.values()].sort((a, b) => (b.count ?? 0) - (a.count ?? 0)).slice(0, 80);
+  const ranked = [...grouped.values()].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+  const behaviorEdges = ranked.filter((edge) => edge.kind !== "sync").slice(0, 40);
+  const structureEdges = ranked.filter((edge) => edge.kind === "sync").slice(0, 40);
+  return [...behaviorEdges, ...structureEdges];
 }
 
 function mapEndpoint(node: ViewerNode): string {
