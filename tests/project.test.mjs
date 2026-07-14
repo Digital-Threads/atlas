@@ -170,6 +170,12 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerApp, /inspector-header/);
   assert.match(viewerApp, /metadata-disclosure/);
   assert.match(viewerApp, /Technical details/);
+  assert.match(viewerApp, /renderCoreSystemMap/);
+  assert.match(viewerApp, /positionSystemMap/);
+  assert.match(viewerApp, /consumerIds/);
+  assert.match(viewerApp, /renderFileRoleMap/);
+  assert.match(viewerApp, /showFlowStory/);
+  assert.match(viewerApp, /Where it ends/);
   assert.match(viewerCss, /\.flow-purpose/);
   assert.match(viewerCss, /\.plain-purpose/);
   assert.match(viewerCss, /\.technical-purpose/);
@@ -179,6 +185,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /id="graph-guide"/);
   assert.match(viewerHtml, /id="graph-help-panel"/);
   assert.match(viewerHtml, /How to read this map/);
+  assert.match(viewerHtml, /id="map-variants"/);
+  assert.match(viewerHtml, /id="flow-story"/);
   assert.match(viewerHtml, /id="ui-tooltip"/);
   assert.match(viewerHtml, /src="cytoscape\.min\.js"/);
   assert.doesNotMatch(viewerHtml, /https?:\/\//);
