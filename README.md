@@ -158,17 +158,25 @@ source and confidence so consumers can distinguish evidence from inference.
   risks.json       Detected risks and recommendations
   report.md        Human-readable architecture summary
   viewer/
-    index.html     Static graph application
-    app.js
-    style.css
-    cytoscape.min.js
-    graph.json
-    graph-data.js
+    index.html                    Offline architecture application
+    atlas-data.js                Real scan data adapted to semantic scenes
+    support.js                   Local viewer runtime
+    react.production.min.js      Local UI runtime
+    react-dom.production.min.js  Local UI renderer
+    graph.json                   Raw typed architecture graph
 ```
 
-The viewer works without a cloud backend. It supports search, node-type filters,
-architecture views, zoom, drag, dependency highlighting, HTTP and asynchronous flows, source
-previews, and incoming/outgoing relationship inspection.
+The viewer works without a cloud backend. Its System map shows every detected
+module together with Kafka topics, queues, processors, consumers, data stores,
+and external systems. Deterministic scenes explain module responsibilities,
+incoming and outgoing service relationships, file roles, numbered HTTP and
+asynchronous flows, source previews, risks, and where each detected flow ends.
+
+The interactive viewer UX reference is stored in
+[`docs/design/atlas-viewer-prototype.html`](docs/design/atlas-viewer-prototype.html).
+It serves as the visual design specification. Generated viewers use the same
+interface with real scan results from `atlas-data.js`; no demonstration project
+entities are copied into a scan.
 
 ## MCP integration
 

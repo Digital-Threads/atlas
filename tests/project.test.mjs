@@ -5,7 +5,6 @@ import { dirname, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { Script } from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { GraphQuery, graphNodeTypes, loadGraph, scanFiles, scanProject } from "../dist/index.js";
@@ -130,7 +129,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.equal(envFileNode.metadata.hash, undefined);
   assert.equal(envFileNode.metadata.size, undefined);
 
-  for (const path of ["graph.json", "metadata.json", "risks.json", "report.md", "viewer/index.html", "viewer/app.js", "viewer/style.css", "viewer/cytoscape.min.js", "viewer/graph.json"]) {
+  for (const path of ["graph.json", "metadata.json", "risks.json", "report.md", "viewer/index.html", "viewer/atlas-data.js", "viewer/support.js", "viewer/react.production.min.js", "viewer/react-dom.production.min.js", "viewer/graph.json"]) {
     assert.ok((await stat(resolve(project, ".atlas", path))).isFile(), `missing output ${path}`);
   }
   const report = await readFile(resolve(project, ".atlas/report.md"), "utf8");
@@ -138,43 +137,26 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(report, /Database Models and Tables/);
   assert.doesNotMatch(report, /never-store-this-value|private\.example\.test/);
 
-  const viewerApp = await readFile(resolve(project, ".atlas/viewer/app.js"), "utf8");
   const viewerHtml = await readFile(resolve(project, ".atlas/viewer/index.html"), "utf8");
-  const viewerCss = await readFile(resolve(project, ".atlas/viewer/style.css"), "utf8");
-  assert.doesNotThrow(() => new Script(viewerApp));
-  assert.match(viewerApp, /source:edge\.from,target:edge\.to/);
-  assert.match(viewerApp, /Dependencies/);
-  assert.match(viewerApp, /data-tab="source"/);
-  assert.match(viewerCss, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
-  assert.match(viewerApp, /renderModePreview/);
-  assert.match(viewerApp, /moduleDependencyContext/);
-  assert.match(viewerApp, /positionDependencyGraph/);
-  assert.match(viewerApp, /Used by/);
-  assert.match(viewerApp, /Depends on/);
-  assert.match(viewerApp, /Request flow/);
-  assert.match(viewerApp, /Async flows/);
-  assert.match(viewerApp, /Async flow/);
-  assert.match(viewerApp, /flowDescription/);
-  assert.match(viewerApp, /plainDescription/);
-  assert.match(viewerApp, /Technical explanation/);
-  assert.match(viewerApp, /modeDescriptions/);
-  assert.match(viewerApp, /Show context/);
-  assert.match(viewerApp, /positionUiTooltip/);
-  assert.match(viewerApp, /semanticModuleContext/);
-  assert.match(viewerApp, /renderSemanticModuleMap/);
-  assert.match(viewerApp, /Functional map/);
-  assert.match(viewerApp, /What starts it/);
-  assert.match(viewerApp, /Technical graph/);
-  assert.match(viewerCss, /\.flow-purpose/);
-  assert.match(viewerCss, /\.plain-purpose/);
-  assert.match(viewerCss, /\.technical-purpose/);
-  assert.match(viewerCss, /\.graph-guide\.semantic/);
-  assert.match(viewerHtml, /id="graph-guide"/);
-  assert.match(viewerHtml, /id="graph-help-panel"/);
+  const viewerDataScript = await readFile(resolve(project, ".atlas/viewer/atlas-data.js"), "utf8");
+  const viewerData = JSON.parse(viewerDataScript.slice("window.__ATLAS_DATA__=".length, -2));
+  assert.equal(viewerData.project.name, result.graph.project.name);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "processor").length, 1);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "risk").length, result.risks.length);
+  assert.ok(Object.keys(viewerData.flows).length > 0);
+  assert.ok(Object.keys(viewerData.asyncFlows).length > 0);
+  assert.ok(Object.keys(viewerData.fileRoles).length > 0);
+  assert.match(viewerHtml, /data-screen-label="Atlas app"/);
+  assert.match(viewerHtml, /data-screen-label="Details panel"/);
   assert.match(viewerHtml, /How to read this map/);
-  assert.match(viewerHtml, /id="ui-tooltip"/);
-  assert.match(viewerHtml, /src="cytoscape\.min\.js"/);
-  assert.doesNotMatch(viewerHtml, /https?:\/\//);
+  assert.match(viewerHtml, /WHAT STARTS IT/);
+  assert.match(viewerHtml, /Technical graph/);
+  assert.match(viewerHtml, /Where it ends/);
+  assert.match(viewerHtml, /Search routes, services, topics, files/);
+  assert.match(viewerHtml, /src="\.\/atlas-data\.js"/);
+  assert.match(viewerHtml, /src="\.\/react\.production\.min\.js"/);
+  assert.doesNotMatch(viewerHtml, /shopcore|deleteUserItems|ItemsService/);
+  assert.doesNotMatch(viewerHtml, /<(?:script|link)[^>]+https?:\/\//);
 
   const cliScan = spawnSync(process.execPath, [cli, "scan", "--path", project], { encoding: "utf8" });
   assert.equal(cliScan.status, 0, cliScan.stderr);
@@ -192,7 +174,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     const indexResponse = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(indexResponse.status, 200);
     assert.match(indexResponse.headers.get("content-type") ?? "", /text\/html/);
-    assert.match(await indexResponse.text(), /Atlas Architecture Map/);
+    assert.match(await indexResponse.text(), /data-screen-label="Atlas app"/);
     const traversalResponse = await fetch(`http://127.0.0.1:${port}/%2e%2e/%2e%2e/package.json`);
     assert.notEqual(traversalResponse.status, 200);
   } finally {
