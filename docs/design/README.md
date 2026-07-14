@@ -1,0 +1,24 @@
+# Atlas viewer design specification
+
+`atlas-viewer-prototype.html` is the interactive UX reference for the generated
+Atlas viewer. It works offline and contains demonstration data so design and
+product decisions can be reviewed without scanning a project.
+
+The production viewer is generated from `src/viewer/templates.ts` and
+`src/viewer/styles.ts`. Production scenes must use `graph-data.js`; identifiers,
+counts, relationships, descriptions, flows, and risks from the prototype must
+never be copied as real scan results.
+
+The specification defines these interaction rules:
+
+- the System map exposes every detected module and all detected async runtime,
+  data-store, and external-system components;
+- module scenes explain triggers, operations, dependencies, and effects;
+- request and async scenes use numbered steps and state where the flow ends;
+- service and data scenes separate incoming and outgoing relationships;
+- file scenes explain users, declarations, code dependencies, and effects;
+- the inspector keeps plain-language purpose visible while technical metadata
+  and source remain available on demand.
+
+When the scanner gains a new node or edge type, add it to the production scene
+adapter first, then extend this document if the interaction model changes.
