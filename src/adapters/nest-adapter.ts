@@ -24,6 +24,19 @@ const writeMethods = new Set([
 ]);
 const typeOrmReadMethods = new Set(["find", "findBy", "findOne", "findOneBy", "findAndCount", "count", "countBy", "exist", "exists"]);
 const typeOrmWriteMethods = new Set(["save", "insert", "update", "upsert", "delete", "remove", "softDelete", "softRemove", "recover", "restore", "clear"]);
+const sequelizeReadMethods = new Set([
+  "findAll", "findOne", "findByPk", "findAndCountAll", "count", "sum", "max", "min", "aggregate",
+]);
+const sequelizeWriteMethods = new Set([
+  "create", "bulkCreate", "findOrCreate", "findCreateFind", "update", "destroy", "restore", "upsert", "increment", "decrement", "truncate",
+]);
+
+interface DrizzleTableInfo {
+  variable: string;
+  tableName: string;
+  tableId: string;
+  file: string;
+}
 
 interface ClassInfo {
   name: string;
@@ -33,6 +46,7 @@ interface ClassInfo {
   declaration: ClassDeclaration;
   constructorTypes: Map<string, string>;
   repositoryEntities: Map<string, string>;
+  sequelizeModels: Map<string, string>;
   queueTokens: Map<string, string>;
 }
 
@@ -40,6 +54,7 @@ interface ClassRegistry {
   byDeclaration: Map<ClassDeclaration, ClassInfo>;
   byName: Map<string, ClassInfo[]>;
   sourceFiles: Map<string, SourceFile>;
+  drizzleTables: Map<string, DrizzleTableInfo>;
   size: number;
 }
 
@@ -93,13 +108,14 @@ export class NestAdapter implements ArchitectureAdapter {
       byDeclaration: new Map(),
       byName: new Map(),
       sourceFiles: new Map(sourceFiles.map((sourceFile) => [relativePath(context.projectRoot, sourceFile.getFilePath()), sourceFile])),
+      drizzleTables: new Map(),
       size: candidates.length,
     };
     for (const candidate of candidates) {
         const { name, type, file, declaration } = candidate;
         const id = nameCounts.get(name) === 1 ? `${type}:${name}` : `${type}:${name}@${file}`;
-        const { constructorTypes, repositoryEntities, queueTokens } = getConstructorInfo(declaration);
-        const info: ClassInfo = { name, id, type, file, declaration, constructorTypes, repositoryEntities, queueTokens };
+        const { constructorTypes, repositoryEntities, sequelizeModels, queueTokens } = getConstructorInfo(declaration);
+        const info: ClassInfo = { name, id, type, file, declaration, constructorTypes, repositoryEntities, sequelizeModels, queueTokens };
         classes.byDeclaration.set(declaration, info);
         const named = classes.byName.get(name) ?? [];
         named.push(info);
@@ -109,6 +125,7 @@ export class NestAdapter implements ArchitectureAdapter {
     }
 
     await parsePrisma(context, addNode, addEdge);
+    classes.drizzleTables = parseDrizzleSchemas(sourceFiles, context.projectRoot, addNode, addEdge);
 
     const globalPrefix = findGlobalPrefix(sourceFiles);
     for (const sourceFile of sourceFiles) {
@@ -139,6 +156,7 @@ function classifyClass(declaration: ClassDeclaration, file: string): GraphNodeTy
   if (decorators.has("Processor")) return "processor";
   if (decorators.has("Controller")) return "controller";
   if (decorators.has("Entity")) return "entity";
+  if (decorators.has("Table")) return "entity";
   if (name.endsWith("Dto") || file.includes(".dto.")) return "dto";
   if (name.endsWith("Guard") || file.includes(".guard.")) return "guard";
   if (name.endsWith("Pipe") || file.includes(".pipe.")) return "pipe";
@@ -183,6 +201,7 @@ function parseClass(
 ) {
   parseModule(info, classes, addNode, addEdge);
   parseTypeOrm(info, classes, addNode, addEdge);
+  parseSequelize(info, classes, addNode, addEdge);
   parseAsyncClass(info, addNode, addEdge);
 
   for (const [parameter, typeName] of info.constructorTypes) {
@@ -228,6 +247,17 @@ function parseModule(info: ClassInfo, classes: ClassRegistry, addNode: NodeAdder
     const initializer = property.getInitializer();
     if (!initializer || !Node.isArrayLiteralExpression(initializer)) continue;
     for (const element of initializer.getElements()) {
+      if (propertyName === "imports" && Node.isCallExpression(element) && element.getExpression().getText().endsWith("SequelizeModule.forFeature")) {
+        const models = element.getArguments()[0];
+        if (models && Node.isArrayLiteralExpression(models)) {
+          for (const model of models.getElements()) {
+            const modelName = model.getText().match(/[A-Z][A-Za-z0-9_$]*/)?.[0];
+            if (!modelName) continue;
+            const target = ensureClass(modelName, classes, info.file, addNode, "entity");
+            addEdge(info.id, target.id, "uses", { moduleProperty: propertyName, via: "SequelizeModule.forFeature" });
+          }
+        }
+      }
       if (Node.isObjectLiteralExpression(element)) {
         const provide = element.getProperty("provide");
         if (!provide || !Node.isPropertyAssignment(provide)) continue;
@@ -281,6 +311,7 @@ function parseMethodRelations(
   addNode: NodeAdder,
   addEdge: EdgeAdder,
 ) {
+  const dataRelations = new Set<string>();
   for (const parameter of method.getParameters()) {
     const typeName = simpleType(parameter.getTypeNode()?.getText() ?? parameter.getType().getText());
     const target = resolveClass(typeName, classes, info.file);
@@ -329,6 +360,27 @@ function parseMethodRelations(
           addNode({ id: tableId, type: "table", label: tableName, name: tableName, framework: "typeorm", source: "heuristic", confidence: 0.9 });
           addEdge(targetMethodId, tableId, typeOrmReadMethods.has(targetMethod) ? "reads" : "writes", { operation: targetMethod, via: property, orm: "typeorm" });
         }
+        const sequelizeModel = info.sequelizeModels.get(property);
+        if (sequelizeModel && (sequelizeReadMethods.has(targetMethod) || sequelizeWriteMethods.has(targetMethod))) {
+          const { id: tableId, name: tableName } = tableForSequelizeModel(sequelizeModel, classes, info.file);
+          addNode({ id: tableId, type: "table", label: tableName, name: tableName, framework: "sequelize", source: "heuristic", confidence: 0.95 });
+          addEdge(targetMethodId, tableId, sequelizeReadMethods.has(targetMethod) ? "reads" : "writes", { operation: targetMethod, via: property, orm: "sequelize" });
+        }
+      }
+    }
+
+    const staticSequelizeCall = expression.match(/^([A-Z][A-Za-z0-9_$]*)\.([A-Za-z_$][\w$]*)$/);
+    if (staticSequelizeCall) {
+      const [, modelName, operation] = staticSequelizeCall;
+      const model = resolveClass(modelName, classes, info.file);
+      if (model?.declaration.getDecorator("Table") && (sequelizeReadMethods.has(operation) || sequelizeWriteMethods.has(operation))) {
+        const operationId = classMethodId(model, operation);
+        const { id: tableId, name: tableName } = tableForSequelizeModel(modelName, classes, info.file);
+        addNode({ id: operationId, type: "method", label: `${modelName}.${operation}`, name: operation, file: model.file, framework: "sequelize", language: "typescript", source: "ast", confidence: 1, metadata: { class: modelName, method: operation, databaseOperation: true } });
+        addNode({ id: tableId, type: "table", label: tableName, name: tableName, framework: "sequelize", source: "ast", confidence: 1 });
+        addEdge(model.id, operationId, "has_method", { generatedFromUsage: true });
+        addEdge(methodId, operationId, "calls", { orm: "sequelize" });
+        addEdge(operationId, tableId, sequelizeReadMethods.has(operation) ? "reads" : "writes", { operation, orm: "sequelize" });
       }
     }
 
@@ -344,6 +396,19 @@ function parseMethodRelations(
         addEdge(prismaService.id, operationId, "has_method", { generatedFromUsage: true });
         addEdge(methodId, operationId, "calls", { via: property, orm: "prisma" });
         addEdge(operationId, tableId, readMethods.has(operation) ? "reads" : "writes", { operation, via: property, orm: "prisma" });
+      }
+    }
+
+    const drizzleOperation = detectDrizzleOperation(call.getText(), classes.drizzleTables);
+    if (drizzleOperation) {
+      const relationKey = `${drizzleOperation.type}:${drizzleOperation.table.tableId}:${drizzleOperation.operation}`;
+      if (!dataRelations.has(relationKey)) {
+        dataRelations.add(relationKey);
+        addEdge(methodId, drizzleOperation.table.tableId, drizzleOperation.type, {
+          operation: drizzleOperation.operation,
+          schemaVariable: drizzleOperation.table.variable,
+          orm: "drizzle",
+        });
       }
     }
 
@@ -374,7 +439,7 @@ function parseMethodRelations(
 }
 
 function parseTypeOrm(info: ClassInfo, classes: ClassRegistry, addNode: NodeAdder, addEdge: EdgeAdder) {
-  if (info.type !== "entity") return;
+  if (!info.declaration.getDecorator("Entity")) return;
   const tableName = decoratorString(info.declaration.getDecorator("Entity")) || info.name;
   const tableId = `table:${tableName}`;
   addNode({ id: "database:typeorm", type: "database", label: "TypeORM", name: "TypeORM", framework: "typeorm", source: "config", confidence: 1 });
@@ -396,6 +461,55 @@ function parseTypeOrm(info: ClassInfo, classes: ClassRegistry, addNode: NodeAdde
       addNode({ id: targetTableId, type: "table", label: targetTableName, name: targetTableName, framework: "typeorm", source: "heuristic", confidence: 0.85 });
       addEdge(tableId, targetTableId, "references", { relation, property: property.getName(), orm: "typeorm" }, "ast", 1);
     }
+  }
+}
+
+function parseSequelize(info: ClassInfo, classes: ClassRegistry, addNode: NodeAdder, addEdge: EdgeAdder) {
+  const tableDecorator = info.declaration.getDecorator("Table");
+  if (!tableDecorator) return;
+  const tableName = decoratorOptionString(tableDecorator, "tableName") || decoratorDirectString(tableDecorator) || info.name;
+  const tableId = `table:${tableName}`;
+  addNode({ id: "database:sequelize", type: "database", label: "Sequelize", name: "Sequelize", framework: "sequelize", source: "config", confidence: 1 });
+  addNode({ id: tableId, type: "table", label: tableName, name: tableName, file: info.file, framework: "sequelize", confidence: 1, source: "ast", metadata: { model: info.name } });
+  addEdge("database:sequelize", tableId, "contains");
+  addEdge(info.id, tableId, "references", { orm: "sequelize" });
+
+  for (const property of info.declaration.getProperties()) {
+    const columnDecorator = property.getDecorator("Column");
+    const decorators = property.getDecorators().map((item) => item.getName());
+    if (columnDecorator) {
+      const columnName = decoratorOptionString(columnDecorator, "field") || property.getName();
+      const columnId = `column:${tableName}.${columnName}`;
+      const configuredType = decoratorOptionText(columnDecorator, "type");
+      addNode({
+        id: columnId,
+        type: "column",
+        label: `${tableName}.${columnName}`,
+        name: columnName,
+        file: info.file,
+        framework: "sequelize",
+        source: "ast",
+        confidence: 1,
+        metadata: {
+          property: property.getName(),
+          type: configuredType || property.getTypeNode()?.getText(),
+          decorators,
+          primaryKey: decoratorOptionText(columnDecorator, "primaryKey") === "true" || decorators.includes("PrimaryKey"),
+          allowNull: decoratorOptionText(columnDecorator, "allowNull") || undefined,
+        },
+      });
+      addEdge(tableId, columnId, "has_column");
+    }
+
+    const relationDecorator = property.getDecorators().find((item) => ["BelongsTo", "HasMany", "HasOne", "BelongsToMany", "ForeignKey"].includes(item.getName()));
+    if (!relationDecorator) continue;
+    const targetName = relationDecorator.getArguments().flatMap((argument) => referencedTypeNames(argument.getText())).find((name) => name !== info.name);
+    if (!targetName) continue;
+    const target = resolveClass(targetName, classes, info.file);
+    if (!target?.declaration.getDecorator("Table")) continue;
+    const { id: targetTableId, name: targetTableName } = tableForSequelizeModel(targetName, classes, info.file);
+    addNode({ id: targetTableId, type: "table", label: targetTableName, name: targetTableName, file: target.file, framework: "sequelize", source: "ast", confidence: 1 });
+    addEdge(tableId, targetTableId, "references", { relation: relationDecorator.getName(), property: property.getName(), orm: "sequelize" });
   }
 }
 
@@ -428,6 +542,103 @@ async function parsePrisma(context: AdapterContext, addNode: NodeAdder, addEdge:
       addEdge(tableId, columnId, "has_column");
     }
   }
+}
+
+function parseDrizzleSchemas(sourceFiles: SourceFile[], projectRoot: string, addNode: NodeAdder, addEdge: EdgeAdder): Map<string, DrizzleTableInfo> {
+  const tables = new Map<string, DrizzleTableInfo>();
+  const pendingReferences: Array<{ from: string; variable: string; property: string }> = [];
+  const tableFactories = new Set(["pgTable", "mysqlTable", "sqliteTable", "sqliteTableCreator"]);
+  const columnModifiers = new Set(["notNull", "primaryKey", "default", "defaultNow", "$defaultFn", "$onUpdate", "unique", "references"]);
+
+  for (const sourceFile of sourceFiles) {
+    const file = relativePath(projectRoot, sourceFile.getFilePath());
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      const calls = [
+        ...(Node.isCallExpression(initializer) ? [initializer] : []),
+        ...initializer.getDescendantsOfKind(SyntaxKind.CallExpression),
+      ];
+      const tableCall = calls.find((call) => tableFactories.has(call.getExpression().getText().split(".").at(-1) ?? ""));
+      if (!tableCall) continue;
+      const tableName = expressionValue(tableCall.getArguments()[0]);
+      const columns = tableCall.getArguments()[1];
+      if (!tableName || !columns || !Node.isObjectLiteralExpression(columns)) continue;
+
+      const variable = declaration.getName();
+      const tableId = `table:${tableName}`;
+      const table: DrizzleTableInfo = { variable, tableName, tableId, file };
+      tables.set(variable, table);
+      addNode({ id: "database:drizzle", type: "database", label: "Drizzle", name: "Drizzle", framework: "drizzle", source: "config", confidence: 1 });
+      addNode({ id: tableId, type: "table", label: tableName, name: tableName, file, framework: "drizzle", source: "ast", confidence: 1, metadata: { schemaVariable: variable } });
+      addEdge("database:drizzle", tableId, "contains");
+      addEdge(`file:${file}`, tableId, "declares", { orm: "drizzle", schemaVariable: variable });
+
+      for (const property of columns.getProperties()) {
+        if (!Node.isPropertyAssignment(property)) continue;
+        const propertyName = property.getName().replace(/^['"`]|['"`]$/g, "");
+        const columnInitializer = property.getInitializer();
+        if (!columnInitializer) continue;
+        const columnCalls = [
+          ...(Node.isCallExpression(columnInitializer) ? [columnInitializer] : []),
+          ...columnInitializer.getDescendantsOfKind(SyntaxKind.CallExpression),
+        ];
+        const builder = [...columnCalls].reverse().find((call) => {
+          const name = call.getExpression().getText().split(".").at(-1) ?? "";
+          return /^[A-Za-z_$][\w$]*$/.test(name) && !columnModifiers.has(name);
+        });
+        const columnName = expressionValue(builder?.getArguments()[0]) || propertyName;
+        const columnType = builder?.getExpression().getText().split(".").at(-1) ?? propertyName;
+        const columnText = columnInitializer.getText();
+        const columnId = `column:${tableName}.${columnName}`;
+        addNode({
+          id: columnId,
+          type: "column",
+          label: `${tableName}.${columnName}`,
+          name: columnName,
+          file,
+          framework: "drizzle",
+          source: "ast",
+          confidence: 1,
+          metadata: {
+            property: propertyName,
+            type: columnType,
+            nullable: !/\.notNull\s*\(/.test(columnText),
+            primaryKey: /\.primaryKey\s*\(/.test(columnText),
+          },
+        });
+        addEdge(tableId, columnId, "has_column");
+
+        const reference = columnText.match(/\.references\s*\(\s*\(\s*\)\s*=>\s*([A-Za-z_$][\w$]*)\./);
+        if (reference) pendingReferences.push({ from: tableId, variable: reference[1], property: propertyName });
+      }
+    }
+  }
+  for (const reference of pendingReferences) {
+    const target = tables.get(reference.variable);
+    if (target) addEdge(reference.from, target.tableId, "references", { property: reference.property, orm: "drizzle" });
+  }
+  return tables;
+}
+
+function detectDrizzleOperation(text: string, tables: Map<string, DrizzleTableInfo>): { table: DrizzleTableInfo; type: "reads" | "writes"; operation: string } | null {
+  const normalized = text.replace(/\s+/g, " ");
+  const write = normalized.match(/\.(insert|update|delete)\s*\(\s*([A-Za-z_$][\w$]*)\s*\)/);
+  if (write) {
+    const table = tables.get(write[2]);
+    if (table) return { table, type: "writes", operation: write[1] };
+  }
+  if (/\.(?:select|selectDistinct|selectDistinctOn)\s*\(/.test(normalized)) {
+    const from = normalized.match(/\.from\s*\(\s*([A-Za-z_$][\w$]*)\s*\)/);
+    const table = from ? tables.get(from[1]) : undefined;
+    if (table) return { table, type: "reads", operation: "select" };
+  }
+  const relational = normalized.match(/\.query\.([A-Za-z_$][\w$]*)\.(findMany|findFirst)\s*\(/);
+  if (relational) {
+    const table = tables.get(relational[1]);
+    if (table) return { table, type: "reads", operation: relational[2] };
+  }
+  return null;
 }
 
 function parseImports(sourceFile: SourceFile, projectRoot: string, addNode: NodeAdder, addEdge: EdgeAdder) {
@@ -535,9 +746,10 @@ function classMethodId(info: ClassInfo, methodName: string): string {
   return info.id === canonicalClassId ? `method:${info.name}.${methodName}` : `method:${info.name}.${methodName}@${info.file}`;
 }
 
-function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "constructorTypes" | "repositoryEntities" | "queueTokens"> {
+function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "constructorTypes" | "repositoryEntities" | "sequelizeModels" | "queueTokens"> {
   const constructorTypes = new Map<string, string>();
   const repositoryEntities = new Map<string, string>();
+  const sequelizeModels = new Map<string, string>();
   const queueTokens = new Map<string, string>();
   for (const constructor of declaration.getConstructors()) {
     for (const parameter of constructor.getParameters()) {
@@ -552,12 +764,19 @@ function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "con
         repositoryEntities.set(parameter.getName(), repositoryEntity);
         continue;
       }
+      const modelDecorator = parameter.getDecorator("InjectModel");
+      const sequelizeModel = modelDecorator?.getArguments()[0]?.getText().match(/[A-Z][A-Za-z0-9_$]*/)?.[0];
+      if (sequelizeModel) {
+        constructorTypes.set(parameter.getName(), sequelizeModel);
+        sequelizeModels.set(parameter.getName(), sequelizeModel);
+        continue;
+      }
       const injectDecorator = parameter.getDecorator("Inject");
       const token = expressionValue(injectDecorator?.getArguments()[0]);
       constructorTypes.set(parameter.getName(), token || simpleType(parameter.getTypeNode()?.getText() ?? parameter.getType().getText()));
     }
   }
-  return { constructorTypes, repositoryEntities, queueTokens };
+  return { constructorTypes, repositoryEntities, sequelizeModels, queueTokens };
 }
 
 function resolveClass(name: string, classes: ClassRegistry, file?: string): ClassInfo | undefined {
@@ -595,7 +814,7 @@ function ensureClass(name: string, classes: ClassRegistry, file: string, addNode
   if (existing) return existing;
   const type = inferType(name, fallbackType);
   const ambiguous = (classes.byName.get(name)?.length ?? 0) > 1;
-  const inferred = { name, id: ambiguous ? `${type}:${name}@unresolved:${file}` : `${type}:${name}`, type, file, declaration: undefined as unknown as ClassDeclaration, constructorTypes: new Map<string, string>(), repositoryEntities: new Map<string, string>(), queueTokens: new Map<string, string>() };
+  const inferred = { name, id: ambiguous ? `${type}:${name}@unresolved:${file}` : `${type}:${name}`, type, file, declaration: undefined as unknown as ClassDeclaration, constructorTypes: new Map<string, string>(), repositoryEntities: new Map<string, string>(), sequelizeModels: new Map<string, string>(), queueTokens: new Map<string, string>() };
   addNode({ id: inferred.id, type, label: name, name, file, framework: "nestjs", language: "typescript", confidence: 0.7, source: "heuristic" });
   return inferred;
 }
@@ -826,6 +1045,28 @@ function decoratorString(decorator?: Decorator): string {
   return argument.getText().replace(/^['"`]|['"`]$/g, "");
 }
 
+function decoratorDirectString(decorator?: Decorator): string {
+  const argument = decorator?.getArguments()[0];
+  if (!argument || (!Node.isStringLiteral(argument) && !Node.isNoSubstitutionTemplateLiteral(argument))) return "";
+  return expressionValue(argument);
+}
+
+function decoratorOptionText(decorator: Decorator, option: string): string {
+  const argument = decorator.getArguments()[0];
+  if (!argument || !Node.isObjectLiteralExpression(argument)) return "";
+  const property = argument.getProperty(option);
+  if (!property || !Node.isPropertyAssignment(property)) return "";
+  return property.getInitializer()?.getText() ?? "";
+}
+
+function decoratorOptionString(decorator: Decorator, option: string): string {
+  const argument = decorator.getArguments()[0];
+  if (!argument || !Node.isObjectLiteralExpression(argument)) return "";
+  const property = argument.getProperty(option);
+  if (!property || !Node.isPropertyAssignment(property)) return "";
+  return expressionValue(property.getInitializer());
+}
+
 function joinRoute(...parts: string[]): string {
   const joined = `/${parts.join("/")}`.replace(/\/+/g, "/");
   return joined.length > 1 && joined.endsWith("/") ? joined.slice(0, -1) : joined;
@@ -969,6 +1210,13 @@ function isExternalHttpCall(expression: string, info: ClassInfo): boolean {
 function tableForEntity(entityName: string, classes: ClassRegistry, file?: string): { id: string; name: string } {
   const entity = resolveClass(entityName, classes, file);
   const tableName = entity?.type === "entity" ? (decoratorString(entity.declaration.getDecorator("Entity")) || entityName) : entityName;
+  return { id: `table:${tableName}`, name: tableName };
+}
+
+function tableForSequelizeModel(modelName: string, classes: ClassRegistry, file?: string): { id: string; name: string } {
+  const model = resolveClass(modelName, classes, file);
+  const decorator = model?.declaration.getDecorator("Table");
+  const tableName = decorator ? (decoratorOptionString(decorator, "tableName") || decoratorDirectString(decorator) || modelName) : modelName;
   return { id: `table:${tableName}`, name: tableName };
 }
 

@@ -8,11 +8,15 @@ import { LoggerMiddleware } from "./logger.middleware";
 import { UserEntity } from "./user.entity";
 import { SettingsModule } from "./feature-a/settings.module";
 import { WorkerModule } from "./worker.module";
+import { SequelizeModule } from "@nestjs/sequelize";
+import { SequelizeAccount, SequelizeSession } from "./sequelize-models";
+import { SequelizeAccountsService } from "./sequelize-accounts.service";
+import { DrizzleEventsRepository } from "./drizzle-events.repository";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEntity]), SettingsModule, WorkerModule],
+  imports: [TypeOrmModule.forFeature([UserEntity]), SequelizeModule.forFeature([SequelizeAccount, SequelizeSession]), SettingsModule, WorkerModule],
   controllers: [UsersController],
-  providers: [UsersService, PrismaService, AuditService, { provide: "MAILER", useClass: PrismaService }],
+  providers: [UsersService, PrismaService, AuditService, SequelizeAccountsService, DrizzleEventsRepository, { provide: "MAILER", useClass: PrismaService }],
   exports: [UsersService],
 })
 export class AppModule implements NestModule {

@@ -36,6 +36,12 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     "database:prisma", "model:User", "table:User", "table:Post", "column:User.email",
     "database:typeorm", "entity:UserEntity", "repository:UserEntityRepository",
     "table:typeorm_users", "method:UserEntityRepository.find", "method:UserEntityRepository.save",
+    "database:sequelize", "entity:SequelizeAccount", "entity:SequelizeSession",
+    "table:sequelize_accounts", "table:sequelize_sessions", "column:sequelize_accounts.email_address",
+    "method:SequelizeAccountsService.listAccounts", "method:SequelizeAccountsService.createAccount",
+    "database:drizzle", "table:drizzle_accounts", "table:drizzle_events",
+    "column:drizzle_accounts.email_address", "column:drizzle_events.account_id",
+    "method:DrizzleEventsRepository.listEvents", "method:DrizzleEventsRepository.addEvent",
     "environment_variable:EXAMPLE_API_KEY", "environment_variable:AUDIT_API_URL",
     "external_api:api.example.com", "external_api:unknown:AUDIT_API_URL", "test:src/users.service.spec.ts",
     "library:@nestjs/core", "library:typeorm",
@@ -66,6 +72,14 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "table:typeorm_users" && edge.to === "table:typeorm_posts" && edge.type === "references"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:UserEntityRepository.find" && edge.to === "table:typeorm_users" && edge.type === "reads"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:UserEntityRepository.save" && edge.to === "table:typeorm_users" && edge.type === "writes"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "table:sequelize_sessions" && edge.to === "table:sequelize_accounts" && edge.type === "references"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:SequelizeAccount.findAll" && edge.to === "table:sequelize_accounts" && edge.type === "reads"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:SequelizeAccount.create" && edge.to === "table:sequelize_accounts" && edge.type === "writes"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "table:drizzle_events" && edge.to === "table:drizzle_accounts" && edge.type === "references"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:DrizzleEventsRepository.listEvents" && edge.to === "table:drizzle_events" && edge.type === "reads"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:DrizzleEventsRepository.addEvent" && edge.to === "table:drizzle_events" && edge.type === "writes"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:DrizzleEventsRepository.updateEvent" && edge.to === "table:drizzle_events" && edge.type === "writes"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:DrizzleEventsRepository.deleteEvent" && edge.to === "table:drizzle_events" && edge.type === "writes"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "environment_variable:AUDIT_API_URL" && edge.to === "external_api:unknown:AUDIT_API_URL" && edge.type === "connects_to"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "test:src/users.service.spec.ts" && edge.to === "service:UsersService" && edge.type === "tests"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:OrderPublisher.publishOrder" && edge.to === "message_topic:orders.created" && edge.type === "publishes_to"));
@@ -162,6 +176,15 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /@keyframes atlasFade/);
   assert.match(viewerHtml, /@keyframes atlasDash/);
   assert.match(viewerHtml, /animation: atlasDash/);
+  assert.match(viewerHtml, /setPointerCapture/);
+  assert.match(viewerHtml, /Math\.max\(vb\.w \/ Math\.max\(rect\.width, 1\), vb\.h \/ Math\.max\(rect\.height, 1\)\)/);
+  assert.match(viewerHtml, /Math\.hypot\(dx, dy\) < 3/);
+  assert.match(viewerHtml, /user-select: none; -webkit-user-select: none/);
+  assert.match(viewerHtml, /this\._suppressClick = true/);
+  assert.match(viewerHtml, /Showing \$\{visible\.length\} key items of \$\{items\.length\}/);
+  assert.match(viewerHtml, /const doms = allDoms\.slice\(0, domainFilter \? 1 : 9\)/);
+  assert.match(viewerHtml, /const runtime = keyIds\(\['broker', 'topic', 'queue', 'processor'\], 14\)/);
+  assert.match(viewerHtml, /No data structures detected/);
   assert.doesNotMatch(viewerHtml, /<(?:svg|g|rect|foreignObject|text|line|path)\b[^>]*\s(?:viewBox|x|y|width|height|x1|y1|x2|y2|d|transform|opacity)="\{\{/i);
   assert.doesNotMatch(viewerHtml, /shopcore|deleteUserItems|ItemsService/);
   assert.doesNotMatch(viewerHtml, /<(?:script|link)[^>]+https?:\/\//);
