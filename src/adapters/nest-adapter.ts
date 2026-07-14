@@ -5,6 +5,7 @@ import {
   Project,
   SyntaxKind,
   type ClassDeclaration,
+  type CallExpression,
   type Decorator,
   type FunctionDeclaration,
   type MethodDeclaration,
@@ -32,6 +33,7 @@ interface ClassInfo {
   declaration: ClassDeclaration;
   constructorTypes: Map<string, string>;
   repositoryEntities: Map<string, string>;
+  queueTokens: Map<string, string>;
 }
 
 interface ClassRegistry {
@@ -96,8 +98,8 @@ export class NestAdapter implements ArchitectureAdapter {
     for (const candidate of candidates) {
         const { name, type, file, declaration } = candidate;
         const id = nameCounts.get(name) === 1 ? `${type}:${name}` : `${type}:${name}@${file}`;
-        const { constructorTypes, repositoryEntities } = getConstructorInfo(declaration);
-        const info: ClassInfo = { name, id, type, file, declaration, constructorTypes, repositoryEntities };
+        const { constructorTypes, repositoryEntities, queueTokens } = getConstructorInfo(declaration);
+        const info: ClassInfo = { name, id, type, file, declaration, constructorTypes, repositoryEntities, queueTokens };
         classes.byDeclaration.set(declaration, info);
         const named = classes.byName.get(name) ?? [];
         named.push(info);
@@ -134,6 +136,7 @@ function classifyClass(declaration: ClassDeclaration, file: string): GraphNodeTy
   const name = declaration.getName() ?? "";
   const decorators = new Set(declaration.getDecorators().map((item) => item.getName()));
   if (decorators.has("Module")) return "module";
+  if (decorators.has("Processor")) return "processor";
   if (decorators.has("Controller")) return "controller";
   if (decorators.has("Entity")) return "entity";
   if (name.endsWith("Dto") || file.includes(".dto.")) return "dto";
@@ -180,8 +183,20 @@ function parseClass(
 ) {
   parseModule(info, classes, addNode, addEdge);
   parseTypeOrm(info, classes, addNode, addEdge);
+  parseAsyncClass(info, addNode, addEdge);
 
   for (const [parameter, typeName] of info.constructorTypes) {
+    const queueName = info.queueTokens.get(parameter);
+    if (queueName) {
+      const queueId = addQueueNode(queueName, info.file, addNode);
+      addEdge(info.id, queueId, "uses", { via: "InjectQueue", parameter });
+      continue;
+    }
+    if (isMessageClient(parameter, typeName)) {
+      const transport = messageTransport(parameter, typeName) ?? "nest-microservice";
+      const brokerId = addMessageBroker(transport, addNode);
+      addEdge(info.id, brokerId, "uses", { via: "constructor", parameter, clientType: typeName, transport });
+    }
     const target = ensureClass(typeName, classes, info.file, addNode);
     addEdge(info.id, target.id, "injects", { via: "constructor", parameter, repositoryEntity: info.repositoryEntities.get(parameter) });
   }
@@ -191,6 +206,7 @@ function parseClass(
     addNode(methodNode(info, method));
     addEdge(info.id, methodId, "has_method");
     parseRoute(info, method, methodId, globalPrefix, addNode, addEdge);
+    parseAsyncConsumer(info, method, methodId, addNode, addEdge);
     parseMethodRelations(info, method, methodId, classes, addNode, addEdge);
     parseAppliedDecorators(method.getDecorators(), methodId, classes, info.file, addNode, addEdge);
   }
@@ -285,6 +301,7 @@ function parseMethodRelations(
 
   for (const call of method.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const expression = call.getExpression().getText();
+    if (parseAsyncProducerCall(info, call, methodId, addNode, addEdge)) continue;
     const localCall = expression.match(/^this\.([A-Za-z_$][\w$]*)$/);
     if (localCall) {
       const targetMethod = info.declaration.getMethod(localCall[1]);
@@ -518,11 +535,15 @@ function classMethodId(info: ClassInfo, methodName: string): string {
   return info.id === canonicalClassId ? `method:${info.name}.${methodName}` : `method:${info.name}.${methodName}@${info.file}`;
 }
 
-function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "constructorTypes" | "repositoryEntities"> {
+function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "constructorTypes" | "repositoryEntities" | "queueTokens"> {
   const constructorTypes = new Map<string, string>();
   const repositoryEntities = new Map<string, string>();
+  const queueTokens = new Map<string, string>();
   for (const constructor of declaration.getConstructors()) {
     for (const parameter of constructor.getParameters()) {
+      const queueDecorator = parameter.getDecorator("InjectQueue");
+      const queueName = expressionValue(queueDecorator?.getArguments()[0]);
+      if (queueName) queueTokens.set(parameter.getName(), queueName);
       const repositoryDecorator = parameter.getDecorator("InjectRepository");
       const repositoryEntity = repositoryDecorator?.getArguments()[0]?.getText().match(/[A-Z][A-Za-z0-9_$]*/)?.[0];
       if (repositoryEntity) {
@@ -532,11 +553,11 @@ function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "con
         continue;
       }
       const injectDecorator = parameter.getDecorator("Inject");
-      const token = injectDecorator?.getArguments()[0]?.getText().replace(/^['"`]|['"`]$/g, "");
+      const token = expressionValue(injectDecorator?.getArguments()[0]);
       constructorTypes.set(parameter.getName(), token || simpleType(parameter.getTypeNode()?.getText() ?? parameter.getType().getText()));
     }
   }
-  return { constructorTypes, repositoryEntities };
+  return { constructorTypes, repositoryEntities, queueTokens };
 }
 
 function resolveClass(name: string, classes: ClassRegistry, file?: string): ClassInfo | undefined {
@@ -574,7 +595,7 @@ function ensureClass(name: string, classes: ClassRegistry, file: string, addNode
   if (existing) return existing;
   const type = inferType(name, fallbackType);
   const ambiguous = (classes.byName.get(name)?.length ?? 0) > 1;
-  const inferred = { name, id: ambiguous ? `${type}:${name}@unresolved:${file}` : `${type}:${name}`, type, file, declaration: undefined as unknown as ClassDeclaration, constructorTypes: new Map<string, string>(), repositoryEntities: new Map<string, string>() };
+  const inferred = { name, id: ambiguous ? `${type}:${name}@unresolved:${file}` : `${type}:${name}`, type, file, declaration: undefined as unknown as ClassDeclaration, constructorTypes: new Map<string, string>(), repositoryEntities: new Map<string, string>(), queueTokens: new Map<string, string>() };
   addNode({ id: inferred.id, type, label: name, name, file, framework: "nestjs", language: "typescript", confidence: 0.7, source: "heuristic" });
   return inferred;
 }
@@ -588,7 +609,186 @@ function inferType(name: string, fallback: GraphNodeType): GraphNodeType {
   if (name.endsWith("Pipe")) return "pipe";
   if (name.endsWith("Interceptor")) return "interceptor";
   if (name.endsWith("Repository")) return "repository";
+  if (name.endsWith("Processor")) return "processor";
   return fallback;
+}
+
+function parseAsyncClass(info: ClassInfo, addNode: NodeAdder, addEdge: EdgeAdder) {
+  const processor = info.declaration.getDecorator("Processor");
+  if (!processor) return;
+  const queueName = expressionValue(processor.getArguments()[0]) || info.name;
+  const queueId = addQueueNode(queueName, info.file, addNode);
+  addEdge(queueId, info.id, "processes", { decorator: "Processor", queue: queueName });
+}
+
+function parseAsyncConsumer(
+  info: ClassInfo,
+  method: MethodDeclaration,
+  methodId: string,
+  addNode: NodeAdder,
+  addEdge: EdgeAdder,
+) {
+  for (const decorator of method.getDecorators()) {
+    if (["MessagePattern", "EventPattern"].includes(decorator.getName())) {
+      const pattern = decorator.getArguments()[0];
+      const topic = expressionValue(pattern);
+      if (!topic) continue;
+      const transport = isObjectPattern(pattern) ? "nest-microservice" : "kafka";
+      const topicId = addMessageTopic(topic, info.file, addNode, addEdge, transport);
+      addEdge(topicId, methodId, "delivers_to", {
+        transport,
+        decorator: decorator.getName(),
+        consumer: info.name,
+        handler: method.getName(),
+      });
+      continue;
+    }
+    if (decorator.getName() !== "Process") continue;
+    const processor = info.declaration.getDecorator("Processor");
+    const queueName = expressionValue(processor?.getArguments()[0]) || info.name;
+    const jobName = processJobName(decorator) || method.getName();
+    const queueId = addQueueNode(queueName, info.file, addNode);
+    addEdge(queueId, methodId, "delivers_to", {
+      transport: "bull",
+      decorator: "Process",
+      processor: info.name,
+      handler: method.getName(),
+      job: jobName,
+    });
+  }
+}
+
+function parseAsyncProducerCall(
+  info: ClassInfo,
+  call: CallExpression,
+  methodId: string,
+  addNode: NodeAdder,
+  addEdge: EdgeAdder,
+): boolean {
+  const expression = call.getExpression().getText();
+  const messageCall = expression.match(/^this\.([A-Za-z_$][\w$]*)\.(emit|send)$/);
+  if (messageCall) {
+    const [, property, operation] = messageCall;
+    const typeName = info.constructorTypes.get(property) ?? "";
+    if (isMessageClient(property, typeName)) {
+      const topic = expressionValue(call.getArguments()[0]);
+      if (!topic) return false;
+      const transport = messageTransport(property, typeName) ?? "nest-microservice";
+      const topicId = addMessageTopic(topic, info.file, addNode, addEdge, transport);
+      addEdge(methodId, topicId, "publishes_to", { transport, operation, client: property });
+      return true;
+    }
+  }
+
+  const queueCall = expression.match(/^this\.([A-Za-z_$][\w$]*)\.(add|addBulk)$/);
+  if (!queueCall) return false;
+  const [, property, operation] = queueCall;
+  const queueName = info.queueTokens.get(property);
+  if (!queueName) return false;
+  const queueId = addQueueNode(queueName, info.file, addNode);
+  const job = expressionValue(call.getArguments()[0]);
+  addEdge(methodId, queueId, "enqueues", { transport: "bull", operation, ...(job ? { job } : {}) });
+  return true;
+}
+
+function addMessageBroker(transport: string, addNode: NodeAdder): string {
+  const id = `message_broker:${transport}`;
+  const label = transport === "kafka" ? "Kafka" : "NestJS messaging";
+  addNode({ id, type: "message_broker", label, name: label, framework: "nestjs", source: "ast", confidence: 1, metadata: { transport } });
+  return id;
+}
+
+function addMessageTopic(topic: string, file: string, addNode: NodeAdder, addEdge: EdgeAdder, transport = "kafka"): string {
+  const id = `message_topic:${cleanToken(topic)}`;
+  const brokerId = addMessageBroker(transport, addNode);
+  addNode({ id, type: "message_topic", label: topic, name: topic, file, framework: "nestjs", source: "ast", confidence: 1, metadata: { transport, topic } });
+  addEdge(brokerId, id, "contains", { transport });
+  return id;
+}
+
+function addQueueNode(queue: string, file: string, addNode: NodeAdder): string {
+  const id = `queue:${cleanToken(queue)}`;
+  addNode({ id, type: "queue", label: queue, name: queue, file, framework: "nestjs", source: "ast", confidence: 1, metadata: { transport: "bull", queue } });
+  return id;
+}
+
+function isMessageClient(parameter: string, typeName: string): boolean {
+  return messageTransport(parameter, typeName) !== null;
+}
+
+function messageTransport(parameter: string, typeName: string): string | null {
+  if (/kafka/i.test(parameter) || /ClientKafka|KafkaClient|KAFKA/i.test(typeName)) return "kafka";
+  if (/ClientProxy|MessageClient|MicroserviceClient/i.test(typeName)) return "nest-microservice";
+  return null;
+}
+
+function processJobName(decorator: Decorator): string {
+  const argument = decorator.getArguments()[0];
+  if (!argument) return "";
+  if (Node.isObjectLiteralExpression(argument)) {
+    const property = argument.getProperty("name");
+    if (property && Node.isPropertyAssignment(property)) return expressionValue(property.getInitializer());
+  }
+  return expressionValue(argument);
+}
+
+function isObjectPattern(node?: Node, seen = new Set<Node>()): boolean {
+  if (!node || seen.has(node)) return false;
+  seen.add(node);
+  if (Node.isObjectLiteralExpression(node)) return true;
+  if (!Node.isIdentifier(node)) return false;
+  return node.getDefinitions().some((definition) => {
+    const declaration = definition.getDeclarationNode();
+    return Boolean(declaration && Node.isVariableDeclaration(declaration) && isObjectPattern(declaration.getInitializer(), seen));
+  });
+}
+
+function expressionValue(node?: Node, seen = new Set<Node>()): string {
+  if (!node || seen.has(node)) return "";
+  seen.add(node);
+  if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node) || Node.isNumericLiteral(node)) {
+    return node.getLiteralText();
+  }
+  if (Node.isTemplateExpression(node)) {
+    let value = node.getHead().getLiteralText();
+    for (const span of node.getTemplateSpans()) value += expressionValue(span.getExpression(), seen) + span.getLiteral().getLiteralText();
+    return value;
+  }
+  if (Node.isCallExpression(node) && /(?:^|\.)getKafkaTopicPrefix$/.test(node.getExpression().getText())) {
+    return "${KAFKA_ENV_PREFIX}";
+  }
+  if (Node.isObjectLiteralExpression(node)) {
+    const values = node.getProperties().flatMap((property) => {
+      if (!Node.isPropertyAssignment(property)) return [];
+      return [`${property.getName()}:${expressionValue(property.getInitializer(), seen)}`];
+    });
+    if (values.length) return values.join(",");
+  }
+  if (Node.isIdentifier(node)) {
+    for (const definition of node.getDefinitions()) {
+      const declaration = definition.getDeclarationNode();
+      if (declaration && Node.isVariableDeclaration(declaration)) {
+        const value = expressionValue(declaration.getInitializer(), seen);
+        if (value) return value;
+      }
+    }
+  }
+  if (Node.isPropertyAccessExpression(node)) {
+    for (const definition of node.getNameNode().getDefinitions()) {
+      const declaration = definition.getDeclarationNode();
+      if (declaration && Node.isVariableDeclaration(declaration)) {
+        const value = expressionValue(declaration.getInitializer(), seen);
+        if (value) return value;
+      }
+    }
+  }
+  if (Node.isBinaryExpression(node) && node.getOperatorToken().getText() === "+") {
+    const left = expressionValue(node.getLeft(), seen);
+    const right = expressionValue(node.getRight(), seen);
+    if (left || right) return left + right;
+  }
+  const text = node.getText().replace(/^['"`]|['"`]$/g, "").trim();
+  return text.length <= 160 ? text : text.slice(0, 157) + "...";
 }
 
 function extractEnvNames(text: string): Set<string> {

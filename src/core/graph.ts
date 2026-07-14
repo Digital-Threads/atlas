@@ -119,6 +119,9 @@ export class GraphQuery {
   findControllers(): GraphNode[] { return this.byType("controller"); }
   findTables(): GraphNode[] { return this.byType("table"); }
   findExternalApis(): GraphNode[] { return this.byType("external_api"); }
+  findMessageTopics(): GraphNode[] { return this.byType("message_topic"); }
+  findQueues(): GraphNode[] { return this.byType("queue"); }
+  findProcessors(): GraphNode[] { return this.byType("processor"); }
 
   getNeighbors(nodeId: string, depth = 1): GraphSubgraph {
     if (!this.nodeMap.has(nodeId)) return { nodes: [], edges: [] };
@@ -145,7 +148,26 @@ export class GraphQuery {
   findFlowFromRoute(routeId: string): GraphSubgraph {
     return this.walk(routeId, "outgoing", 12, new Set([
       "handles", "calls", "reads", "writes", "uses", "connects_to", "validates", "returns",
+      "publishes_to", "delivers_to", "enqueues", "processes",
     ]));
+  }
+
+  findAsyncFlow(rootId: string): GraphSubgraph {
+    const root = this.nodeMap.get(rootId);
+    if (!root || !["message_topic", "queue"].includes(root.type)) return { nodes: [], edges: [] };
+    const flow = this.walk(rootId, "outgoing", 12, new Set([
+      "delivers_to", "calls", "reads", "writes", "uses", "connects_to", "publishes_to", "enqueues", "processes",
+    ]));
+    const nodeIds = new Set(flow.nodes.map((node) => node.id));
+    const edgeIds = new Set(flow.edges.map((edge) => edge.id));
+    for (const edge of this.getIncoming(rootId).filter((item) => ["publishes_to", "enqueues"].includes(item.type))) {
+      nodeIds.add(edge.from);
+      edgeIds.add(edge.id);
+    }
+    return {
+      nodes: [...nodeIds].map((id) => this.nodeMap.get(id)).filter(Boolean) as GraphNode[],
+      edges: this.graph.edges.filter((edge) => edgeIds.has(edge.id)),
+    };
   }
 
   findDependencies(nodeId: string, depth = 2): GraphSubgraph {

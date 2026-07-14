@@ -27,6 +27,8 @@ const metrics = [
 const capabilities = [
   "NestJS modules, controllers, services, providers, DTOs, guards, pipes, and interceptors",
   "HTTP routes with controller prefixes and handler methods",
+  "Kafka topics with publishers, consumers, and downstream processing flows",
+  "Bull queues, job producers, processors, and decorated job handlers",
   "Constructor injection, imports, exports, method calls, and dependency chains",
   "Prisma models, TypeORM entities, environment variables, external APIs, tests, and package dependencies",
   "Risk detection for circular imports, missing tests, direct database access, route flow gaps, and oversized services",
@@ -45,6 +47,8 @@ const mcpTools = [
   "atlas_find_node",
   "atlas_get_node",
   "atlas_find_flow",
+  "atlas_find_async_flows",
+  "atlas_find_async_flow",
   "atlas_get_dependencies",
   "atlas_find_routes",
   "atlas_project_summary",

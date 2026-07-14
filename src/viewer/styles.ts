@@ -1005,12 +1005,14 @@ a:focus-visible {
 }
 
 .tabs button {
+  flex: 0 0 auto;
   height: 33px;
   padding: 0 7px;
   color: var(--muted);
   background: transparent;
   border: 0;
   border-radius: 0;
+  white-space: nowrap;
 }
 
 .tabs button.active {
@@ -1108,6 +1110,10 @@ export const viewerLayoutCss = `
 .type-folder { --dot: #66716d; }
 .type-config { --dot: #8a6f3d; }
 .type-library { --dot: #4e7184; }
+.type-message_broker { --dot: #293b75; }
+.type-message_topic { --dot: #0f7895; }
+.type-queue { --dot: #a66708; }
+.type-processor { --dot: #6e4a9e; }
 
 .method-get { --method-color: #2f6fca; }
 .method-post { --method-color: #087f6d; }

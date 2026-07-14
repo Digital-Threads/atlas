@@ -40,13 +40,15 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     "environment_variable:EXAMPLE_API_KEY", "environment_variable:AUDIT_API_URL",
     "external_api:api.example.com", "external_api:unknown:AUDIT_API_URL", "test:src/users.service.spec.ts",
     "library:@nestjs/core", "library:typeorm",
+    "message_broker:kafka", "message_topic:orders.created", "queue:email-jobs", "processor:EmailProcessor",
+    "method:OrderPublisher.publishOrder", "method:OrderEventsConsumer.handleOrder", "method:EmailProcessor.handleEmail",
   ];
   for (const id of requiredNodes) assert.ok(query.getNode(id), `missing node ${id}`);
 
   for (const method of ["ALL", "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]) {
     assert.ok(query.findRoutes().some((route) => route.metadata?.httpMethod === method), `missing ${method} route`);
   }
-  assert.equal(query.findControllers().length, 1);
+  assert.equal(query.findControllers().length, 2);
   assert.ok(query.findServices().length >= 3);
   assert.equal(query.findRoutes().length, 8);
   assert.ok(result.graph.nodes.every((node) => graphNodeTypes.includes(node.type)), "graph contains an invalid node type");
@@ -67,6 +69,11 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:UserEntityRepository.save" && edge.to === "table:typeorm_users" && edge.type === "writes"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "environment_variable:AUDIT_API_URL" && edge.to === "external_api:unknown:AUDIT_API_URL" && edge.type === "connects_to"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "test:src/users.service.spec.ts" && edge.to === "service:UsersService" && edge.type === "tests"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:OrderPublisher.publishOrder" && edge.to === "message_topic:orders.created" && edge.type === "publishes_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "message_topic:orders.created" && edge.to === "method:OrderEventsConsumer.handleOrder" && edge.type === "delivers_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:OrderPublisher.scheduleEmail" && edge.to === "queue:email-jobs" && edge.type === "enqueues"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "queue:email-jobs" && edge.to === "processor:EmailProcessor" && edge.type === "processes"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "queue:email-jobs" && edge.to === "method:EmailProcessor.handleEmail" && edge.type === "delivers_to"));
 
   const featureASettings = "module:SettingsModule@src/feature-a/settings.module.ts";
   const featureBSettings = "module:SettingsModule@src/feature-b/settings.module.ts";
@@ -75,7 +82,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "module:AppModule" && edge.to === featureASettings && edge.type === "imports"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "module:WorkerModule" && edge.to === featureBSettings && edge.type === "imports"));
 
-  for (const node of result.graph.nodes.filter((item) => ["module", "controller", "service", "provider", "repository", "method", "function", "route"].includes(item.type))) {
+  for (const node of result.graph.nodes.filter((item) => ["module", "controller", "service", "provider", "repository", "method", "function", "route", "message_broker", "message_topic", "queue", "processor"].includes(item.type))) {
     assert.ok(node.metadata?.description, `missing architecture description for ${node.id}`);
     assert.ok(node.metadata?.plainDescription, `missing plain-language description for ${node.id}`);
     assert.equal(node.metadata?.plainDescriptionSource, "inferred_from_code_structure");
@@ -90,6 +97,17 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(query.getNode("function:src/main.ts:bootstrap").metadata.plainDescription, /Starts and configures the application/);
   assert.match(query.getNode("route:DELETE:/api/users/:id").metadata.plainFlowDescription, /asks the system to remove a user/i);
   assert.match(query.getNode("route:DELETE:/api/users/:id").metadata.plainFlowDescription, /reads the required data/i);
+  assert.match(query.getNode("message_topic:orders.created").metadata.plainAsyncFlowDescription, /sends|publishes/i);
+  assert.match(query.getNode("queue:email-jobs").metadata.plainAsyncFlowDescription, /background work|queue/i);
+
+  const kafkaFlow = query.findAsyncFlow("message_topic:orders.created");
+  for (const id of ["method:OrderPublisher.publishOrder", "message_topic:orders.created", "method:OrderEventsConsumer.handleOrder"]) {
+    assert.ok(kafkaFlow.nodes.some((node) => node.id === id), `Kafka flow is missing ${id}`);
+  }
+  const queueFlow = query.findAsyncFlow("queue:email-jobs");
+  for (const id of ["method:OrderPublisher.scheduleEmail", "queue:email-jobs", "processor:EmailProcessor", "method:EmailProcessor.handleEmail"]) {
+    assert.ok(queueFlow.nodes.some((node) => node.id === id), `queue flow is missing ${id}`);
+  }
 
   const createFlow = query.findFlowFromRoute("route:POST:/api/users");
   for (const id of ["method:UsersController.create", "method:UsersService.create", "method:PrismaService.user.create", "table:User"]) {
@@ -134,6 +152,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerApp, /Used by/);
   assert.match(viewerApp, /Depends on/);
   assert.match(viewerApp, /Request flow/);
+  assert.match(viewerApp, /Async flows/);
+  assert.match(viewerApp, /Async flow/);
   assert.match(viewerApp, /flowDescription/);
   assert.match(viewerApp, /plainDescription/);
   assert.match(viewerApp, /Technical explanation/);
@@ -172,14 +192,18 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   await client.connect(transport);
   try {
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 10);
-    for (const name of ["atlas_find_node", "atlas_get_node", "atlas_get_dependencies", "atlas_get_dependents", "atlas_find_routes", "atlas_find_flow", "atlas_find_tables", "atlas_find_external_apis", "atlas_search", "atlas_project_summary"]) {
+    assert.equal(tools.tools.length, 12);
+    for (const name of ["atlas_find_node", "atlas_get_node", "atlas_get_dependencies", "atlas_get_dependents", "atlas_find_routes", "atlas_find_flow", "atlas_find_async_flows", "atlas_find_async_flow", "atlas_find_tables", "atlas_find_external_apis", "atlas_search", "atlas_project_summary"]) {
       assert.ok(tools.tools.some((tool) => tool.name === name), `missing MCP tool ${name}`);
     }
     const routes = await client.callTool({ name: "atlas_find_routes", arguments: {} });
     assert.match(JSON.stringify(routes), /POST \/api\/users/);
     const flow = await client.callTool({ name: "atlas_find_flow", arguments: { query: "POST /api/users" } });
     assert.match(JSON.stringify(flow), /PrismaService\.user\.create/);
+    const asyncFlows = await client.callTool({ name: "atlas_find_async_flows", arguments: {} });
+    assert.match(JSON.stringify(asyncFlows), /orders\.created/);
+    const asyncFlow = await client.callTool({ name: "atlas_find_async_flow", arguments: { query: "orders.created" } });
+    assert.match(JSON.stringify(asyncFlow), /OrderEventsConsumer\.handleOrder/);
     const dependencies = await client.callTool({ name: "atlas_get_dependencies", arguments: { id: "service:UsersService", depth: 3 } });
     assert.match(JSON.stringify(dependencies), /table:User/);
     const nodeSearch = await client.callTool({ name: "atlas_find_node", arguments: { query: "UsersService" } });

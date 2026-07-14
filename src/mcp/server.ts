@@ -54,6 +54,18 @@ export async function startMcpServer(projectPath: string, outputPath = ".atlas")
   server.registerTool("atlas_find_tables", { description: "List detected database tables." }, async () => result({ tables: query.findTables() }));
   server.registerTool("atlas_find_external_apis", { description: "List detected external API hosts." }, async () => result({ externalApis: query.findExternalApis() }));
 
+  server.registerTool("atlas_find_async_flows", {
+    description: "List detected Kafka topics, Bull queues, and background processors.",
+  }, async () => result({ topics: query.findMessageTopics(), queues: query.findQueues(), processors: query.findProcessors() }));
+
+  server.registerTool("atlas_find_async_flow", {
+    description: "Find a Kafka topic or Bull queue and return publishers, consumers, processors, and downstream calls.",
+    inputSchema: { query: z.string().min(1) },
+  }, async ({ query: value }) => {
+    const root = query.findNode(value).find((node) => ["message_topic", "queue"].includes(node.type));
+    return result({ root: root ?? null, flow: root ? query.findAsyncFlow(root.id) : { nodes: [], edges: [] } });
+  });
+
   server.registerTool("atlas_search", {
     description: "Search the complete architecture graph.",
     inputSchema: { query: z.string().min(1) },

@@ -8,6 +8,8 @@ browser viewer and MCP tools for exploring the result.
 Atlas helps answer practical questions about an unfamiliar backend:
 
 - Which route calls which controller, service, and database table?
+- Which code publishes to a Kafka topic, which consumer receives it, and what runs next?
+- Which Bull queues and processors perform background work?
 - How are NestJS modules and providers connected?
 - Which environment variables and external APIs does the project use?
 - Which services have no detected tests?
@@ -130,6 +132,8 @@ The NestJS adapter currently detects:
 - projects, folders, files, packages, and imports;
 - modules, controllers, services, providers, and dependency injection;
 - routes, controller methods, service methods, and method calls;
+- Kafka publishers and consumers declared with `ClientKafka`, `@MessagePattern`, and `@EventPattern`;
+- Bull queues, producers, processors, and jobs declared with `@InjectQueue`, `@Processor`, and `@Process`;
 - DTO fields, types, optional flags, validation decorators, and custom NestJS decorators;
 - guards, pipes, interceptors, and middleware;
 - Prisma models and operations;
@@ -163,7 +167,7 @@ source and confidence so consumers can distinguish evidence from inference.
 ```
 
 The viewer works without a cloud backend. It supports search, node-type filters,
-architecture views, zoom, drag, dependency highlighting, route flows, source
+architecture views, zoom, drag, dependency highlighting, HTTP and asynchronous flows, source
 previews, and incoming/outgoing relationship inspection.
 
 ## MCP integration
@@ -203,6 +207,8 @@ The server exposes these tools:
 - `atlas_get_dependents`
 - `atlas_find_routes`
 - `atlas_find_flow`
+- `atlas_find_async_flows`
+- `atlas_find_async_flow`
 - `atlas_find_tables`
 - `atlas_find_external_apis`
 - `atlas_search`
@@ -233,8 +239,8 @@ npm run lint
 npm run typecheck
 ```
 
-The tests scan a representative NestJS fixture, validate route-to-database flow,
-exercise all ten MCP tools, verify all seven risk rules, and confirm that environment
+The tests scan a representative NestJS fixture, validate route-to-database and
+publisher-to-consumer flows, exercise all twelve MCP tools, verify all seven risk rules, and confirm that environment
 values never enter generated artifacts. The performance test generates 1,000
 TypeScript files, 100 controllers, 300 services, and 1,000 routes.
 
