@@ -3,6 +3,7 @@ export const graphNodeTypes = [
   "provider", "repository", "entity", "dto", "method", "function", "route",
   "guard", "pipe", "interceptor", "middleware", "decorator", "database",
   "table", "column", "model", "environment_variable", "external_api",
+  "message_broker", "message_topic", "queue", "processor",
   "config", "test", "library", "risk",
 ] as const;
 
@@ -10,6 +11,7 @@ export const graphEdgeTypes = [
   "contains", "imports", "exports", "declares", "provides", "injects", "calls",
   "uses", "reads", "writes", "handles", "depends_on", "decorates", "validates",
   "returns", "references", "connects_to", "tests", "has_method", "has_column",
+  "publishes_to", "delivers_to", "enqueues", "processes",
 ] as const;
 
 export type GraphNodeType = (typeof graphNodeTypes)[number];
