@@ -85,6 +85,19 @@ a:focus-visible {
   gap: 8px;
 }
 
+.toolbar {
+  padding: 3px;
+  gap: 3px;
+  background: #111916;
+  border: 1px solid #35413c;
+  border-radius: 7px;
+}
+
+.toolbar button {
+  border-color: transparent;
+  background: transparent;
+}
+
 .identity strong {
   font-size: 17px;
   font-weight: 800;
@@ -541,6 +554,14 @@ a:focus-visible {
   line-height: 1.15;
 }
 
+.view-description {
+  max-width: 620px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .type-filters {
   min-width: 0;
   max-width: 62%;
@@ -751,6 +772,107 @@ a:focus-visible {
   pointer-events: auto;
 }
 
+.graph-help {
+  position: absolute;
+  right: 12px;
+  bottom: 52px;
+  z-index: 5;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--ink-soft);
+  background: rgb(255 255 255 / 96%);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgb(23 26 25 / 10%);
+  font-weight: 800;
+}
+
+.graph-help:hover,
+.graph-help[aria-expanded="true"] {
+  color: #fff;
+  background: var(--dark);
+  border-color: var(--dark);
+}
+
+.graph-help-panel {
+  position: absolute;
+  right: 12px;
+  bottom: 94px;
+  z-index: 6;
+  width: min(340px, calc(100% - 24px));
+  padding: 15px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.graph-help-heading {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.graph-help-heading > strong {
+  font-size: 14px;
+}
+
+.graph-help-heading button {
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}
+
+.graph-help-row {
+  padding: 9px 0;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 9px;
+  border-top: 1px solid var(--line);
+}
+
+.graph-help-row > b {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: var(--dark);
+  border-radius: 50%;
+  font-size: 10px;
+}
+
+.graph-help-row span,
+.graph-help-row strong,
+.graph-help-row small {
+  display: block;
+  min-width: 0;
+}
+
+.graph-help-row strong {
+  font-size: 12px;
+}
+
+.graph-help-row small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.graph-help-shortcuts {
+  margin-top: 8px;
+  padding: 8px 9px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  font-size: 10px;
+  text-align: center;
+}
+
 #cy {
   position: absolute;
   inset: 0;
@@ -778,6 +900,15 @@ a:focus-visible {
   pointer-events: none;
 }
 
+.tooltip-kind {
+  display: block;
+  margin-bottom: 4px;
+  color: #9fd6c6;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .tooltip strong {
   display: block;
   margin-bottom: 3px;
@@ -791,6 +922,25 @@ a:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.tooltip-description {
+  display: -webkit-box;
+  max-width: 310px;
+  overflow: hidden;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.ui-tooltip {
+  width: max-content;
+  max-width: 300px;
+  padding: 7px 9px;
+  color: #eef4f1;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .legend {
   position: absolute;
   right: 12px;
@@ -800,7 +950,7 @@ a:focus-visible {
   max-width: calc(100% - 24px);
   padding: 6px 8px;
   display: flex;
-  gap: 11px;
+  gap: 12px;
   overflow: hidden;
   color: var(--muted);
   background: rgb(255 255 255 / 94%);
@@ -810,10 +960,23 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+.legend-title {
+  color: var(--ink);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
 .legend .direction-key {
   margin-left: auto;
   color: var(--ink-soft);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.legend .direction-key b {
+  margin-right: 5px;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 9px;
+  text-transform: uppercase;
 }
 
 .details {
@@ -989,6 +1152,7 @@ a:focus-visible {
   color: var(--ink);
   background: #fff;
   border-color: var(--line-strong);
+  white-space: nowrap;
 }
 
 .details .actions button:first-child {
@@ -1252,6 +1416,13 @@ export const viewerLayoutCss = `
     font-size: 17px;
   }
 
+  .view-description {
+    max-width: 390px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .type-filters {
     max-width: 58%;
   }
@@ -1358,6 +1529,14 @@ export const viewerLayoutCss = `
 
   .legend {
     display: none;
+  }
+
+  .graph-help {
+    bottom: 12px;
+  }
+
+  .graph-help-panel {
+    bottom: 54px;
   }
 
   .type-filters {
