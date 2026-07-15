@@ -553,6 +553,10 @@
                   </div>
                   <div style="display: grid; gap: 12px; margin-top: 14px;">
                     <div style="display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 12px; align-items: center;">
+                      <svg width="46" height="30"><rect x="0" y="7" width="12" height="16" rx="3" fill="#fff" stroke="#9ba7a2"></rect><line x1="12" y1="15" x2="19" y2="15" stroke="#7d8a84"></line><rect x="19" y="4" width="12" height="22" rx="3" fill="#fdf3ec" stroke="#df642d"></rect><line x1="31" y1="15" x2="38" y2="15" stroke="#7d8a84"></line><rect x="38" y="7" width="8" height="16" rx="3" fill="#fff" stroke="#9ba7a2"></rect></svg>
+                      <span style="font-size: 12px; line-height: 1.5;"><strong>Every focused view follows one rule.</strong> The left side uses or enters the selected element. The right side is what it calls, depends on, changes, or owns. Click any box to make it the new center.</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 46px minmax(0,1fr); gap: 12px; align-items: center;">
                       <svg width="46" height="30"><rect x="1" y="3" width="44" height="24" rx="6" fill="#fff" stroke="#ccd5d1"></rect><rect x="1" y="3" width="4" height="24" rx="2" fill="#7452a8"></rect></svg>
                       <span style="font-size: 12px; line-height: 1.5;"><strong>Boxes are parts of the system.</strong> The color stripe shows what kind: route, service, data, event… Click a box — Atlas explains what it is and what it touches.</span>
                     </div>
@@ -735,6 +739,7 @@ class Component extends DCLogic {
     tab: 'overview', hist: [], q: '', catQ: '', searchOpen: false,
     vb: null, hover: null, panning: false, domainFilter: null,
     dataVariant: 'overview', deliveryEnv: 'production',
+    moduleView: 'dependencies',
     daQ: '', daDb: 'all', migQ: '', migOp: 'all', migDestr: false,
     jobQ: '', jobKind: 'all', dbDetail: 'overview',
   };
@@ -843,6 +848,7 @@ class Component extends DCLogic {
         expandedOp: opts.expandedOp !== undefined ? opts.expandedOp : null, searchOpen: false,
         panelHidden: !!opts.flow, storyOpen: !!opts.flow,
         dbDetail: opts.dbDetail !== undefined ? opts.dbDetail : s.dbDetail,
+        moduleView: opts.moduleView !== undefined ? opts.moduleView : (id !== s.sel ? 'dependencies' : s.moduleView),
         domainFilter: opts.domainFilter !== undefined ? opts.domainFilter : s.domainFilter };
     });
   }
@@ -868,7 +874,7 @@ class Component extends DCLogic {
     this.select(id, { mode, flow, dbDetail });
   }
 
-  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, hist: [], vb: null, hover: null, catQ: '', domainFilter: null, mapExpanded: false, dbDetail: 'overview' }); }
+  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, hist: [], vb: null, hover: null, catQ: '', domainFilter: null, mapExpanded: false, dbDetail: 'overview', moduleView: 'dependencies' }); }
 
   // ---------- code highlighting ----------
   highlight(code) {
@@ -993,7 +999,7 @@ class Component extends DCLogic {
       if (sel && sel.startsWith('op.') && this._profHost) return this.sceneModule(this._profHost);
       if (!sel) return this.sceneModuleGrid(domainFilter);
       const n = this.node(sel);
-      if (n && n.type === 'module') return this.sceneModule(sel);
+      if (n && n.type === 'module') return this.state.moduleView === 'internals' ? this.sceneModule(sel) : this.sceneContext(sel, true);
       if (n && n.type === 'controller') return this.sceneController(sel);
       if (this.state.expandedOp === sel && this._profHost) return this.sceneModule(this._profHost);
       return this.sceneDirectional(sel);
@@ -1562,21 +1568,39 @@ class Component extends DCLogic {
     const pos = {};
     const colW = 285, rowH = 96;
     const stages = {};
+    const root = this.node(flow.root);
+    const handled = root?.type === 'route' ? flow.links.find((link) => link.from === flow.root && (link.relation === 'handles' || link.verb === 'handled by')) : null;
+    const controllerEdge = handled ? this.state.D.edges.find((edge) => edge.to === handled.to && edge.relation === 'has_method' && this.node(edge.from)?.type === 'controller') : null;
+    const controller = controllerEdge ? this.node(controllerEdge.from) : null;
+    const controllerInserted = !!controller && !flow.steps.some((step) => step.id === controller.id);
     flow.steps.forEach((st) => {
       const n = this.node(st.id);
-      const b = { x: 40 + st.col * colW, y: 76 + st.row * rowH, w: 225, h: 54 };
+      const displayCol = controllerInserted && st.col > 0 ? st.col + 1 : st.col;
+      const b = { x: 40 + displayCol * colW, y: 76 + st.row * rowH, w: 225, h: 54 };
       pos[st.id] = b;
-      if (!stages[st.col]) { stages[st.col] = st.stage; C.push({ x: b.x, y: 46, x2: b.x + 225, ly: 54, label: st.stage.toUpperCase(), fill: '#8b9793' }); }
+      if (!stages[displayCol]) { stages[displayCol] = st.stage; C.push({ x: b.x, y: 46, x2: b.x + 225, ly: 54, label: st.stage.toUpperCase(), fill: '#8b9793' }); }
       N.push(this.mkNode(n, b.x, b.y, b.w, b.h, {
         step: (flow.links.find((l) => l.to === st.id && l.n) || {}).n || (st.col === 0 ? 1 : false),
-        onClick: () => this.select(st.id),
+        onClick: () => this.reveal(st.id),
       }));
     });
+    if (controllerInserted) {
+      const handlerBox = pos[handled.to];
+      const b = { x: 40 + colW, y: handlerBox?.y || 76, w: 225, h: 54 };
+      pos[controller.id] = b;
+      C.push({ x: b.x, y: 46, x2: b.x + 225, ly: 54, label: 'CONTROLLER', fill: '#286aa6' });
+      N.push(this.mkNode(controller, b.x, b.y, b.w, b.h, { sub: 'receives the endpoint and dispatches its handler' }));
+    }
     flow.links.forEach((l) => {
+      if (controllerInserted && l.from === flow.root && l.to === handled.to) return;
       if (!pos[l.from] || !pos[l.to]) return;
       E.push(this.linkEdge(pos[l.from], pos[l.to], l, false, false, showLabels));
     });
-    return { nodes: N, edges: E, groups: [], cols: C, status: `Focused view · ${flow.steps.length} elements. ${flow.ends ? 'Where it ends: ' + flow.ends : flow.summary} Use Full trace to inspect every detected branch.`, flowTitle: flow.title };
+    if (controllerInserted) {
+      E.push(this.linkEdge(pos[flow.root], pos[controller.id], { from: flow.root, to: controller.id, verb: 'enters', kind: 'sync', relation: 'handles' }, false, false, true));
+      E.push(this.linkEdge(pos[controller.id], pos[handled.to], { from: controller.id, to: handled.to, verb: 'dispatches', kind: 'sync', relation: 'has_method' }, false, false, true));
+    }
+    return { nodes: N, edges: E, groups: [], cols: C, status: `Focused request chain · ${flow.steps.length + (controllerInserted ? 1 : 0)} elements. ${flow.ends ? 'Where it ends: ' + flow.ends : flow.summary} Click any element to recenter on its direct context, or use Trace flow for every detected branch.`, flowTitle: flow.title };
   }
 
   sceneTrace(rootId) {
@@ -1663,34 +1687,97 @@ class Component extends DCLogic {
     return { nodes: N, edges: E, groups: [], cols: C, status: `${depthScope} from ${root.label}. ${completeness}${evidence}` };
   }
 
-  sceneDirectional(sel) {
+  sceneContext(sel, moduleMode = false) {
     const { D } = this.state;
     const showLabels = this.props.showEdgeLabels ?? true;
     const n = this.node(sel);
     if (!n) return { nodes: [], edges: [], groups: [], cols: [], status: '' };
-    const inc = D.edges.filter((e) => e.to === sel).slice(0, 8);
-    const out = D.edges.filter((e) => e.from === sel).slice(0, 10);
+    const relation = (edge) => edge.relation || String(edge.verb || '').toLowerCase().replaceAll(' ', '_');
+    const ownershipRelations = new Set(['contains', 'declares', 'has_method', 'has_column', 'provides', 'exports']);
+    const moduleParts = new Set(['controller', 'processor', 'consumer', 'service', 'use_case', 'provider', 'port', 'adapter', 'repository', 'guard', 'middleware', 'interceptor', 'entity', 'model']);
+    const ignoredModuleParts = new Set(['method', 'function', 'file', 'column', 'index', 'constraint']);
+    const rawIncoming = D.edges.filter((edge) => edge.to === sel && this.node(edge.from));
+    const rawOutgoing = D.edges.filter((edge) => edge.from === sel && this.node(edge.to));
+    const isOwned = (edge) => ownershipRelations.has(relation(edge)) || (moduleMode && relation(edge) === 'uses' && moduleParts.has(this.node(edge.to)?.type));
+    const ownedTargets = new Set(rawOutgoing.filter(isOwned).map((edge) => edge.to));
+    const incomingEdges = moduleMode
+      ? rawIncoming.filter((edge) => relation(edge) === 'imports' || !ownershipRelations.has(relation(edge)))
+      : rawIncoming;
+    const dependencyEdges = rawOutgoing.filter((edge) => !isOwned(edge) && !ownedTargets.has(edge.to));
+    const ownedEdges = rawOutgoing.filter((edge) => isOwned(edge) && (!moduleMode || !ignoredModuleParts.has(this.node(edge.to)?.type)));
+    const aggregate = (edges, direction) => {
+      const grouped = new Map();
+      edges.forEach((edge) => {
+        const otherId = direction === 'in' ? edge.from : edge.to;
+        if (otherId === sel || !this.node(otherId)) return;
+        const list = grouped.get(otherId) || [];
+        list.push(edge); grouped.set(otherId, list);
+      });
+      const order = ['module', 'route', 'controller', 'processor', 'consumer', 'method', 'function', 'use_case', 'service', 'port', 'adapter', 'repository', 'provider', 'topic', 'queue', 'table', 'entity', 'model', 'external', 'env', 'file'];
+      return [...grouped.entries()].map(([otherId, edgesForNode]) => {
+        const other = this.node(otherId);
+        const verbs = [...new Set(edgesForNode.map((edge) => edge.verb || relation(edge).replaceAll('_', ' ')))];
+        const relations = [...new Set(edgesForNode.map(relation))];
+        const primary = edgesForNode.find((edge) => edge.source !== 'heuristic') || edgesForNode[0];
+        const kind = edgesForNode.some((edge) => edge.kind === 'external') ? 'external'
+          : edgesForNode.some((edge) => edge.kind === 'async') ? 'async'
+            : edgesForNode.some((edge) => edge.kind === 'data') ? 'data' : 'sync';
+        return { node: other, edge: { ...primary, from: direction === 'in' ? otherId : sel, to: direction === 'in' ? sel : otherId, verb: verbs.join(' · '), relation: relations[0], kind }, sub: `${verbs.join(' · ')} · ${this.tLabel(other.type)}` };
+      }).sort((a, b) => {
+        const ai = order.indexOf(a.node.type), bi = order.indexOf(b.node.type);
+        return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi) || a.node.label.localeCompare(b.node.label);
+      });
+    };
+    let incoming = aggregate(incomingEdges, 'in');
+    let dependencies = aggregate(dependencyEdges, 'out');
+    let owned = aggregate(ownedEdges, 'out');
+    const mutual = [];
+    incoming = incoming.filter((incomingItem) => {
+      const depIndex = dependencies.findIndex((item) => item.node.id === incomingItem.node.id);
+      const ownedIndex = owned.findIndex((item) => item.node.id === incomingItem.node.id);
+      const target = depIndex >= 0 ? dependencies[depIndex] : ownedIndex >= 0 ? owned[ownedIndex] : null;
+      if (!target) return true;
+      if (depIndex >= 0) dependencies.splice(depIndex, 1); else owned.splice(ownedIndex, 1);
+      mutual.push({
+        node: target.node,
+        edge: { ...target.edge, verb: `${target.edge.verb} both ways` },
+        sub: `${target.edge.verb} both ways · ${this.tLabel(target.node.type)}`,
+      });
+      return false;
+    });
     const N = [], E = [], C = [];
-    C.push({ x: 40, y: 46, x2: 290, ly: 54, label: 'USED BY / TRIGGERED BY', fill: '#8b9793' });
-    C.push({ x: 380, y: 46, x2: 630, ly: 54, label: 'SELECTED', fill: '#df642d' });
-    C.push({ x: 720, y: 46, x2: 970, ly: 54, label: 'CALLS / CHANGES', fill: '#8b9793' });
-    const midY = 76 + Math.max(inc.length, out.length, 1) * 33;
-    const selB = { x: 380, y: midY - 34, w: 250, h: 68 };
-    N.push(this.mkNode(n, selB.x, selB.y, selB.w, selB.h, { sub: n.file || '' }));
-    inc.forEach((e, i) => {
-      const a = this.node(e.from);
-      const b = { x: 40, y: 76 + i * 66, w: 250, h: 52 };
-      N.push(this.mkNode(a, b.x, b.y, b.w, b.h));
-      E.push(this.linkEdge(b, selB, e, false, false, showLabels));
+    const cardW = 250, cardH = 54, rowH = 66, maxRows = 14, gap = 50;
+    const lanes = (items) => Math.max(1, Math.ceil(items.length / maxRows));
+    const incomingX = 40, incomingW = lanes(incoming) * 270;
+    const selectedX = incomingX + incomingW + gap;
+    const mutualX = selectedX + cardW + gap, mutualW = mutual.length ? lanes(mutual) * 270 : 0;
+    const dependenciesX = mutualX + mutualW + (mutual.length ? gap : 0), dependenciesW = lanes(dependencies) * 270;
+    const ownedX = dependenciesX + dependenciesW + gap, ownedW = lanes(owned) * 270;
+    const maxVisibleRows = Math.max(1, Math.min(maxRows, incoming.length), Math.min(maxRows, mutual.length), Math.min(maxRows, dependencies.length), Math.min(maxRows, owned.length));
+    const selectedY = 86 + Math.max(0, maxVisibleRows - 1) * rowH / 2 - 7;
+    const selB = { x: selectedX, y: selectedY, w: cardW, h: 68 };
+    const header = (x, width, label, sub, fill) => C.push({ x, y: 36, subY: 50, x2: x + width - 20, ly: 60, label, sub, fill });
+    header(incomingX, incomingW, moduleMode ? 'DEPENDED ON BY' : 'USED BY / ENTERED FROM', `${incoming.length} direct`, '#8b9793');
+    header(selectedX, cardW, moduleMode ? 'SELECTED MODULE' : 'SELECTED', 'current focus', '#df642d');
+    if (mutual.length) header(mutualX, mutualW, 'MUTUAL DEPENDENCIES', `${mutual.length} both ways`, '#a66708');
+    header(dependenciesX, dependenciesW, moduleMode ? 'MODULE DEPENDENCIES' : 'CALLS / DEPENDS ON', `${dependencies.length} direct`, '#6b4aa0');
+    header(ownedX, ownedW, moduleMode ? 'OWNED COMPONENTS' : 'OWNS / EXPOSES', `${owned.length} direct`, '#16798b');
+    N.push(this.mkNode(n, selB.x, selB.y, selB.w, selB.h, { sub: moduleMode ? `${incoming.length} dependants · ${dependencies.length} dependencies · ${mutual.length} mutual · ${owned.length} owned parts` : (n.file || this.tLabel(n.type)) }));
+    const place = (items, startX, direction) => items.forEach((item, index) => {
+      const lane = Math.floor(index / maxRows), row = index % maxRows;
+      const b = { x: startX + lane * 270, y: 86 + row * rowH, w: cardW, h: cardH };
+      N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: item.sub }));
+      E.push(this.linkEdge(direction === 'in' ? b : selB, direction === 'in' ? selB : b, item.edge, false, false, showLabels));
     });
-    out.forEach((e, i) => {
-      const t = this.node(e.to);
-      const b = { x: 720, y: 76 + i * 66, w: 250, h: 52 };
-      N.push(this.mkNode(t, b.x, b.y, b.w, b.h));
-      E.push(this.linkEdge(selB, b, e, false, false, showLabels));
-    });
-    const incTotal = D.edges.filter((e) => e.to === sel).length, outTotal = D.edges.filter((e) => e.from === sel).length;
-    return { nodes: N, edges: E, groups: [], cols: C, status: `${n.label} — used by ${incTotal} element${incTotal === 1 ? '' : 's'}, uses ${outTotal}. ${incTotal > inc.length || outTotal > out.length ? 'Showing the strongest links; open the panel tabs for the full lists.' : 'All direct relationships shown.'}` };
+    place(incoming, incomingX, 'in');
+    place(mutual, mutualX, 'out');
+    place(dependencies, dependenciesX, 'out');
+    place(owned, ownedX, 'out');
+    return { nodes: N, edges: E, groups: [], cols: C, status: `One-hop context for ${n.label}: ${incoming.length} upstream, ${dependencies.length} dependencies, ${mutual.length} mutual, ${owned.length} owned parts. Left points into the selected element; right points out; mutual means both depend on each other. Click any card to make it the new center, or use Trace flow for deeper paths.` };
+  }
+
+  sceneDirectional(sel) {
+    return this.sceneContext(sel, this.node(sel)?.type === 'module');
   }
 
   sceneTech(sel) {
@@ -2181,7 +2268,7 @@ class Component extends DCLogic {
     const titles = {
       overview: ['Overview', 'Project size, key domains, entry points, and architecture risks at a glance.'],
       map: ['System Map', 'The project’s key domains, runtime components, and data systems — grouped for readability, with complete catalogs one click away.'],
-      modules: ['Modules', 'Pick a module to see what starts it, what it does, what it needs, and what it changes.'],
+      modules: ['Modules', 'Select a module to see one direct hop: who depends on it, what it depends on, and which components it owns.'],
       routes: ['Routes & Flows', 'Follow an HTTP request from its endpoint to the data it changes and the events it publishes.'],
       async: ['Async Flows', 'Kafka topics, queues, publishers, consumers and processors — who sends what, and what runs next.'],
       services: ['Services', 'Business logic: who calls each service, and what it depends on.'],
@@ -2514,6 +2601,8 @@ class Component extends DCLogic {
     const databaseRoot = mode === 'database' && sel ? this.tableForDataElement(sel) : null;
     const variantConfig = mode === 'map'
       ? { value: mapVariant, buttons: [['clusters', 'Clusters'], ['layers', 'Layers'], ['columns', 'Columns']], key: 'mapVariant' }
+      : mode === 'modules' && selNode?.type === 'module'
+        ? { value: this.state.moduleView || 'dependencies', buttons: [['dependencies', 'Dependencies'], ['internals', 'Internals']], key: 'moduleView', preserveSelection: true }
       : mode === 'database' && databaseRoot
         ? { value: this.state.dbDetail || 'overview', buttons: [['overview', 'Overview'], ['columns', 'Columns'], ['indexes', 'Indexes & Rules'], ['relations', 'Relations & Access'], ['migrations', 'Migrations']], key: 'dbDetail', preserveSelection: true }
       : mode === 'delivery'
