@@ -34,7 +34,8 @@ export class ProjectAdapter implements ArchitectureAdapter {
       ...nodes.get(node.id), ...node, metadata: { ...nodes.get(node.id)?.metadata, ...node.metadata },
     });
     const addEdge: AddEdge = (from, to, type, metadata) => {
-      edges.push({ from, to, type, label: type, source: "config", confidence: 1, metadata });
+      const relationshipKey = typeof metadata?.relationshipKey === "string" ? metadata.relationshipKey : "";
+      edges.push({ from, to, type, label: relationshipKey ? `${type}#${relationshipKey}` : type, source: "config", confidence: 1, metadata });
     };
     const contentOf = async (file: ScannedFile) => {
       if (contents.has(file.path)) return contents.get(file.path)!;
@@ -148,7 +149,8 @@ function parseSqlFile(file: ScannedFile, fragments: string[], clickHouseProject:
     addEdge(`file:${file.path}`, migrationId, "declares");
   }
   for (const statement of statements) {
-    const clickhouse = clickHouseProject || /MergeTree|ReplacingMergeTree|Replicated\w*MergeTree|PARTITION\s+BY|TTL\s+/i.test(statement);
+    const clickHouseDialect = /(?:Replicated|Replacing|Summing|Aggregating|Collapsing|VersionedCollapsing)?MergeTree|ENGINE\s*=\s*Kafka|DateTime64|LowCardinality\s*\(|Nullable\s*\(|\bUInt(?:8|16|32|64|128|256)\b|\bTTL\s+/i.test(statement);
+    const clickhouse = clickHouseDialect || (clickHouseProject && /clickhouse/i.test(file.path));
     const databaseId = clickhouse ? "database:clickhouse" : "database:sql";
     addNode({ id: databaseId, type: "database", label: clickhouse ? "ClickHouse" : "SQL database", name: clickhouse ? "ClickHouse" : "SQL database", file: file.path, framework: clickhouse ? "clickhouse" : "sql", source: "config", confidence: clickhouse ? 1 : 0.7 });
     parseCreateTable(statement, file, databaseId, migration ? migrationId : null, clickhouse, addNode, addEdge);
@@ -186,12 +188,18 @@ function parseCreateTable(statement: string, file: ScannedFile, databaseId: stri
       ...(rest.match(/\bDEFAULT\s+([^,]+)/i)?.[1] ? { default: rest.match(/\bDEFAULT\s+([^,]+)/i)![1].trim() } : {}),
     } });
     addEdge(tableId, columnId, "has_column");
-    const reference = rest.match(/\bREFERENCES\s+([^\s(]+)/i);
+    const reference = rest.match(/\bREFERENCES\s+([^\s(]+)\s*(?:\(([^)]*)\))?/i);
     if (reference) {
       const target = splitQualifiedName(sqlName(reference[1]));
       const targetId = tableNodeId(target.schema, target.table);
       addSchemaAndTable(databaseId, target.schema, target.table, targetId, file.path, clickhouse, addNode, addEdge);
-      addEdge(tableId, targetId, "references", { column: name });
+      const targetColumns = sqlColumns(reference[2]);
+      addEdge(tableId, targetId, "references", {
+        relationshipKey: name,
+        sourceColumns: [name],
+        targetColumns,
+        orm: "sql",
+      });
     }
   }
 }
@@ -205,12 +213,18 @@ function parseTableConstraint(definition: string, qualified: string, tableId: st
   const id = `constraint:${qualified}.${name}`;
   addNode({ id, type: "constraint", label: name, name, file, source: "config", confidence: 1, metadata: { kind, columns, expression: match[4].trim() } });
   addEdge(tableId, id, "contains");
-  const reference = match[4].match(/REFERENCES\s+([^\s(]+)/i);
+  const reference = match[4].match(/REFERENCES\s+([^\s(]+)\s*(?:\(([^)]*)\))?/i);
   if (reference) {
     const target = splitQualifiedName(sqlName(reference[1]));
     const targetId = tableNodeId(target.schema, target.table);
     addSchemaAndTable(databaseId, target.schema, target.table, targetId, file, clickhouse, addNode, addEdge);
-    addEdge(tableId, targetId, "references", { constraint: name, columns });
+    addEdge(tableId, targetId, "references", {
+      relationshipKey: columns.join(",") || name,
+      constraint: name,
+      sourceColumns: columns,
+      targetColumns: sqlColumns(reference[2]),
+      orm: "sql",
+    });
   }
   return true;
 }
@@ -223,7 +237,8 @@ function parseAlterTable(statement: string, file: ScannedFile, databaseId: strin
   const tableId = tableNodeId(schema, table);
   addSchemaAndTable(databaseId, schema, table, tableId, file.path, clickhouse, addNode, addEdge);
   if (migrationId) addEdge(migrationId, tableId, /\bDROP\s+TABLE\b/i.test(statement) ? "drops" : "alters", { statement: compactSql(match[2]) });
-  const addColumn = match[2].match(/ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([`"\w.]+)\s+([^\s,]+)/i);
+  const foreignKey = match[2].match(/(?:ADD\s+)?(?:CONSTRAINT\s+([`"\w.-]+)\s+)?FOREIGN\s+KEY\s*\(([^)]*)\)\s+REFERENCES\s+([^\s(]+)\s*\(([^)]*)\)/i);
+  const addColumn = foreignKey ? null : match[2].match(/ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([`"\w.]+)\s+([^\s,]+)/i);
   if (addColumn) {
     const name = sqlName(addColumn[1]);
     const columnId = `column:${qualified}.${name}`;
@@ -231,6 +246,26 @@ function parseAlterTable(statement: string, file: ScannedFile, databaseId: strin
     addEdge(tableId, columnId, "has_column");
     if (migrationId) addEdge(migrationId, columnId, "creates");
   }
+  if (foreignKey) {
+    const sourceColumns = sqlColumns(foreignKey[2]);
+    const target = splitQualifiedName(sqlName(foreignKey[3]));
+    const targetId = tableNodeId(target.schema, target.table);
+    const targetColumns = sqlColumns(foreignKey[4]);
+    addSchemaAndTable(databaseId, target.schema, target.table, targetId, file.path, clickhouse, addNode, addEdge);
+    addEdge(tableId, targetId, "references", {
+      relationshipKey: sourceColumns.join(",") || sqlName(foreignKey[1] ?? "foreign_key"),
+      ...(foreignKey[1] ? { constraint: sqlName(foreignKey[1]) } : {}),
+      sourceColumns,
+      targetColumns,
+      orm: "sql",
+      ...(match[2].match(/ON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)/i)?.[1] ? { onDelete: match[2].match(/ON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)/i)![1].toUpperCase() } : {}),
+      ...(match[2].match(/ON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)/i)?.[1] ? { onUpdate: match[2].match(/ON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)/i)![1].toUpperCase() } : {}),
+    });
+  }
+}
+
+function sqlColumns(value?: string): string[] {
+  return (value ?? "").split(",").map((item) => sqlName(item.trim())).filter(Boolean);
 }
 
 function parseCreateIndex(statement: string, file: ScannedFile, migrationId: string | null, addNode: AddNode, addEdge: AddEdge) {

@@ -89,10 +89,14 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "table:typeorm_users" && edge.to === "table:typeorm_posts" && edge.type === "references"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:UserEntityRepository.find" && edge.to === "table:typeorm_users" && edge.type === "reads"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:UserEntityRepository.save" && edge.to === "table:typeorm_users" && edge.type === "writes"));
-  assert.ok(result.graph.edges.some((edge) => edge.from === "table:sequelize_sessions" && edge.to === "table:sequelize_accounts" && edge.type === "references"));
+  const sequelizeReference = result.graph.edges.find((edge) => edge.from === "table:sequelize_sessions" && edge.to === "table:sequelize_accounts" && edge.type === "references");
+  assert.deepEqual(sequelizeReference?.metadata?.sourceColumns, ["account_id"]);
+  assert.deepEqual(sequelizeReference?.metadata?.targetColumns, ["id"]);
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:SequelizeAccount.findAll" && edge.to === "table:sequelize_accounts" && edge.type === "reads"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:SequelizeAccount.create" && edge.to === "table:sequelize_accounts" && edge.type === "writes"));
-  assert.ok(result.graph.edges.some((edge) => edge.from === "table:drizzle_events" && edge.to === "table:drizzle_accounts" && edge.type === "references"));
+  const drizzleReference = result.graph.edges.find((edge) => edge.from === "table:drizzle_events" && edge.to === "table:drizzle_accounts" && edge.type === "references");
+  assert.deepEqual(drizzleReference?.metadata?.sourceColumns, ["account_id"]);
+  assert.deepEqual(drizzleReference?.metadata?.targetColumns, ["id"]);
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:DrizzleEventsRepository.listEvents" && edge.to === "table:drizzle_events" && edge.type === "reads"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:DrizzleEventsRepository.addEvent" && edge.to === "table:drizzle_events" && edge.type === "writes"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:DrizzleEventsRepository.updateEvent" && edge.to === "table:drizzle_events" && edge.type === "writes"));
@@ -106,7 +110,10 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "queue:email-jobs" && edge.to === "method:EmailProcessor.handleEmail" && edge.type === "delivers_to"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "migration:migrations/001_create_profiles.sql" && edge.to === "table:profiles" && edge.type === "creates"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "index:public.profiles.profiles_user_id_unique" && edge.to === "table:profiles" && edge.type === "indexes"));
-  assert.ok(result.graph.edges.some((edge) => edge.from === "table:profiles" && edge.to === "table:users" && edge.type === "references"));
+  const profileReferences = result.graph.edges.filter((edge) => edge.from === "table:profiles" && edge.to === "table:users" && edge.type === "references");
+  assert.deepEqual(profileReferences.map((edge) => edge.metadata?.sourceColumns?.[0]).sort(), ["invited_user_id", "user_id"]);
+  assert.ok(profileReferences.every((edge) => edge.metadata?.targetColumns?.[0] === "id"));
+  assert.equal(query.getNode("column:public.profiles.FOREIGN"), null, "ALTER TABLE foreign keys must not become fake columns");
   assert.equal(query.getNode("table:analytics.order_events").metadata.engine, "MergeTree()");
   assert.match(query.getNode("table:analytics.order_events").metadata.partitionBy, /toYYYYMM/);
   assert.match(query.getNode("table:analytics.order_events").metadata.orderBy, /order_id/);

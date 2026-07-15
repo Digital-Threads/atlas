@@ -9,6 +9,7 @@ import {
   type Decorator,
   type FunctionDeclaration,
   type MethodDeclaration,
+  type PropertyDeclaration,
   type SourceFile,
 } from "ts-morph";
 import type { GraphEdge, GraphNode, GraphNodeType } from "../core/types.js";
@@ -36,6 +37,7 @@ interface DrizzleTableInfo {
   tableName: string;
   tableId: string;
   file: string;
+  columns: Map<string, string>;
 }
 
 interface ClassInfo {
@@ -75,7 +77,8 @@ export class NestAdapter implements ArchitectureAdapter {
     const warnings: string[] = [];
     const addNode = (node: GraphNode) => nodes.set(node.id, { ...nodes.get(node.id), ...node, metadata: { ...nodes.get(node.id)?.metadata, ...node.metadata } });
     const addEdge = (from: string, to: string, type: GraphEdge["type"], metadata?: Record<string, unknown>, source: GraphEdge["source"] = "ast", confidence = 1) => {
-      edges.push({ from, to, type, label: type, source, confidence, metadata });
+      const relationshipKey = typeof metadata?.relationshipKey === "string" ? metadata.relationshipKey : "";
+      edges.push({ from, to, type, label: relationshipKey ? `${type}#${relationshipKey}` : type, source, confidence, metadata });
     };
 
     const tsFiles = context.files.filter((file) => file.extension === ".ts" || file.extension === ".js");
@@ -496,7 +499,23 @@ function parseTypeOrm(info: ClassInfo, classes: ClassRegistry, addNode: NodeAdde
       if (!targetName) continue;
       const { id: targetTableId, name: targetTableName } = tableForEntity(targetName, classes, info.file);
       addNode({ id: targetTableId, type: "table", label: targetTableName, name: targetTableName, framework: "typeorm", source: "heuristic", confidence: 0.85 });
-      addEdge(tableId, targetTableId, "references", { relation, property: property.getName(), orm: "typeorm" }, "ast", 1);
+      const joinColumn = property.getDecorator("JoinColumn");
+      const configuredSource = joinColumn ? decoratorOptionString(joinColumn, "name") : "";
+      const configuredTarget = joinColumn ? decoratorOptionString(joinColumn, "referencedColumnName") : "";
+      const conventionalProperty = `${property.getName()}Id`;
+      const sourceProperty = info.declaration.getProperty(conventionalProperty);
+      const sourceColumn = configuredSource || (sourceProperty ? typeOrmColumnName(sourceProperty) : "");
+      const targetColumn = configuredTarget || typeOrmPrimaryColumn(targetName, classes, info.file);
+      const associationOnly = relation === "OneToMany";
+      addEdge(tableId, targetTableId, "references", {
+        relationshipKey: sourceColumn || `${relation}:${property.getName()}`,
+        relation,
+        property: property.getName(),
+        sourceColumns: associationOnly ? [] : sourceColumn ? [sourceColumn] : [],
+        targetColumns: associationOnly ? [] : targetColumn ? [targetColumn] : [],
+        ...(associationOnly ? { associationOnly: true } : {}),
+        orm: "typeorm",
+      }, "ast", 1);
     }
   }
 }
@@ -510,6 +529,14 @@ function parseSequelize(info: ClassInfo, classes: ClassRegistry, addNode: NodeAd
   addNode({ id: tableId, type: "table", label: tableName, name: tableName, file: info.file, framework: "sequelize", confidence: 1, source: "ast", metadata: { model: info.name } });
   addEdge("database:sequelize", tableId, "contains");
   addEdge(info.id, tableId, "references", { orm: "sequelize" });
+
+  const foreignKeys = info.declaration.getProperties().flatMap((property) => {
+    const decorator = property.getDecorator("ForeignKey");
+    if (!decorator) return [];
+    const targetName = decorator.getArguments().flatMap((argument) => referencedTypeNames(argument.getText())).find((name) => name !== info.name);
+    if (!targetName) return [];
+    return [{ targetName, property: property.getName(), column: sequelizeColumnName(property) }];
+  });
 
   for (const property of info.declaration.getProperties()) {
     const columnDecorator = property.getDecorator("Column");
@@ -549,7 +576,28 @@ function parseSequelize(info: ClassInfo, classes: ClassRegistry, addNode: NodeAd
     if (!target?.declaration.getDecorator("Table")) continue;
     const { id: targetTableId, name: targetTableName } = tableForSequelizeModel(targetName, classes, info.file);
     addNode({ id: targetTableId, type: "table", label: targetTableName, name: targetTableName, file: target.file, framework: "sequelize", source: "ast", confidence: 1 });
-    addEdge(tableId, targetTableId, "references", { relation: relationDecorator.getName(), property: property.getName(), orm: "sequelize" });
+    const relation = relationDecorator.getName();
+    const configuredForeignKey = sequelizeAssociationForeignKey(relationDecorator);
+    const candidates = foreignKeys.filter((item) => item.targetName === targetName);
+    const matchingForeignKey = candidates.find((item) => configuredForeignKey && [item.property, item.column].includes(configuredForeignKey))
+      ?? (candidates.length === 1 ? candidates[0] : undefined);
+    const sourceColumn = relation === "ForeignKey"
+      ? sequelizeColumnName(property)
+      : matchingForeignKey?.column || configuredForeignKey;
+    const targetColumn = sequelizePrimaryColumn(targetName, classes, info.file);
+    const associationOnly = ["HasMany", "HasOne", "BelongsToMany"].includes(relation);
+    const sourceColumns = associationOnly ? [] : sourceColumn ? [sourceColumn] : [];
+    const targetColumns = associationOnly ? [] : targetColumn ? [targetColumn] : [];
+    addEdge(tableId, targetTableId, "references", {
+      relationshipKey: sourceColumn || `${relation}:${property.getName()}`,
+      relation,
+      property: property.getName(),
+      sourceColumns,
+      targetColumns,
+      orm: "sequelize",
+      ...(associationOnly ? { associationOnly: true } : {}),
+      ...(relation === "BelongsToMany" ? { association: "many_to_many" } : {}),
+    });
   }
 }
 
@@ -580,7 +628,19 @@ async function parsePrisma(context: AdapterContext, addNode: NodeAdder, addEdge:
       const [, fieldName, fieldType] = field;
       const relatedModel = fieldType.replace(/[\[\]?]/g, "");
       if (modelNames.has(relatedModel)) {
-        addEdge(tableId, `table:${relatedModel}`, "references", { relation: fieldType.includes("[]") ? "has_many" : "belongs_to", field: fieldName, orm: "prisma" }, "config", 1);
+        const relationOptions = line.match(/@relation\s*\(([^)]*)\)/)?.[1] ?? "";
+        const sourceColumns = prismaRelationColumns(relationOptions, "fields");
+        const targetColumns = prismaRelationColumns(relationOptions, "references");
+        const associationOnly = fieldType.includes("[]") || sourceColumns.length === 0;
+        addEdge(tableId, `table:${relatedModel}`, "references", {
+          relationshipKey: sourceColumns.join(",") || fieldName,
+          relation: fieldType.includes("[]") ? "has_many" : "belongs_to",
+          field: fieldName,
+          sourceColumns,
+          targetColumns,
+          orm: "prisma",
+          ...(associationOnly ? { associationOnly: true } : {}),
+        }, "config", 1);
         continue;
       }
       const columnId = `column:${modelName}.${fieldName}`;
@@ -612,7 +672,7 @@ async function parsePrisma(context: AdapterContext, addNode: NodeAdder, addEdge:
 
 function parseDrizzleSchemas(sourceFiles: SourceFile[], projectRoot: string, addNode: NodeAdder, addEdge: EdgeAdder): Map<string, DrizzleTableInfo> {
   const tables = new Map<string, DrizzleTableInfo>();
-  const pendingReferences: Array<{ from: string; variable: string; property: string }> = [];
+  const pendingReferences: Array<{ from: string; variable: string; sourceColumn: string; targetProperty: string }> = [];
   const tableFactories = new Set(["pgTable", "mysqlTable", "sqliteTable", "sqliteTableCreator"]);
   const columnModifiers = new Set(["notNull", "primaryKey", "default", "defaultNow", "$defaultFn", "$onUpdate", "unique", "references"]);
 
@@ -633,7 +693,7 @@ function parseDrizzleSchemas(sourceFiles: SourceFile[], projectRoot: string, add
 
       const variable = declaration.getName();
       const tableId = `table:${tableName}`;
-      const table: DrizzleTableInfo = { variable, tableName, tableId, file };
+      const table: DrizzleTableInfo = { variable, tableName, tableId, file, columns: new Map() };
       tables.set(variable, table);
       addNode({ id: "database:drizzle", type: "database", label: "Drizzle", name: "Drizzle", framework: "drizzle", source: "config", confidence: 1 });
       addNode({ id: tableId, type: "table", label: tableName, name: tableName, file, framework: "drizzle", source: "ast", confidence: 1, metadata: { schemaVariable: variable } });
@@ -654,6 +714,7 @@ function parseDrizzleSchemas(sourceFiles: SourceFile[], projectRoot: string, add
           return /^[A-Za-z_$][\w$]*$/.test(name) && !columnModifiers.has(name);
         });
         const columnName = expressionValue(builder?.getArguments()[0]) || propertyName;
+        table.columns.set(propertyName, columnName);
         const columnType = builder?.getExpression().getText().split(".").at(-1) ?? propertyName;
         const columnText = columnInitializer.getText();
         const columnId = `column:${tableName}.${columnName}`;
@@ -675,8 +736,8 @@ function parseDrizzleSchemas(sourceFiles: SourceFile[], projectRoot: string, add
         });
         addEdge(tableId, columnId, "has_column");
 
-        const reference = columnText.match(/\.references\s*\(\s*\(\s*\)\s*=>\s*([A-Za-z_$][\w$]*)\./);
-        if (reference) pendingReferences.push({ from: tableId, variable: reference[1], property: propertyName });
+        const reference = columnText.match(/\.references\s*\(\s*\(\s*\)\s*=>\s*([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)/);
+        if (reference) pendingReferences.push({ from: tableId, variable: reference[1], sourceColumn: columnName, targetProperty: reference[2] });
       }
       const extraConfig = tableCall.getArguments()[2]?.getText() ?? "";
       for (const indexMatch of extraConfig.matchAll(/(uniqueIndex|index)\s*\(\s*["'`]([^"'`]+)["'`]\s*\)\.on\s*\(([^)]*)\)/g)) {
@@ -689,7 +750,13 @@ function parseDrizzleSchemas(sourceFiles: SourceFile[], projectRoot: string, add
   }
   for (const reference of pendingReferences) {
     const target = tables.get(reference.variable);
-    if (target) addEdge(reference.from, target.tableId, "references", { property: reference.property, orm: "drizzle" });
+    if (target) addEdge(reference.from, target.tableId, "references", {
+      relationshipKey: reference.sourceColumn,
+      sourceColumns: [reference.sourceColumn],
+      targetColumns: [target.columns.get(reference.targetProperty) || reference.targetProperty],
+      property: reference.sourceColumn,
+      orm: "drizzle",
+    });
   }
   return tables;
 }
@@ -1173,6 +1240,45 @@ function decoratorOptionString(decorator: Decorator, option: string): string {
   const property = argument.getProperty(option);
   if (!property || !Node.isPropertyAssignment(property)) return "";
   return expressionValue(property.getInitializer());
+}
+
+function sequelizeAssociationForeignKey(decorator: Decorator): string {
+  const argument = decorator.getArguments()[1];
+  if (!argument) return "";
+  if (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument)) return expressionValue(argument);
+  if (!Node.isObjectLiteralExpression(argument)) return "";
+  const property = argument.getProperty("foreignKey");
+  return property && Node.isPropertyAssignment(property) ? expressionValue(property.getInitializer()) : "";
+}
+
+function sequelizeColumnName(property: PropertyDeclaration): string {
+  const column = property.getDecorator("Column");
+  return (column && decoratorOptionString(column, "field")) || property.getName();
+}
+
+function typeOrmColumnName(property: PropertyDeclaration): string {
+  const column = property.getDecorators().find((item) => ["Column", "PrimaryColumn", "PrimaryGeneratedColumn"].includes(item.getName()));
+  return (column && decoratorOptionString(column, "name")) || property.getName();
+}
+
+function typeOrmPrimaryColumn(entityName: string, classes: ClassRegistry, file?: string): string {
+  const entity = resolveClass(entityName, classes, file);
+  const primary = entity?.declaration.getProperties().find((property) => Boolean(property.getDecorator("PrimaryColumn") || property.getDecorator("PrimaryGeneratedColumn")));
+  return primary ? typeOrmColumnName(primary) : "id";
+}
+
+function prismaRelationColumns(options: string, key: string): string[] {
+  const match = options.match(new RegExp(`${key}\\s*:\\s*\\[([^\\]]*)\\]`));
+  return (match?.[1] ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function sequelizePrimaryColumn(modelName: string, classes: ClassRegistry, file?: string): string {
+  const model = resolveClass(modelName, classes, file);
+  const primary = model?.declaration.getProperties().find((property) => {
+    const column = property.getDecorator("Column");
+    return Boolean(property.getDecorator("PrimaryKey") || (column && decoratorOptionText(column, "primaryKey") === "true"));
+  });
+  return primary ? sequelizeColumnName(primary) : "id";
 }
 
 function joinRoute(...parts: string[]): string {

@@ -186,7 +186,8 @@ function viewerType(type: GraphNode["type"]): string {
 }
 
 function toViewerEdge(edge: GraphEdge): ViewerEdge {
-  const customLabel = edge.label && edge.label !== edge.type ? edge.label : "";
+  const internalRelationshipLabel = edge.label?.startsWith(`${edge.type}#`);
+  const customLabel = edge.label && edge.label !== edge.type && !internalRelationshipLabel ? edge.label : "";
   const details = safeDetails(edge.metadata ?? {});
   return {
     from: edge.from,
@@ -228,6 +229,7 @@ function safeDetails(metadata: Record<string, unknown>): Record<string, string |
     "sourcePreview", "description", "plainDescription", "descriptionSource", "plainDescriptionSource",
     "flowDescription", "plainFlowDescription", "flowDescriptionSource",
     "asyncFlowDescription", "plainAsyncFlowDescription", "asyncFlowDescriptionSource", "methods", "fields",
+    "relationshipKey",
   ]);
   const result: Record<string, string | number | boolean | string[]> = {};
   for (const [key, value] of Object.entries(metadata)) {

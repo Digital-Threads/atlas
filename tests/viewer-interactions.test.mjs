@@ -172,3 +172,34 @@ test("HTTP flow explicitly passes through its controller and drills into context
   assert.equal(viewer.state.activeFlow, null, "drilling into an element must leave the previous route flow");
   assert.match(viewer.scene().status, /controller operations/);
 });
+
+test("database relations show exact foreign-key fields and keep repeated table links", async () => {
+  const viewer = await createViewer();
+  viewer.state = { ...viewer.state, mode: "database", sel: "table:profiles", dbDetail: "relations" };
+
+  const scene = viewer.scene();
+  const mappings = scene.nodes.filter((node) => node.id.startsWith("fk:table:profiles:"));
+  assert.ok(mappings.some((node) => node.label === "profiles.user_id → users.id"));
+  assert.ok(mappings.some((node) => node.label === "profiles.invited_user_id → users.id"));
+  assert.equal(mappings.filter((node) => node.label.endsWith("→ users.id")).length, 2);
+  assert.ok(scene.edges.length >= 2, "every visible foreign key must have a directional line");
+  assert.ok(scene.edges.every((edge) => edge.d.startsWith("M ") && !edge.d.includes("NaN")));
+});
+
+test("ClickHouse overview stays bounded and a selected service opens direct context", async () => {
+  const viewer = await createViewer();
+  viewer.state = { ...viewer.state, mode: "clickhouse", sel: null };
+
+  const overview = viewer.scene();
+  assert.match(overview.status, /ClickHouse overview/);
+  assert.ok(overview.nodes.length <= 54);
+  assert.ok(overview.nodes.every((node) => !["column", "index", "constraint"].includes(viewer.node(node.id)?.type)));
+
+  const service = viewer.node("service:UsersService");
+  service.label = "AnalyticsClickhouseService";
+  viewer.reveal(service.id);
+  assert.equal(viewer.state.mode, "clickhouse");
+  const focused = viewer.scene();
+  assert.match(focused.status, /One-hop context/);
+  assert.ok(focused.nodes.length < 40, "a ClickHouse service must not expand the complete database catalog");
+});

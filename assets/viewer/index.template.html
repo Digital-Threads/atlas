@@ -769,7 +769,16 @@ class Component extends DCLogic {
   }
 
   // ---------- helpers ----------
-  node(id) { const { D } = this.state; if (!D) return null; if (id && id.startsWith('op.')) return this._opNode(id); if (this._syn && this._syn[id]) return this._syn[id]; return D.nodes.find((n) => n.id === id) || null; }
+  node(id) {
+    const { D } = this.state; if (!D) return null;
+    if (id && id.startsWith('op.')) return this._opNode(id);
+    if (this._syn && this._syn[id]) return this._syn[id];
+    if (this._nodeIndexData !== D) {
+      this._nodeIndexData = D;
+      this._nodeIndex = new Map(D.nodes.map((node) => [node.id, node]));
+    }
+    return this._nodeIndex.get(id) || null;
+  }
   _opNode(id) {
     const profiles = Object.entries(this.state.D.moduleProfiles || {});
     for (const [moduleId, prof] of profiles) {
@@ -1024,7 +1033,17 @@ class Component extends DCLogic {
       return this.sceneDirectional(sel);
     }
     if (mode === 'migrations') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['migration'], 'Select a migration to inspect every structure it changes.');
-    if (mode === 'clickhouse') return this.sceneClickHouse();
+    if (mode === 'clickhouse') {
+      if (!sel) return this.sceneClickHouse();
+      const clickHouseNode = this.node(sel);
+      if (clickHouseNode?.type === 'table') return this.sceneDataTable(sel);
+      if (clickHouseNode && ['column', 'index', 'constraint'].includes(clickHouseNode.type)) {
+        const tableId = this.tableForDataElement(sel);
+        if (tableId) return this.sceneDataTable(tableId, sel);
+      }
+      if (clickHouseNode && ['database', 'schema'].includes(clickHouseNode.type)) return this.sceneClickHouse();
+      return this.sceneContext(sel);
+    }
     if (mode === 'schedules') return sel ? this.sceneScheduled(sel) : this.sceneScheduleOverview();
     if (mode === 'delivery') return this.state.deliveryEnv === 'compare' ? this.sceneDeliveryCompare() : this.sceneDelivery(this.state.deliveryEnv || 'production');
     if (mode === 'configuration') return sel ? this.sceneDirectional(sel) : this.sceneConfiguration();
@@ -1889,7 +1908,7 @@ class Component extends DCLogic {
     const { D } = this.state;
     const tables = D.nodes.filter((node) => node.type === 'table');
     const degrees = new Map();
-    D.edges.filter((edge) => edge.verb === 'references').forEach((edge) => {
+    D.edges.filter((edge) => edge.verb === 'references' && edge.details?.associationOnly !== true).forEach((edge) => {
       degrees.set(edge.from, (degrees.get(edge.from) || 0) + 1);
       degrees.set(edge.to, (degrees.get(edge.to) || 0) + 1);
     });
@@ -1904,7 +1923,7 @@ class Component extends DCLogic {
       const columns = D.edges.filter((edge) => edge.from === node.id && edge.verb === 'has column').length;
       N.push(this.mkNode(node, box.x, box.y, box.w, box.h, { sub: `${columns} columns · ${degrees.get(node.id) || 0} relations` }));
     });
-    D.edges.filter((edge) => edge.verb === 'references' && visibleIds.has(edge.from) && visibleIds.has(edge.to)).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
+    D.edges.filter((edge) => edge.verb === 'references' && edge.details?.associationOnly !== true && visibleIds.has(edge.from) && visibleIds.has(edge.to)).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
     return { nodes: N, edges: E, groups: [], cols: C, status: `Showing all ${visible.length} detected tables across every schema. Select a table to isolate its columns, indexes, migrations, readers, writers and foreign-key relationships.`, emptyOk: tables.length === 0 };
   }
 
@@ -1917,7 +1936,7 @@ class Component extends DCLogic {
     D.edges.filter((edge) => schemaIds.includes(edge.from) && edge.verb === 'contains').forEach((edge) => allIds.add(edge.to));
     const tables = D.nodes.filter((node) => node.type === 'table' && (sel === 'database:detected' || allIds.has(node.id)));
     const degrees = new Map();
-    D.edges.filter((edge) => edge.verb === 'references').forEach((edge) => { degrees.set(edge.from, (degrees.get(edge.from) || 0) + 1); degrees.set(edge.to, (degrees.get(edge.to) || 0) + 1); });
+    D.edges.filter((edge) => edge.verb === 'references' && edge.details?.associationOnly !== true).forEach((edge) => { degrees.set(edge.from, (degrees.get(edge.from) || 0) + 1); degrees.set(edge.to, (degrees.get(edge.to) || 0) + 1); });
     const visible = tables.slice().sort((a, b) => (degrees.get(b.id) || 0) - (degrees.get(a.id) || 0) || a.label.localeCompare(b.label));
     const visibleIds = new Set(visible.map((node) => node.id));
     const N = [], E = [], C = [];
@@ -1930,7 +1949,7 @@ class Component extends DCLogic {
       const columnCount = D.edges.filter((edge) => edge.from === node.id && edge.verb === 'has column').length;
       N.push(this.mkNode(node, box.x, box.y, box.w, box.h, { sub: `${columnCount} columns · ${degrees.get(node.id) || 0} relations` }));
     });
-    D.edges.filter((edge) => edge.verb === 'references' && visibleIds.has(edge.from) && visibleIds.has(edge.to)).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, false)));
+    D.edges.filter((edge) => edge.verb === 'references' && edge.details?.associationOnly !== true && visibleIds.has(edge.from) && visibleIds.has(edge.to)).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, false)));
     return { nodes: N, edges: E, groups: [], cols: C, status: `${root.label}: showing ${visible.length} relationship-rich tables of ${tables.length}. Search the complete catalog and select a table to inspect every column, key, index, migration, reader and writer.` };
   }
 
@@ -1939,7 +1958,7 @@ class Component extends DCLogic {
     const table = this.node(sel), detail = this.state.dbDetail || 'overview';
     const columns = D.edges.filter((edge) => edge.from === sel && edge.verb === 'has column').map((edge) => this.node(edge.to)).filter(Boolean).sort((a, b) => a.label.localeCompare(b.label));
     const structures = D.edges.filter((edge) => (edge.from === sel && edge.verb === 'contains') || (edge.to === sel && edge.verb === 'indexes')).map((edge) => this.node(edge.from === sel ? edge.to : edge.from)).filter((node) => node && ['index', 'constraint'].includes(node.type)).sort((a, b) => a.label.localeCompare(b.label));
-    const relations = D.edges.filter((edge) => edge.verb === 'references' && (edge.from === sel || edge.to === sel)).map((edge) => ({ node: this.node(edge.from === sel ? edge.to : edge.from), edge, direction: edge.from === sel ? 'references' : 'referenced by' })).filter((item) => item.node).sort((a, b) => a.node.label.localeCompare(b.node.label));
+    const relations = D.edges.filter((edge) => edge.verb === 'references' && edge.details?.associationOnly !== true && (edge.from === sel || edge.to === sel) && this.node(edge.from)?.type === 'table' && this.node(edge.to)?.type === 'table').map((edge) => ({ node: this.node(edge.from === sel ? edge.to : edge.from), edge, direction: edge.from === sel ? 'references' : 'referenced by' })).filter((item) => item.node).sort((a, b) => a.node.label.localeCompare(b.node.label));
     const migrations = D.edges.filter((edge) => edge.to === sel && ['creates', 'alters', 'drops'].includes(edge.verb)).map((edge) => ({ node: this.node(edge.from), verb: edge.verb, details: edge.details })).filter((item) => item.node).sort((a, b) => a.node.label.localeCompare(b.node.label));
     const access = D.edges.filter((edge) => edge.to === sel && ['reads', 'writes'].includes(edge.verb)).map((edge) => ({ node: this.node(edge.from), verb: edge.verb })).filter((item) => item.node).sort((a, b) => a.node.label.localeCompare(b.node.label));
     const N = [], E = [], C = [];
@@ -1976,9 +1995,27 @@ class Component extends DCLogic {
       heading(340, 34, 1340, 'INDEXES & CONSTRAINTS', 'all access paths and database-enforced rules');
       structures.forEach((node, index) => { const col = index % 4, row = Math.floor(index / 4), b = { x: 340 + col * 250, y: 80 + row * 68, w: 230, h: 56 }; const cols = Array.isArray(node.details?.columns) ? node.details.columns.join(', ') : node.details?.expression || this.tLabel(node.type); N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: String(cols), onClick: () => this.select(node.id, { mode: 'database', dbDetail: 'indexes' }) })); });
     } else if (detail === 'relations') {
-      heading(340, 34, 1340, 'RELATED TABLES', 'direction, ORM relation and foreign-key fields');
-      relations.forEach((item, index) => { const col = index % 4, row = Math.floor(index / 4), b = { x: 340 + col * 250, y: 80 + row * 68, w: 230, h: 56 }; const meta = item.edge.details ? Object.entries(item.edge.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : ''; N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: `${item.direction}${meta ? ' · ' + meta : ''}` })); });
-      const accessY = 110 + Math.ceil(relations.length / 4) * 68;
+      heading(340, 34, 1400, 'FOREIGN KEYS', 'exact source field → target field · click a card to open the related table');
+      const names = (value) => Array.isArray(value) ? value.map(String).filter(Boolean) : value ? [String(value)] : [];
+      const primaryColumns = (tableId) => D.edges.filter((edge) => edge.from === tableId && edge.verb === 'has column').map((edge) => this.node(edge.to)).filter((node) => node?.details?.primaryKey).map((node) => String(node.details?.databaseName || node.label.split('.').at(-1)));
+      relations.forEach((item, index) => {
+        const source = this.node(item.edge.from), target = this.node(item.edge.to);
+        const sourceColumns = names(item.edge.details?.sourceColumns || item.edge.details?.sourceColumn);
+        const targetColumns = names(item.edge.details?.targetColumns || item.edge.details?.targetColumn);
+        const resolvedTarget = targetColumns.length ? targetColumns : primaryColumns(item.edge.to);
+        const sourceFields = sourceColumns.length ? sourceColumns.join(', ') : 'field not detected';
+        const targetFields = resolvedTarget.length ? resolvedTarget.join(', ') : 'field not detected';
+        const mapping = `${source.label}.${sourceFields} → ${target.label}.${targetFields}`;
+        const notes = [item.direction, item.edge.details?.constraint ? `constraint ${item.edge.details.constraint}` : '', item.edge.details?.relation ? String(item.edge.details.relation) : '', item.edge.details?.orm ? String(item.edge.details.orm) : '', item.edge.details?.onDelete ? `on delete ${item.edge.details.onDelete}` : ''].filter(Boolean).join(' · ');
+        const col = index % 3, row = Math.floor(index / 3), b = { x: 340 + col * 360, y: 80 + row * 82, w: 336, h: 68 };
+        const relationCard = { ...item.node, id: `fk:${sel}:${index}:${item.node.id}`, type: 'constraint', label: mapping, desc: `Foreign key: ${mapping}. ${notes}` };
+        N.push(this.mkNode(relationCard, b.x, b.y, b.w, b.h, { sub: notes, onClick: () => this.reveal(item.node.id) }));
+        const visual = this.linkEdge(item.edge.from === sel ? tableBox : b, item.edge.from === sel ? b : tableBox, { ...item.edge, verb: `${sourceFields} → ${targetFields}` }, false, false, true);
+        visual.id = `${visual.id}:${index}`;
+        visual.onClick = (event) => { event.stopPropagation(); this.reveal(item.node.id); };
+        E.push(visual);
+      });
+      const accessY = 116 + Math.ceil(relations.length / 3) * 82;
       heading(340, accessY, 1340, 'READERS & WRITERS', 'services, repositories and jobs that access this table');
       access.forEach((item, index) => { const col = index % 4, row = Math.floor(index / 4), b = { x: 340 + col * 250, y: accessY + 46 + row * 62, w: 230, h: 50 }; N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: `${item.verb} ${table.label}` })); });
     } else if (detail === 'migrations') {
@@ -1993,47 +2030,54 @@ class Component extends DCLogic {
     const { D } = this.state;
     const isClickHouse = (node) => node && /clickhouse/i.test(`${node.id} ${node.label} ${node.file || ''} ${node.details?.engine || ''}`);
     const databases = D.nodes.filter((node) => node.type === 'database' && isClickHouse(node));
-    const included = new Set(databases.map((node) => node.id));
+    const structuralTypes = new Set(['database', 'schema', 'table', 'materialized_view']);
+    const dataIds = new Set(databases.map((node) => node.id));
     let changed = true;
     while (changed) {
       changed = false;
       D.edges.forEach((edge) => {
-        if (included.has(edge.from) && ['contains', 'has column', 'creates', 'indexes'].includes(edge.verb) && !included.has(edge.to)) { included.add(edge.to); changed = true; }
-        if (included.has(edge.to) && ['contains', 'has column'].includes(edge.verb) && !included.has(edge.from) && isClickHouse(this.node(edge.from))) { included.add(edge.from); changed = true; }
+        const target = this.node(edge.to);
+        if (dataIds.has(edge.from) && edge.verb === 'contains' && structuralTypes.has(target?.type) && !dataIds.has(edge.to)) { dataIds.add(edge.to); changed = true; }
       });
     }
-    D.nodes.filter((node) => ['schema', 'table', 'materialized_view'].includes(node.type) && isClickHouse(node)).forEach((node) => included.add(node.id));
-    const dataIds = new Set([...included].filter((id) => ['database', 'schema', 'table', 'materialized_view', 'column', 'index', 'constraint'].includes(this.node(id)?.type)));
+    D.nodes.filter((node) => structuralTypes.has(node.type) && isClickHouse(node)).forEach((node) => dataIds.add(node.id));
+    const operationalRelations = new Set(['reads', 'writes', 'publishes', 'publishes_to', 'delivers_to', 'processes', 'connects_to']);
+    const runtimeIds = new Set();
     D.edges.forEach((edge) => {
-      if ((dataIds.has(edge.from) || dataIds.has(edge.to)) && ['reads', 'writes', 'publishes', 'delivered to', 'processed by', 'connects to'].includes(edge.verb)) {
-        included.add(edge.from); included.add(edge.to);
-      }
+      if (!operationalRelations.has(edge.relation || '')) return;
+      if (dataIds.has(edge.from) && !dataIds.has(edge.to)) runtimeIds.add(edge.to);
+      if (dataIds.has(edge.to) && !dataIds.has(edge.from)) runtimeIds.add(edge.from);
     });
-    const columnFor = (node) => {
-      if (['topic', 'queue', 'broker', 'processor', 'consumer'].includes(node.type)) return 0;
-      if (['database', 'schema'].includes(node.type)) return 1;
-      if (node.type === 'table' && /kafka/i.test(String(node.details?.engine || ''))) return 0;
-      if (node.type === 'table') return 2;
-      if (node.type === 'materialized_view') return 3;
-      return 4;
-    };
+    const activity = new Map();
+    D.edges.forEach((edge) => {
+      if (!dataIds.has(edge.from) && !dataIds.has(edge.to)) return;
+      activity.set(edge.from, (activity.get(edge.from) || 0) + 1);
+      activity.set(edge.to, (activity.get(edge.to) || 0) + 1);
+    });
+    const sortByActivity = (a, b) => (activity.get(b.id) || 0) - (activity.get(a.id) || 0) || a.label.localeCompare(b.label);
+    const runtime = [...runtimeIds].map((id) => this.node(id)).filter(Boolean).sort(sortByActivity);
+    const roots = [...dataIds].map((id) => this.node(id)).filter((node) => ['database', 'schema'].includes(node?.type)).sort((a, b) => a.label.localeCompare(b.label));
+    const tables = [...dataIds].map((id) => this.node(id)).filter((node) => node?.type === 'table').sort(sortByActivity);
+    const views = [...dataIds].map((id) => this.node(id)).filter((node) => node?.type === 'materialized_view').sort(sortByActivity);
+    const shown = [runtime.slice(0, 16), roots.slice(0, 8), tables.slice(0, 18), views.slice(0, 12)];
     const columns = [
-      ['EVENT SOURCES', 'Kafka engines, topics and ingest'],
+      ['PRODUCERS & CONSUMERS', `${shown[0].length} most connected of ${runtime.length}`],
       ['CLICKHOUSE', 'database and schemas'],
-      ['STORAGE', 'raw and aggregate tables'],
-      ['TRANSFORMS', 'materialized views'],
-      ['STRUCTURE', 'columns, indexes and constraints'],
+      ['STORAGE TABLES', `${shown[2].length} most connected of ${tables.length}`],
+      ['MATERIALIZED VIEWS', `${shown[3].length} most connected of ${views.length}`],
     ];
-    const N = [], E = [], C = [], pos = {}, rows = [0, 0, 0, 0, 0];
+    const N = [], E = [], C = [], pos = {};
     columns.forEach(([label, sub], index) => C.push({ x: 40 + index * 285, y: 34, subY: 47, x2: 270 + index * 285, ly: 56, label, sub, fill: index === 1 ? '#df642d' : '#8b9793' }));
-    [...included].map((id) => this.node(id)).filter(Boolean).sort((a, b) => a.label.localeCompare(b.label)).forEach((node) => {
-      const col = columnFor(node), row = rows[col]++;
+    shown.forEach((items, col) => items.forEach((node, row) => {
       const b = { x: 40 + col * 285, y: 76 + row * 68, w: 230, h: 52 }; pos[node.id] = b;
-      const sub = node.details?.engine || node.details?.type || this.tLabel(node.type);
+      const sub = col === 0 ? this.tLabel(node.type) : node.details?.engine || this.tLabel(node.type);
       N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: String(sub) }));
+    }));
+    const visibleIds = new Set(Object.keys(pos));
+    D.edges.filter((edge) => visibleIds.has(edge.from) && visibleIds.has(edge.to) && (edge.verb === 'contains' || operationalRelations.has(edge.relation || ''))).forEach((edge) => {
+      E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true));
     });
-    D.edges.filter((edge) => pos[edge.from] && pos[edge.to]).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
-    return { nodes: N, edges: E, groups: [], cols: C, status: `${dataIds.size} ClickHouse data structures and ${N.length - dataIds.size} connected producers or consumers detected.`, emptyOk: N.length === 0 };
+    return { nodes: N, edges: E, groups: [], cols: C, status: `ClickHouse overview: showing ${shown[0].length} of ${runtime.length} connected code elements, ${shown[2].length} of ${tables.length} tables and ${shown[3].length} of ${views.length} materialized views. Select any item to inspect only its direct context; the complete catalog remains available on the left.`, emptyOk: N.length === 0 };
   }
 
   sceneAsyncOverview() {
@@ -2405,7 +2449,7 @@ class Component extends DCLogic {
       if (selNode.type === 'table') {
         facts.push({ k: 'Columns', v: String(D.edges.filter((e) => e.from === sel && e.verb === 'has column').length) });
         facts.push({ k: 'Indexes', v: String(D.edges.filter((e) => e.to === sel && e.verb === 'indexes').length) });
-        facts.push({ k: 'Relationships', v: String(D.edges.filter((e) => e.verb === 'references' && (e.from === sel || e.to === sel)).length) });
+        facts.push({ k: 'Relationships', v: String(D.edges.filter((e) => e.verb === 'references' && e.details?.associationOnly !== true && (e.from === sel || e.to === sel) && this.node(e.from)?.type === 'table' && this.node(e.to)?.type === 'table').length) });
         facts.push({ k: 'Readers / writers', v: String(D.edges.filter((e) => e.to === sel && ['reads', 'writes'].includes(e.verb)).length) });
         facts.push({ k: 'Migrations', v: String(D.edges.filter((e) => e.to === sel && ['creates', 'alters', 'drops'].includes(e.verb)).length) });
       }
@@ -2529,7 +2573,7 @@ class Component extends DCLogic {
       const tableCard = (table) => {
         const columns = D.edges.filter((edge) => edge.from === table.id && edge.verb === 'has column').length;
         const indexes = D.edges.filter((edge) => edge.to === table.id && edge.verb === 'indexes').length;
-        const refs = D.edges.filter((edge) => (edge.from === table.id || edge.to === table.id) && edge.verb === 'references').length;
+        const refs = D.edges.filter((edge) => (edge.from === table.id || edge.to === table.id) && edge.verb === 'references' && edge.details?.associationOnly !== true && this.node(edge.from)?.type === 'table' && this.node(edge.to)?.type === 'table').length;
         return { label: table.label, desc: table.desc || this.typeExplain(table.type), hot: degree(table.id) >= 5, counts: `${columns || '?'} cols · ${indexes} idx · ${refs} relations`, tip: `${table.label}: ${columns || 'unknown'} columns, ${indexes} indexes, ${refs} relationships`, go: () => this.reveal(table.id) };
       };
       const visibleDbs = databaseGroups.filter(({ database }) => dbFilter === 'all' || database.id === dbFilter).map(({ database, schemaGroups }) => {
@@ -2598,12 +2642,12 @@ class Component extends DCLogic {
     }
 
     const mapVariant = this.state.mapVariant ?? this.props.mapVariant ?? 'clusters';
-    const databaseRoot = mode === 'database' && sel ? this.tableForDataElement(sel) : null;
+    const databaseRoot = ['database', 'clickhouse'].includes(mode) && sel ? this.tableForDataElement(sel) : null;
     const variantConfig = mode === 'map'
       ? { value: mapVariant, buttons: [['clusters', 'Clusters'], ['layers', 'Layers'], ['columns', 'Columns']], key: 'mapVariant' }
       : mode === 'modules' && selNode?.type === 'module'
         ? { value: this.state.moduleView || 'dependencies', buttons: [['dependencies', 'Dependencies'], ['internals', 'Internals']], key: 'moduleView', preserveSelection: true }
-      : mode === 'database' && databaseRoot
+      : ['database', 'clickhouse'].includes(mode) && databaseRoot
         ? { value: this.state.dbDetail || 'overview', buttons: [['overview', 'Overview'], ['columns', 'Columns'], ['indexes', 'Indexes & Rules'], ['relations', 'Relations & Access'], ['migrations', 'Migrations']], key: 'dbDetail', preserveSelection: true }
       : mode === 'delivery'
           ? { value: this.state.deliveryEnv || 'production', buttons: [['development', 'Development'], ['staging', 'Staging'], ['production', 'Production'], ['compare', 'Compare']], key: 'deliveryEnv' }
