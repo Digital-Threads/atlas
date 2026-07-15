@@ -19,6 +19,7 @@ interface ViewerEdge {
   to: string;
   verb: string;
   kind: ViewerKind;
+  relation?: GraphEdge["type"];
   count?: number;
   n?: number;
 }
@@ -175,7 +176,13 @@ function viewerType(type: GraphNode["type"]): string {
 
 function toViewerEdge(edge: GraphEdge): ViewerEdge {
   const customLabel = edge.label && edge.label !== edge.type ? edge.label : "";
-  return { from: edge.from, to: edge.to, verb: customLabel || edgeVerb(edge.type), kind: edgeKind(edge.type) };
+  return {
+    from: edge.from,
+    to: edge.to,
+    verb: customLabel || edgeVerb(edge.type),
+    kind: edgeKind(edge.type),
+    relation: edge.type,
+  };
 }
 
 function edgeKind(type: GraphEdge["type"]): ViewerKind {
@@ -276,10 +283,17 @@ function buildMapEdges(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): Vie
     if (!from || !to) continue;
     const fromId = mapEndpoint(from), toId = mapEndpoint(to);
     if (!fromId || !toId || fromId === toId) continue;
-    const key = `${fromId}>${toId}:${edge.kind}`;
+    const key = `${fromId}>${toId}:${edge.kind}:${edge.relation ?? ""}`;
     const current = grouped.get(key);
     if (current) current.count = (current.count ?? 1) + 1;
-    else grouped.set(key, { from: fromId, to: toId, verb: edge.verb, kind: edge.kind, count: 1 });
+    else grouped.set(key, {
+      from: fromId,
+      to: toId,
+      verb: edge.verb,
+      kind: edge.kind,
+      relation: edge.relation,
+      count: 1,
+    });
   }
   const ranked = [...grouped.values()].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
   const behaviorEdges = ranked.filter((edge) => edge.kind !== "sync").slice(0, 40);
