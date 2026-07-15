@@ -284,11 +284,13 @@ function buildDomains(nodes: ViewerNode[], domainByNode: Map<string, string>) {
 }
 
 function buildMapEdges(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): ViewerEdge[] {
+  const dataOwners = buildMapDataOwners(edges, nodes);
   const grouped = new Map<string, ViewerEdge>();
   for (const edge of edges) {
+    if (["has_column", "creates", "alters", "drops", "indexes"].includes(edge.relation ?? "")) continue;
     const from = nodes.get(edge.from), to = nodes.get(edge.to);
     if (!from || !to) continue;
-    const fromId = mapEndpoint(from), toId = mapEndpoint(to);
+    const fromId = mapEndpoint(from, dataOwners), toId = mapEndpoint(to, dataOwners);
     if (!fromId || !toId || fromId === toId) continue;
     const key = `${fromId}>${toId}:${edge.kind}:${edge.relation ?? ""}`;
     const current = grouped.get(key);
@@ -303,15 +305,39 @@ function buildMapEdges(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): Vie
     });
   }
   const ranked = [...grouped.values()].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
-  const behaviorEdges = ranked.filter((edge) => edge.kind !== "sync").slice(0, 40);
   const structureEdges = ranked.filter((edge) => edge.kind === "sync").slice(0, 40);
-  // Render behavioral edges last so animated async/data links stay visible above structural lines.
-  return [...structureEdges, ...behaviorEdges];
+  const dataEdges = ranked.filter((edge) => edge.kind === "data").slice(0, 30);
+  const externalEdges = ranked.filter((edge) => edge.kind === "external").slice(0, 20);
+  const asyncEdges = ranked.filter((edge) => edge.kind === "async").slice(0, 50);
+  // Separate budgets prevent large schemas from displacing async and external behavior.
+  return [...structureEdges, ...dataEdges, ...externalEdges, ...asyncEdges];
 }
 
-function mapEndpoint(node: ViewerNode): string {
+function buildMapDataOwners(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): Map<string, string> {
+  const owners = new Map<string, string>();
+  const contains = edges.filter((edge) => edge.relation === "contains");
+  const dataTypes = new Set(["schema", "table", "entity", "model", "materialized_view"]);
+  for (const edge of contains) {
+    if (nodes.get(edge.from)?.type === "database" && dataTypes.has(nodes.get(edge.to)?.type ?? "")) owners.set(edge.to, edge.from);
+  }
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of contains) {
+      const owner = owners.get(edge.from);
+      if (owner && !owners.has(edge.to) && dataTypes.has(nodes.get(edge.to)?.type ?? "")) {
+        owners.set(edge.to, owner);
+        changed = true;
+      }
+    }
+  }
+  return owners;
+}
+
+function mapEndpoint(node: ViewerNode, dataOwners: Map<string, string>): string {
   if (["topic", "queue", "processor", "broker"].includes(node.type)) return node.id;
-  if (["database", "table", "entity", "model"].includes(node.type)) return node.id;
+  if (node.type === "database") return node.id;
+  if (["schema", "table", "entity", "model", "materialized_view"].includes(node.type)) return dataOwners.get(node.id) ?? node.id;
   if (["external", "env"].includes(node.type)) return node.id;
   return node.domain ? `d.${node.domain}` : "";
 }
