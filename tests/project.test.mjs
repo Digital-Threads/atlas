@@ -198,6 +198,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(Object.keys(viewerData.flows).length > 0);
   assert.ok(Object.keys(viewerData.asyncFlows).length > 0);
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "async"));
+  assert.ok(viewerData.edges.some((edge) => edge.relation === "reads" && edge.kind === "data"));
+  assert.ok(viewerData.edges.some((edge) => edge.relation === "writes" && edge.kind === "data"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "controller:UsersController" && edge.to === "method:UsersController.create" && edge.verb === "declares"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "route:POST:/api/users" && edge.to === "method:UsersController.create" && edge.verb === "handled by"));
   assert.ok(Object.keys(viewerData.fileRoles).length > 0);
@@ -216,6 +218,9 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /@keyframes atlasFade/);
   assert.match(viewerHtml, /@keyframes atlasDash/);
   assert.match(viewerHtml, /animation: atlasDash/);
+  assert.match(viewerHtml, /arr-data-read/);
+  assert.match(viewerHtml, /arr-data-write/);
+  assert.match(viewerHtml, /prefers-reduced-motion/);
   assert.match(viewerHtml, /setPointerCapture/);
   assert.match(viewerHtml, /if \(!this\._pan\.moved\) \{[\s\S]*setPointerCapture/);
   assert.doesNotMatch(viewerHtml, /onPanStart:[\s\S]{0,700}setPointerCapture/);
