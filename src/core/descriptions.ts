@@ -54,7 +54,7 @@ function buildIndex(graph: ArchitectureGraph): GraphIndex {
 function describeNode(node: GraphNode, index: GraphIndex): string {
   if (node.type === "module") return describeModule(node, index);
   if (node.type === "controller") return describeController(node, index);
-  if (["service", "provider", "repository"].includes(node.type)) return describeProvider(node, index);
+  if (["service", "provider", "repository", "use_case", "port", "adapter"].includes(node.type)) return describeProvider(node, index);
   if (node.type === "method") return describeMethod(node, index);
   if (node.type === "function") return describeFunction(node, index);
   if (node.type === "route") return describeFlow(node, index);
@@ -66,7 +66,7 @@ function describeNode(node: GraphNode, index: GraphIndex): string {
 function describePlainNode(node: GraphNode, index: GraphIndex): string {
   if (node.type === "module") return describePlainModule(node, index);
   if (node.type === "controller") return describePlainController(node, index);
-  if (["service", "provider", "repository"].includes(node.type)) return describePlainProvider(node, index);
+  if (["service", "provider", "repository", "use_case", "port", "adapter"].includes(node.type)) return describePlainProvider(node, index);
   if (node.type === "method") return describePlainMethod(node, index);
   if (node.type === "function") return describePlainFunction(node);
   if (node.type === "route") return describePlainFlow(node, index);
@@ -161,7 +161,7 @@ function describeIntelligenceNode(node: GraphNode, index: GraphIndex, plain: boo
 }
 
 function describePlainModule(node: GraphNode, index: GraphIndex): string {
-  const providers = relatedNodes(node.id, index, "out", ["provides"], ["service", "provider", "repository"]);
+  const providers = relatedNodes(node.id, index, "out", ["provides"], ["service", "provider", "repository", "use_case", "port", "adapter"]);
   const consumers = relatedNodes(node.id, index, "in", ["imports", "exports"], ["module"]);
   const sentences = ["Groups the parts of the application related to " + subjectFromNode(node) + "."];
   if (providers.length) sentences.push("It makes " + countLabel(providers.length, "capability", "capabilities") + " available to the application.");
@@ -183,13 +183,19 @@ function describePlainController(node: GraphNode, index: GraphIndex): string {
 function describePlainProvider(node: GraphNode, index: GraphIndex): string {
   const methods = relatedNodes(node.id, index, "out", ["has_method"], ["method"]);
   const consumers = relatedNodes(node.id, index, "in", ["injects", "provides"], [
-    "module", "controller", "service", "provider", "repository",
+    "module", "controller", "service", "provider", "repository", "use_case", "port", "adapter",
   ]);
   const dependencies = relatedNodes(node.id, index, "out", ["injects"], [
-    "service", "provider", "repository",
+    "service", "provider", "repository", "use_case", "port", "adapter",
   ]);
   const subject = subjectFromNode(node);
-  const lead = node.type === "repository"
+  const lead = node.type === "port"
+    ? "Defines a boundary required by the application for " + subject + "."
+    : node.type === "adapter"
+      ? "Connects an application port to infrastructure related to " + subject + "."
+      : node.type === "use_case"
+        ? "Coordinates one application use case related to " + subject + "."
+        : node.type === "repository"
     ? "Handles stored data related to " + subject + "."
     : node.type === "service"
       ? "Contains the application's operations and rules related to " + subject + "."
@@ -364,7 +370,7 @@ function describeProvider(node: GraphNode, index: GraphIndex): string {
     "module", "controller", "service", "provider", "repository",
   ]);
   const dependencies = relatedNodes(node.id, index, "out", ["injects"], [
-    "service", "provider", "repository",
+    "service", "provider", "repository", "use_case", "port", "adapter",
   ]);
   const reads = operationTargets(operationIds, index, ["reads"], ["table", "entity", "model", "database"]);
   const writes = operationTargets(operationIds, index, ["writes"], ["table", "entity", "model", "database"]);
