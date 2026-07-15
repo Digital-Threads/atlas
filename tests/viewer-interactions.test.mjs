@@ -96,3 +96,79 @@ test("project search ranks exact endpoints above incidental file matches", async
   assert.equal(results[0].label, "POST /api/users");
   assert.equal(results[0].type, "HTTP route");
 });
+
+test("focused context uses one methodology and recenters without duplicate cards", async () => {
+  const viewer = await createViewer();
+  const moduleNode = viewer.state.D.nodes.find((node) => node.type === "module"
+    && viewer.state.D.edges.some((edge) => edge.from === node.id || edge.to === node.id));
+  assert.ok(moduleNode, "fixture must contain a connected module");
+  const otherModule = viewer.state.D.nodes.find((node) => node.type === "module" && node.id !== moduleNode.id);
+  assert.ok(otherModule);
+  viewer.state.D.edges.push(
+    { from: moduleNode.id, to: otherModule.id, verb: "imports", relation: "imports", kind: "sync", confidence: 1, source: "ast" },
+    { from: otherModule.id, to: moduleNode.id, verb: "imports", relation: "imports", kind: "sync", confidence: 1, source: "ast" },
+  );
+  viewer.state = { ...viewer.state, mode: "modules", sel: moduleNode.id, moduleView: "dependencies" };
+
+  const scene = viewer.scene();
+  assert.match(scene.status, /One-hop context/);
+  assert.ok(scene.cols.some((column) => column.label === "DEPENDED ON BY"));
+  assert.ok(scene.cols.some((column) => column.label === "MUTUAL DEPENDENCIES"));
+  assert.ok(scene.cols.some((column) => column.label === "MODULE DEPENDENCIES"));
+  assert.ok(scene.cols.some((column) => column.label === "OWNED COMPONENTS"));
+  assert.equal(new Set(scene.nodes.map((node) => node.id)).size, scene.nodes.length, "a direct neighbour must be rendered once");
+  assert.ok(scene.edges.every((edge) => {
+    const [from, to] = edge.id.slice(2).split(">");
+    return from === moduleNode.id || to === moduleNode.id;
+  }), "every one-hop line must touch the selected element");
+
+  const neighbour = scene.nodes.find((node) => node.id !== moduleNode.id);
+  assert.ok(neighbour, "module context must expose a clickable neighbour");
+  neighbour.onClick({ preventDefault() {}, stopPropagation() {} });
+  assert.equal(viewer.state.sel, neighbour.id);
+  assert.equal(viewer.state.activeFlow, null);
+});
+
+test("module dependencies and internals are separate views", async () => {
+  const viewer = await createViewer();
+  const moduleNode = viewer.state.D.nodes.find((node) => node.type === "module");
+  assert.ok(moduleNode);
+  viewer.state = { ...viewer.state, mode: "modules", sel: moduleNode.id, moduleView: "dependencies" };
+
+  let values = viewer.renderVals();
+  assert.deepEqual(values.variantBtns.map((button) => button.label), ["Dependencies", "Internals"]);
+  values.variantBtns.find((button) => button.label === "Internals").go();
+  assert.equal(viewer.state.sel, moduleNode.id);
+  assert.equal(viewer.state.moduleView, "internals");
+  assert.match(viewer.scene().status, /module boundary above, internal architecture below/);
+
+  values = viewer.renderVals();
+  values.variantBtns.find((button) => button.label === "Dependencies").go();
+  assert.equal(viewer.state.moduleView, "dependencies");
+  assert.match(viewer.scene().status, /One-hop context/);
+});
+
+test("HTTP flow explicitly passes through its controller and drills into context", async () => {
+  const viewer = await createViewer();
+  const candidate = Object.entries(viewer.state.D.flows).map(([id, flow]) => {
+    const handled = flow.links.find((edge) => edge.from === flow.root && edge.relation === "handles");
+    const controllerEdge = handled && viewer.state.D.edges.find((edge) => edge.to === handled.to
+      && edge.relation === "has_method" && viewer.node(edge.from)?.type === "controller");
+    return controllerEdge ? { id, flow, handled, controllerEdge } : null;
+  }).find(Boolean);
+  assert.ok(candidate, "fixture must contain a route, handler and owning controller");
+  viewer.state = { ...viewer.state, mode: "routes", sel: candidate.flow.root, activeFlow: candidate.id };
+
+  const scene = viewer.sceneFlow(candidate.flow);
+  assert.ok(scene.nodes.some((node) => node.id === candidate.controllerEdge.from));
+  assert.ok(scene.edges.some((edge) => edge.id === `e:${candidate.flow.root}>${candidate.controllerEdge.from}`));
+  assert.ok(scene.edges.some((edge) => edge.id === `e:${candidate.controllerEdge.from}>${candidate.handled.to}`));
+  assert.ok(!scene.edges.some((edge) => edge.id === `e:${candidate.flow.root}>${candidate.handled.to}`));
+
+  const controllerCard = scene.nodes.find((node) => node.id === candidate.controllerEdge.from);
+  controllerCard.onClick({ preventDefault() {}, stopPropagation() {} });
+  assert.equal(viewer.state.sel, candidate.controllerEdge.from);
+  assert.equal(viewer.state.mode, "routes");
+  assert.equal(viewer.state.activeFlow, null, "drilling into an element must leave the previous route flow");
+  assert.match(viewer.scene().status, /controller operations/);
+});
