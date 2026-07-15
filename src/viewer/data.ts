@@ -46,7 +46,8 @@ interface ViewerFileRole {
 
 const typeColors: Record<string, string> = {
   project: "#17201d", module: "#bd4e86", controller: "#286aa6", service: "#7452a8",
-  provider: "#765d97", repository: "#5068a4", route: "#df642d", method: "#56635e",
+  provider: "#765d97", repository: "#5068a4", use_case: "#6b4aa0", port: "#16798b",
+  adapter: "#9a5b32", route: "#df642d", method: "#56635e",
   function: "#56635e", guard: "#43635b", dto: "#16798b", pipe: "#16798b",
   interceptor: "#755381", middleware: "#756b56", decorator: "#8c5375", table: "#1e8068",
   database: "#1e8068", entity: "#2b8d70", model: "#1e8068", column: "#5b9f87",
@@ -62,7 +63,8 @@ const typeColors: Record<string, string> = {
 
 const typeLabels: Record<string, string> = {
   project: "Project", module: "Module", controller: "Controller", service: "Service", provider: "Provider",
-  repository: "Repository", route: "HTTP route", method: "Method", function: "Function", guard: "Guard",
+  repository: "Repository", use_case: "Use case", port: "Port", adapter: "Adapter",
+  route: "HTTP route", method: "Method", function: "Function", guard: "Guard",
   dto: "DTO", pipe: "Pipe", interceptor: "Interceptor", middleware: "Middleware", decorator: "Decorator",
   table: "Table", database: "Database", entity: "Entity", model: "Model", column: "Column",
   topic: "Message topic", broker: "Message broker", queue: "Queue", processor: "Processor",
@@ -121,7 +123,7 @@ export function generateViewerData(
       files: metadata.filesScanned,
       modules: counts("module"),
       routes: counts("route"),
-      services: counts("service") + counts("provider") + counts("repository"),
+      services: counts("service") + counts("provider") + counts("repository") + counts("use_case") + counts("port") + counts("adapter"),
       tables: counts("table") || counts("entity") + counts("model"),
       topics: counts("topic"),
       queues: counts("queue"),
@@ -198,7 +200,7 @@ function edgeKind(type: GraphEdge["type"]): ViewerKind {
 function edgeVerb(type: GraphEdge["type"]): string {
   const labels: Partial<Record<GraphEdge["type"], string>> = {
     contains: "contains", imports: "imports", exports: "exports", declares: "declares", provides: "provides",
-    injects: "injects", calls: "calls", uses: "uses", reads: "reads", writes: "writes", handles: "handled by",
+    injects: "injects", implements: "implements", calls: "calls", uses: "uses", reads: "reads", writes: "writes", handles: "handled by",
     depends_on: "depends on", decorates: "applies", validates: "validates with", returns: "returns",
     references: "references", connects_to: "calls", tests: "tests", has_method: "declares",
     has_column: "has column", publishes_to: "publishes", delivers_to: "delivered to", enqueues: "enqueues",
@@ -254,7 +256,7 @@ function buildDomains(nodes: ViewerNode[], domainByNode: Map<string, string>) {
   const serviceCounts = new Map<string, number>();
   for (const node of nodes) {
     if (node.type === "route") routeCounts.set(node.domain, (routeCounts.get(node.domain) ?? 0) + 1);
-    if (["service", "provider", "repository"].includes(node.type)) serviceCounts.set(node.domain, (serviceCounts.get(node.domain) ?? 0) + 1);
+    if (["service", "provider", "repository", "use_case", "port", "adapter"].includes(node.type)) serviceCounts.set(node.domain, (serviceCounts.get(node.domain) ?? 0) + 1);
   }
   const grouped = new Map<string, ViewerNode[]>();
   for (const moduleNode of modules) {
@@ -388,7 +390,7 @@ function flowEdgeForViewer(edge: ViewerEdge): boolean {
 }
 
 function stageName(type: string, mode: "route" | "async"): string {
-  const names: Record<string, string> = { route: "Trigger", guard: "Guard", pipe: "Validation", dto: "Input", controller: "Controller", method: "Operation", service: "Business logic", provider: "Provider", repository: "Data access", database: "Database", table: "Data", entity: "Data", model: "Data", topic: "Topic", queue: "Queue", processor: "Processor", external: "External", env: "Configuration" };
+  const names: Record<string, string> = { route: "Trigger", guard: "Guard", pipe: "Validation", dto: "Input", controller: "Controller", method: "Operation", service: "Business logic", use_case: "Use case", port: "Port", adapter: "Adapter", provider: "Provider", repository: "Data access", database: "Database", table: "Data", entity: "Data", model: "Data", topic: "Topic", queue: "Queue", processor: "Processor", external: "External", env: "Configuration" };
   return names[type] ?? (mode === "async" ? "Effect" : "Processing");
 }
 
