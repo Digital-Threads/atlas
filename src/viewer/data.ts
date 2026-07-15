@@ -305,7 +305,7 @@ function buildMapEdges(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): Vie
   const ranked = [...grouped.values()].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
   const behaviorEdges = ranked.filter((edge) => edge.kind !== "sync").slice(0, 40);
   const structureEdges = ranked.filter((edge) => edge.kind === "sync").slice(0, 40);
-  return [...behaviorEdges, ...structureEdges];
+  // Render behavioral edges last so animated async/data links stay visible above structural lines.\n  return [...structureEdges, ...behaviorEdges];
 }
 
 function mapEndpoint(node: ViewerNode): string {
