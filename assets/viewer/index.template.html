@@ -1586,9 +1586,12 @@ class Component extends DCLogic {
     const structural = new Set(['contains', 'declares', 'has_method', 'has_column', 'imports', 'exports', 'provides']);
     const enabled = { sync: traceSync, async: traceAsync, data: traceData, external: traceExternal };
     const allowed = (edge) => !!enabled[edge.kind] && (traceStructure || !structural.has(edge.relation || String(edge.verb || '').replaceAll(' ', '_')));
+    const semanticEdge = (edge) => edge.relation === 'implements'
+      ? { ...edge, from: edge.to, to: edge.from, verb: 'implemented by' }
+      : edge;
     if (this._traceIndexD !== D) {
       const outgoing = new Map(), incoming = new Map();
-      D.edges.forEach((edge) => {
+      D.edges.map(semanticEdge).forEach((edge) => {
         const out = outgoing.get(edge.from) || []; out.push(edge); outgoing.set(edge.from, out);
         const inc = incoming.get(edge.to) || []; inc.push(edge); incoming.set(edge.to, inc);
       });
@@ -1619,7 +1622,7 @@ class Component extends DCLogic {
     walk('outgoing', 1);
     if (traceDirection === 'both') walk('incoming', -1);
     const visible = new Set(depths.keys());
-    const allVisibleEdges = D.edges.filter((edge) => visible.has(edge.from) && visible.has(edge.to) && allowed(edge));
+    const allVisibleEdges = D.edges.map(semanticEdge).filter((edge) => visible.has(edge.from) && visible.has(edge.to) && allowed(edge));
     if (allVisibleEdges.length > maxEdges) truncated = true;
     const links = allVisibleEdges.slice(0, maxEdges);
     const byDepth = new Map();
