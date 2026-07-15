@@ -215,6 +215,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(viewerData.nodes.filter((node) => node.type === "column").every((node) => !node.details?.plainDescriptionSource));
   assert.ok(viewerData.edges.some((edge) => edge.from === "controller:UsersController" && edge.to === "method:UsersController.create" && edge.verb === "declares"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "route:POST:/api/users" && edge.to === "method:UsersController.create" && edge.verb === "handled by"));
+  assert.ok(viewerData.nodes.every((node) => typeof node.confidence === "number" && node.source));
+  assert.ok(viewerData.edges.every((edge) => typeof edge.confidence === "number" && edge.source));
   assert.ok(Object.keys(viewerData.fileRoles).length > 0);
   assert.equal(viewerData.domains.filter((domain) => !domain.light).length, Math.min(7, viewerData.domains.length));
   assert.ok(viewerData.domains.every((domain) => domain.modules.length <= 3));
@@ -225,7 +227,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /WHAT STARTS IT/);
   assert.match(viewerHtml, /Technical graph/);
   assert.match(viewerHtml, /Where it ends/);
-  assert.match(viewerHtml, /Search routes, services, topics, files/);
+  assert.match(viewerHtml, /Search endpoint, function, service, table/);
   assert.match(viewerHtml, /src="\.\/atlas-data\.js"/);
   assert.match(viewerHtml, /src="\.\/react\.production\.min\.js"/);
   assert.match(viewerHtml, /@keyframes atlasFade/);
@@ -283,6 +285,13 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /sceneDataErd/);
   assert.match(viewerHtml, /sceneAsyncOverview/);
   assert.match(viewerHtml, /sceneController/);
+  assert.match(viewerHtml, /sceneTrace/);
+  assert.match(viewerHtml, /Full trace/);
+  assert.match(viewerHtml, /Complete for the selected filters/);
+  assert.match(viewerHtml, /traceStructure/);
+  assert.match(viewerHtml, /Trace dependencies/);
+  assert.match(viewerHtml, /Inferred by/);
+  assert.match(viewerHtml, /Search endpoint, function, service, table/);
   assert.match(viewerHtml, /IMPORTED BY/);
   assert.match(viewerHtml, /ENTRY POINTS/);
   assert.match(viewerHtml, /SERVICES & USE CASES/);
