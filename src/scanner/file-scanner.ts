@@ -10,7 +10,11 @@ const ignoredDirectories = new Set([
   ".worktrees", "worktrees", ".pnpm-store", ".yarn", ".nx", ".angular", ".svelte-kit",
   ".output", ".serverless", ".aws-sam", ".parcel-cache", ".vercel", "storybook-static",
 ]);
-const supportedExtensions = new Set([".ts", ".js", ".json", ".yml", ".yaml", ".prisma"]);
+const supportedExtensions = new Set([
+  ".ts", ".js", ".json", ".yml", ".yaml", ".prisma", ".sql", ".tf", ".hcl",
+  ".toml", ".sh", ".tpl",
+]);
+const supportedNames = new Set(["dockerfile", "jenkinsfile"]);
 
 export interface FileScanResult {
   files: ScannedFile[];
@@ -63,7 +67,9 @@ export async function scanFiles(projectRoot: string, options: FileScanOptions = 
       }
       const extension = extname(entry.name).toLowerCase();
       const isEnv = entry.name === ".env" || entry.name.startsWith(".env.");
-      if (!supportedExtensions.has(extension) && !isEnv) {
+      const normalizedName = entry.name.toLowerCase();
+      const isNamedConfig = supportedNames.has(normalizedName) || normalizedName.startsWith("dockerfile.");
+      if (!supportedExtensions.has(extension) && !isEnv && !isNamedConfig) {
         ignored += 1;
         continue;
       }
@@ -73,7 +79,7 @@ export async function scanFiles(projectRoot: string, options: FileScanOptions = 
         files.push({
           absolutePath,
           path: projectPath,
-          extension: isEnv ? ".env" : extension,
+          extension: isEnv ? ".env" : (isNamedConfig ? normalizedName : extension),
           size: fileStat.size,
           hash,
           lastModified: fileStat.mtime.toISOString(),

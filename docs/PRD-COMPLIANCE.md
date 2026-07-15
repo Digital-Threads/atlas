@@ -22,8 +22,12 @@ verification or `npm run test:performance` for the scale target alone.
 | Supported HTTP client calls and unknown env-configured APIs | Complete | fixture integration test |
 | Package dependencies, libraries, scripts, version, and package manager metadata | Complete | fixture integration test |
 | Static local viewer with modes, filters, search, details, flows, source, dependencies, and dependents | Complete | generated viewer syntax/assertions and browser verification |
-| Twelve read-only MCP graph tools, including async flow queries | Complete | live MCP subprocess integration test |
-| Markdown report and seven architecture risk rules | Complete | `tests/risks.test.mjs`, report integration test |
+| Eighteen read-only MCP graph tools, including data, schedule, delivery, and async queries | Complete | live MCP subprocess integration test |
+| Markdown report and architecture/runtime risk rules | Complete | `tests/risks.test.mjs`, report integration test |
+| SQL migrations, full table profiles, and ClickHouse topology | Complete | SQL fixtures and MCP integration test |
+| Scheduled jobs and deterministic async overview | Complete | schedule fixtures and viewer assertions |
+| CI/CD, Docker, Compose, and Kubernetes topology | Complete | delivery fixtures and viewer assertions |
+| Separate development, staging, and production runtime scenes | Complete | generated viewer integration test |
 | Unsupported projects produce a basic graph and warning without crashing | Complete | unsupported-project integration test |
 
 ## Acceptance and non-functional requirements

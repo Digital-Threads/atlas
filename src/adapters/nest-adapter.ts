@@ -446,12 +446,27 @@ function parseTypeOrm(info: ClassInfo, classes: ClassRegistry, addNode: NodeAdde
   addNode({ id: tableId, type: "table", label: tableName, name: tableName, file: info.file, framework: "typeorm", confidence: 1, source: "ast" });
   addEdge("database:typeorm", tableId, "contains");
   addEdge(info.id, tableId, "references");
+  for (const decorator of info.declaration.getDecorators().filter((item) => ["Index", "Unique"].includes(item.getName()))) {
+    addOrmIndex(tableId, tableName, decorator, info.file, decorator.getName() === "Unique", addNode, addEdge);
+  }
   for (const property of info.declaration.getProperties()) {
     const decorators = property.getDecorators().map((item) => item.getName());
     if (decorators.some((name) => ["Column", "PrimaryColumn", "PrimaryGeneratedColumn"].includes(name))) {
       const columnId = `column:${tableName}.${property.getName()}`;
-      addNode({ id: columnId, type: "column", label: `${tableName}.${property.getName()}`, name: property.getName(), file: info.file, framework: "typeorm", source: "ast", confidence: 1, metadata: { type: property.getTypeNode()?.getText(), decorators } });
+      const columnDecorator = property.getDecorators().find((item) => ["Column", "PrimaryColumn", "PrimaryGeneratedColumn"].includes(item.getName()));
+      addNode({ id: columnId, type: "column", label: `${tableName}.${property.getName()}`, name: property.getName(), file: info.file, framework: "typeorm", source: "ast", confidence: 1, metadata: {
+        type: decoratorOptionText(columnDecorator!, "type") || property.getTypeNode()?.getText(), decorators,
+        nullable: decoratorOptionText(columnDecorator!, "nullable") === "true",
+        unique: decoratorOptionText(columnDecorator!, "unique") === "true",
+        primaryKey: decorators.some((name) => ["PrimaryColumn", "PrimaryGeneratedColumn"].includes(name)),
+        generated: decorators.includes("PrimaryGeneratedColumn"),
+        databaseName: decoratorOptionString(columnDecorator!, "name") || property.getName(),
+        default: decoratorOptionText(columnDecorator!, "default") || undefined,
+      } });
       addEdge(tableId, columnId, "has_column");
+      for (const decorator of property.getDecorators().filter((item) => ["Index", "Unique"].includes(item.getName()))) {
+        addOrmIndex(tableId, tableName, decorator, info.file, decorator.getName() === "Unique", addNode, addEdge, [property.getName()]);
+      }
     }
     const relation = decorators.find((name) => ["ManyToOne", "OneToMany", "OneToOne", "ManyToMany"].includes(name));
     if (relation) {
@@ -499,6 +514,9 @@ function parseSequelize(info: ClassInfo, classes: ClassRegistry, addNode: NodeAd
         },
       });
       addEdge(tableId, columnId, "has_column");
+      for (const indexDecorator of property.getDecorators().filter((item) => ["Index", "Unique"].includes(item.getName()))) {
+        addOrmIndex(tableId, tableName, indexDecorator, info.file, indexDecorator.getName() === "Unique", addNode, addEdge, [columnName]);
+      }
     }
 
     const relationDecorator = property.getDecorators().find((item) => ["BelongsTo", "HasMany", "HasOne", "BelongsToMany", "ForeignKey"].includes(item.getName()));
@@ -524,9 +542,15 @@ async function parsePrisma(context: AdapterContext, addNode: NodeAdder, addEdge:
   for (const { name: modelName, body } of models) {
     const modelId = `model:${modelName}`;
     const tableId = `table:${modelName}`;
+    const mappedName = body.match(/@@map\(\s*["']([^"']+)["']\s*\)/)?.[1] ?? modelName;
+    const schemaName = body.match(/@@schema\(\s*["']([^"']+)["']\s*\)/)?.[1] ?? "public";
     addNode({ id: modelId, type: "model", label: modelName, name: modelName, file: schema.path, framework: "prisma", source: "config", confidence: 1 });
-    addNode({ id: tableId, type: "table", label: modelName, name: modelName, file: schema.path, framework: "prisma", source: "config", confidence: 1 });
+    addNode({ id: tableId, type: "table", label: mappedName, name: mappedName, file: schema.path, framework: "prisma", source: "config", confidence: 1, metadata: { model: modelName, schema: schemaName, databaseName: mappedName } });
+    const schemaId = `schema:prisma.${schemaName}`;
+    addNode({ id: schemaId, type: "schema", label: schemaName, name: schemaName, file: schema.path, framework: "prisma", source: "config", confidence: 1 });
     addEdge("database:prisma", modelId, "contains");
+    addEdge("database:prisma", schemaId, "contains");
+    addEdge(schemaId, tableId, "contains");
     addEdge(modelId, tableId, "references");
     for (const line of body.split(/\r?\n/)) {
       const field = line.trim().match(/^(\w+)\s+([\w\[\]?]+)/);
@@ -538,8 +562,28 @@ async function parsePrisma(context: AdapterContext, addNode: NodeAdder, addEdge:
         continue;
       }
       const columnId = `column:${modelName}.${fieldName}`;
-      addNode({ id: columnId, type: "column", label: `${modelName}.${fieldName}`, name: fieldName, file: schema.path, framework: "prisma", source: "config", confidence: 1, metadata: { type: fieldType } });
+      const databaseName = line.match(/@map\(\s*["']([^"']+)["']\s*\)/)?.[1] ?? fieldName;
+      addNode({ id: columnId, type: "column", label: `${mappedName}.${databaseName}`, name: databaseName, file: schema.path, framework: "prisma", source: "config", confidence: 1, metadata: {
+        property: fieldName, type: fieldType, nullable: fieldType.endsWith("?"), list: fieldType.endsWith("[]"),
+        primaryKey: /@id\b/.test(line), unique: /@unique\b/.test(line), databaseName,
+        default: line.match(/@default\(([^)]*)\)/)?.[1],
+      } });
       addEdge(tableId, columnId, "has_column");
+    }
+    for (const directive of body.matchAll(/@@(index|unique|id)\s*\(\s*\[([^\]]+)\]([^)]*)\)/g)) {
+      const [, kind, rawColumns, options] = directive;
+      const columns = rawColumns.split(",").map((item) => item.trim().split(/\s+/)[0]).filter(Boolean);
+      const configuredName = options.match(/(?:name|map)\s*:\s*["']([^"']+)["']/)?.[1];
+      const name = configuredName ?? `${kind}_${columns.join("_")}`;
+      if (kind === "index") {
+        const id = `index:${modelName}.${name}`;
+        addNode({ id, type: "index", label: name, name, file: schema.path, framework: "prisma", source: "config", confidence: 1, metadata: { columns, type: options.match(/type\s*:\s*(\w+)/)?.[1] } });
+        addEdge(id, tableId, "indexes");
+      } else {
+        const id = `constraint:${modelName}.${name}`;
+        addNode({ id, type: "constraint", label: name, name, file: schema.path, framework: "prisma", source: "config", confidence: 1, metadata: { kind, columns } });
+        addEdge(tableId, id, "contains");
+      }
     }
   }
 }
@@ -611,6 +655,13 @@ function parseDrizzleSchemas(sourceFiles: SourceFile[], projectRoot: string, add
 
         const reference = columnText.match(/\.references\s*\(\s*\(\s*\)\s*=>\s*([A-Za-z_$][\w$]*)\./);
         if (reference) pendingReferences.push({ from: tableId, variable: reference[1], property: propertyName });
+      }
+      const extraConfig = tableCall.getArguments()[2]?.getText() ?? "";
+      for (const indexMatch of extraConfig.matchAll(/(uniqueIndex|index)\s*\(\s*["'`]([^"'`]+)["'`]\s*\)\.on\s*\(([^)]*)\)/g)) {
+        const id = `index:${tableName}.${indexMatch[2]}`;
+        const columns = [...indexMatch[3].matchAll(/\.([A-Za-z_$][\w$]*)/g)].map((match) => match[1]);
+        addNode({ id, type: "index", label: indexMatch[2], name: indexMatch[2], file, framework: "drizzle", source: "ast", confidence: 1, metadata: { unique: indexMatch[1] === "uniqueIndex", columns } });
+        addEdge(id, tableId, "indexes");
       }
     }
   }
@@ -847,6 +898,12 @@ function parseAsyncConsumer(
   addNode: NodeAdder,
   addEdge: EdgeAdder,
 ) {
+  const processor = info.declaration.getDecorator("Processor");
+  if (processor && method.getName() === "process" && !method.getDecorator("Process")) {
+    const queueName = expressionValue(processor.getArguments()[0]) || info.name;
+    const queueId = addQueueNode(queueName, info.file, addNode);
+    addEdge(queueId, methodId, "delivers_to", { transport: "bullmq", processor: info.name, handler: method.getName(), job: "any" });
+  }
   for (const decorator of method.getDecorators()) {
     if (["MessagePattern", "EventPattern"].includes(decorator.getName())) {
       const pattern = decorator.getArguments()[0];
@@ -860,6 +917,21 @@ function parseAsyncConsumer(
         consumer: info.name,
         handler: method.getName(),
       });
+      continue;
+    }
+    if (["RabbitSubscribe", "RabbitRPC"].includes(decorator.getName())) {
+      const options = decorator.getArguments()[0]?.getText() ?? "";
+      const exchange = options.match(/exchange\s*:\s*['"`]([^'"`]+)['"`]/)?.[1] ?? "default";
+      const routingKey = options.match(/routingKey\s*:\s*['"`]([^'"`]+)['"`]/)?.[1] ?? method.getName();
+      const queueName = options.match(/queue\s*:\s*['"`]([^'"`]+)['"`]/)?.[1];
+      const brokerId = addMessageBroker("rabbitmq", addNode);
+      const topicId = addMessageTopic(`${exchange}:${routingKey}`, info.file, addNode, addEdge, "rabbitmq");
+      addEdge(topicId, methodId, "delivers_to", { transport: "rabbitmq", exchange, routingKey, handler: method.getName() });
+      if (queueName) {
+        const queueId = addQueueNode(queueName, info.file, addNode, "rabbitmq");
+        addEdge(brokerId, queueId, "contains", { transport: "rabbitmq" });
+        addEdge(queueId, methodId, "delivers_to", { transport: "rabbitmq", exchange, routingKey });
+      }
       continue;
     }
     if (decorator.getName() !== "Process") continue;
@@ -912,7 +984,7 @@ function parseAsyncProducerCall(
 
 function addMessageBroker(transport: string, addNode: NodeAdder): string {
   const id = `message_broker:${transport}`;
-  const label = transport === "kafka" ? "Kafka" : "NestJS messaging";
+  const label = transport === "kafka" ? "Kafka" : transport === "rabbitmq" ? "RabbitMQ" : "NestJS messaging";
   addNode({ id, type: "message_broker", label, name: label, framework: "nestjs", source: "ast", confidence: 1, metadata: { transport } });
   return id;
 }
@@ -925,10 +997,21 @@ function addMessageTopic(topic: string, file: string, addNode: NodeAdder, addEdg
   return id;
 }
 
-function addQueueNode(queue: string, file: string, addNode: NodeAdder): string {
+function addQueueNode(queue: string, file: string, addNode: NodeAdder, transport = "bull"): string {
   const id = `queue:${cleanToken(queue)}`;
-  addNode({ id, type: "queue", label: queue, name: queue, file, framework: "nestjs", source: "ast", confidence: 1, metadata: { transport: "bull", queue } });
+  addNode({ id, type: "queue", label: queue, name: queue, file, framework: "nestjs", source: "ast", confidence: 1, metadata: { transport, queue } });
   return id;
+}
+
+function addOrmIndex(tableId: string, tableName: string, decorator: Decorator, file: string, forceUnique: boolean, addNode: NodeAdder, addEdge: EdgeAdder, fallbackColumns: string[] = []) {
+  const args = decorator.getArguments().map((argument) => argument.getText());
+  const configuredName = args.find((value) => /^['"`]/.test(value));
+  const columns = args.flatMap((value) => [...value.matchAll(/['"`]([A-Za-z_$][\w$]*)['"`]/g)].map((match) => match[1])).filter((value) => value !== configuredName?.replace(/^['"`]|['"`]$/g, ""));
+  const unique = forceUnique || args.some((value) => /unique\s*:\s*true/.test(value));
+  const name = configuredName?.replace(/^['"`]|['"`]$/g, "") || `${unique ? "uniq" : "idx"}_${tableName}_${(columns.length ? columns : fallbackColumns).join("_") || "custom"}`;
+  const id = `index:${tableName}.${name}`;
+  addNode({ id, type: "index", label: name, name, file, framework: "typeorm", source: "ast", confidence: 1, metadata: { columns: columns.length ? columns : fallbackColumns, unique, decorator: decorator.getName() } });
+  addEdge(id, tableId, "indexes");
 }
 
 function isMessageClient(parameter: string, typeName: string): boolean {

@@ -11,6 +11,7 @@ interface ViewerNode {
   desc: string;
   metrics?: Record<string, string | number>;
   severity?: string;
+  details?: Record<string, string | number | boolean | string[]>;
 }
 
 interface ViewerEdge {
@@ -50,6 +51,11 @@ const typeColors: Record<string, string> = {
   topic: "#0f7895", broker: "#293b75", queue: "#a66708", processor: "#6e4a9e",
   external: "#c94747", env: "#b27a12", file: "#39433f", folder: "#66716d",
   risk: "#c94747", library: "#4e7184", config: "#8a6f3d", test: "#6f7774", package: "#3f5550",
+  schema: "#28745f", index: "#87660e", constraint: "#9b5b45", migration: "#8c4f77",
+  materialized_view: "#0f7895", scheduled_job: "#a66708", workflow: "#355f8a",
+  pipeline_job: "#4e7184", build_stage: "#66716d", container_image: "#315d72",
+  container: "#3f756e", deployment: "#5068a4", infrastructure_service: "#16798b",
+  ingress: "#c94747", config_map: "#8a6f3d", secret: "#a83a3a", environment: "#5f6f68",
 };
 
 const typeLabels: Record<string, string> = {
@@ -60,6 +66,11 @@ const typeLabels: Record<string, string> = {
   topic: "Message topic", broker: "Message broker", queue: "Queue", processor: "Processor",
   external: "External API", env: "Environment variable", file: "Source file", folder: "Folder",
   risk: "Risk", library: "Library", config: "Configuration", test: "Test", package: "Package",
+  schema: "Schema", index: "Index", constraint: "Constraint", migration: "Migration",
+  materialized_view: "Materialized view", scheduled_job: "Scheduled job", workflow: "Workflow",
+  pipeline_job: "Pipeline job", build_stage: "Build stage", container_image: "Container image",
+  container: "Container", deployment: "Deployment", infrastructure_service: "Runtime service",
+  ingress: "Ingress", config_map: "ConfigMap", secret: "Secret", environment: "Environment",
 };
 
 export function generateViewerData(
@@ -109,10 +120,13 @@ export function generateViewerData(
       modules: counts("module"),
       routes: counts("route"),
       services: counts("service") + counts("provider") + counts("repository"),
-      tables: counts("table") + counts("entity") + counts("model"),
+      tables: counts("table") || counts("entity") + counts("model"),
       topics: counts("topic"),
       queues: counts("queue"),
       processors: counts("processor"),
+      schedules: counts("scheduled_job"),
+      migrations: counts("migration"),
+      deployments: counts("deployment"),
       external: counts("external"),
       risks: riskNodes.length,
       relationships: edges.length,
@@ -135,6 +149,7 @@ function toViewerNode(node: GraphNode, domain: string): ViewerNode {
     ? `${baseDescription} Recommendation: ${String(metadata.recommendation)}`
     : baseDescription;
   const metrics: Record<string, string | number> = {};
+  const details = safeDetails(metadata);
   if (Array.isArray(metadata.methods)) metrics.methods = metadata.methods.length;
   if (node.sourceLocation?.startLine && node.sourceLocation?.endLine) metrics.lines = node.sourceLocation.endLine - node.sourceLocation.startLine + 1;
   return {
@@ -144,6 +159,7 @@ function toViewerNode(node: GraphNode, domain: string): ViewerNode {
     file: node.file ?? node.sourceLocation?.file ?? "",
     domain,
     desc: desc || fallbackDescription(type, node.label),
+    ...(details ? { details } : {}),
     ...(Object.keys(metrics).length ? { metrics } : {}),
     ...(type === "risk" && typeof metadata.severity === "string" ? { severity: metadata.severity } : {}),
   };
@@ -163,8 +179,8 @@ function toViewerEdge(edge: GraphEdge): ViewerEdge {
 }
 
 function edgeKind(type: GraphEdge["type"]): ViewerKind {
-  if (["publishes_to", "delivers_to", "enqueues", "processes"].includes(type)) return "async";
-  if (["reads", "writes", "has_column"].includes(type)) return "data";
+  if (["publishes_to", "delivers_to", "enqueues", "processes", "schedules", "triggers"].includes(type)) return "async";
+  if (["reads", "writes", "has_column", "creates", "alters", "drops", "indexes"].includes(type)) return "data";
   if (type === "connects_to") return "external";
   return "sync";
 }
@@ -177,8 +193,23 @@ function edgeVerb(type: GraphEdge["type"]): string {
     references: "references", connects_to: "calls", tests: "tests", has_method: "declares",
     has_column: "has column", publishes_to: "publishes", delivers_to: "delivered to", enqueues: "enqueues",
     processes: "processed by",
+    creates: "creates", alters: "alters", drops: "drops", indexes: "indexes",
+    schedules: "runs", triggers: "triggers", builds: "builds", publishes: "publishes",
+    deploys: "deploys", exposes: "exposes", configures: "configures", runs_in: "runs in",
+    targets: "targets",
   };
   return labels[type] ?? type.replaceAll("_", " ");
+}
+
+function safeDetails(metadata: Record<string, unknown>): Record<string, string | number | boolean | string[]> | null {
+  const excluded = new Set(["sourcePreview", "description", "plainDescription", "flowDescription", "plainFlowDescription", "asyncFlowDescription", "plainAsyncFlowDescription", "methods", "fields"]);
+  const result: Record<string, string | number | boolean | string[]> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (excluded.has(key) || value === undefined || value === null) continue;
+    if (["string", "number", "boolean"].includes(typeof value)) result[key] = value as string | number | boolean;
+    else if (Array.isArray(value) && value.length <= 40 && value.every((item) => ["string", "number", "boolean"].includes(typeof item))) result[key] = value.map(String);
+  }
+  return Object.keys(result).length ? result : null;
 }
 
 function inferDomains(graph: ArchitectureGraph): Map<string, string> {

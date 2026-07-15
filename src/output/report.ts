@@ -18,6 +18,11 @@ export function generateReport(graph: ArchitectureGraph, risks: ArchitectureRisk
     `- Services: ${byType("service").length}`,
     `- Routes: ${byType("route").length}`,
     `- Tables: ${byType("table").length}`,
+    `- Schemas: ${byType("schema").length}`,
+    `- Indexes: ${byType("index").length}`,
+    `- Migrations: ${byType("migration").length}`,
+    `- Scheduled jobs: ${byType("scheduled_job").length}`,
+    `- Deployments: ${byType("deployment").length}`,
     `- External APIs: ${byType("external_api").length}`,
     `- Risks: ${risks.length}`,
     "",
@@ -30,6 +35,18 @@ export function generateReport(graph: ArchitectureGraph, risks: ArchitectureRisk
   addNodeSection(lines, "Controllers", byType("controller"));
   addNodeSection(lines, "Services", byType("service"));
   addNodeSection(lines, "Database Models and Tables", [...byType("model"), ...byType("table")]);
+  addNodeSection(lines, "Database Schemas", byType("schema"));
+  addNodeSection(lines, "Indexes and Constraints", [...byType("index"), ...byType("constraint")]);
+  addNodeSection(lines, "Migrations", byType("migration"));
+  addNodeSection(lines, "Materialized Views", byType("materialized_view"));
+  addNodeSection(lines, "ClickHouse", graph.nodes.filter((node) => node.framework === "clickhouse" && ["database", "schema", "table", "materialized_view"].includes(node.type)), (node) => {
+    const details = [node.metadata?.engine, node.metadata?.partitionBy ? `PARTITION BY ${String(node.metadata.partitionBy)}` : "", node.metadata?.orderBy ? `ORDER BY ${String(node.metadata.orderBy)}` : "", node.metadata?.ttl ? `TTL ${String(node.metadata.ttl)}` : ""].filter(Boolean).join(" · ");
+    return `${node.label}${details ? ` — ${details}` : ""}${node.file ? ` — \`${node.file}\`` : ""}`;
+  });
+  addNodeSection(lines, "Scheduled Jobs", byType("scheduled_job"), (node) => `${node.label} — ${String(node.metadata?.humanSchedule ?? node.metadata?.expression ?? "configured schedule")}${node.file ? ` — \`${node.file}\`` : ""}`);
+  addNodeSection(lines, "CI/CD Workflows", [...byType("workflow"), ...byType("pipeline_job")]);
+  addNodeSection(lines, "Runtime Environments", byType("environment"));
+  addNodeSection(lines, "Deployments and Containers", [...byType("deployment"), ...byType("container")]);
   addNodeSection(lines, "External APIs", byType("external_api"));
   addNodeSection(lines, "Environment Variables", byType("environment_variable"));
   lines.push("## Risks", "");

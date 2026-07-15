@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atlas-api
+  namespace: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: atlas-api
+  template:
+    metadata:
+      labels:
+        app: atlas-api
+    spec:
+      containers:
+        - name: api
+          image: registry.example.test/atlas-api:production
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+          envFrom:
+            - configMapRef:
+                name: atlas-api
+            - secretRef:
+                name: atlas-api-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atlas-api
+  namespace: production
+spec:
+  selector:
+    app: atlas-api
+  ports:
+    - port: 80
+      targetPort: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: atlas-api
+  namespace: production
+spec:
+  tls:
+    - hosts: [api.example.test]
+  rules:
+    - host: api.example.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: atlas-api
+                port:
+                  number: 80
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atlas-api
+  namespace: production
+data:
+  NODE_ENV: production
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: atlas-api-secrets
+  namespace: production
+stringData:
+  JWT_SECRET: another-value-that-must-never-be-stored
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-expired-sessions
+  namespace: production
+spec:
+  schedule: "0 0 * * *"
+  timeZone: UTC
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: registry.example.test/atlas-api:production
+

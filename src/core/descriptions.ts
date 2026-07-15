@@ -59,6 +59,7 @@ function describeNode(node: GraphNode, index: GraphIndex): string {
   if (node.type === "function") return describeFunction(node, index);
   if (node.type === "route") return describeFlow(node, index);
   if (["message_broker", "message_topic", "queue", "processor"].includes(node.type)) return describeAsyncNode(node, index);
+  if (isIntelligenceNode(node.type)) return describeIntelligenceNode(node, index, false);
   return "";
 }
 
@@ -70,7 +71,93 @@ function describePlainNode(node: GraphNode, index: GraphIndex): string {
   if (node.type === "function") return describePlainFunction(node);
   if (node.type === "route") return describePlainFlow(node, index);
   if (["message_broker", "message_topic", "queue", "processor"].includes(node.type)) return describePlainAsyncNode(node, index);
+  if (isIntelligenceNode(node.type)) return describeIntelligenceNode(node, index, true);
   return "";
+}
+
+function isIntelligenceNode(type: GraphNodeType): boolean {
+  return [
+    "database", "schema", "table", "column", "index", "constraint", "migration", "materialized_view",
+    "scheduled_job", "workflow", "pipeline_job", "build_stage", "container_image", "container", "deployment",
+    "infrastructure_service", "ingress", "config_map", "secret", "environment", "environment_variable",
+  ].includes(type);
+}
+
+function describeIntelligenceNode(node: GraphNode, index: GraphIndex, plain: boolean): string {
+  const outgoing = index.outgoing.get(node.id) ?? [];
+  const incoming = index.incoming.get(node.id) ?? [];
+  const countOutgoing = (types: GraphEdgeType[]) => outgoing.filter((edge) => types.includes(edge.type)).length;
+  const countIncoming = (types: GraphEdgeType[]) => incoming.filter((edge) => types.includes(edge.type)).length;
+  const details = node.metadata ?? {};
+  const environment = typeof details.environment === "string" ? ` in ${details.environment}` : "";
+  const file = plain ? "" : sourceClause(node);
+
+  switch (node.type) {
+    case "database": return `Database${file} containing ${countOutgoing(["contains"])} detected schemas or structures.`;
+    case "schema": return `Database namespace${file} containing ${countOutgoing(["contains"])} detected tables.`;
+    case "table": {
+      const columns = countOutgoing(["has_column"]);
+      const relations = countOutgoing(["references"]) + countIncoming(["references"]);
+      return plain
+        ? `Stores ${humanWords(node.label).toLowerCase()} data in ${columns} detected columns and connects to ${relations} other tables.`
+        : `Database table${file} with ${columns} detected columns and ${relations} relationships.`;
+    }
+    case "column": return plain
+      ? `Stores one value for ${humanWords(node.name ?? node.label).toLowerCase()}${details.type ? ` using the ${String(details.type)} data type` : ""}.`
+      : `Database column${file}${details.type ? ` of type ${String(details.type)}` : ""}.`;
+    case "index": return plain
+      ? `Helps the database find rows faster${Array.isArray(details.columns) ? ` by ${details.columns.join(", ")}` : ""}.`
+      : `Database index${file}${details.unique ? " enforcing uniqueness" : ""}.`;
+    case "constraint": return plain
+      ? `Protects stored data with the ${humanWords(String(details.kind ?? "configured rule")).toLowerCase()} rule.`
+      : `Database constraint${file} of type ${String(details.kind ?? "configured")}.`;
+    case "migration": return plain
+      ? `Changes the database structure through ${countOutgoing(["creates", "alters", "drops"])} detected operations.`
+      : `Database migration${file} with ${String(details.statements ?? countOutgoing(["creates", "alters", "drops"]))} detected statements.`;
+    case "materialized_view": return plain
+      ? `Precomputes query results for faster analytics and reads from ${countOutgoing(["reads"])} detected sources.`
+      : `Materialized database view${file}${details.engine ? ` using ${String(details.engine)}` : ""}.`;
+    case "scheduled_job": return plain
+      ? `Starts automatically ${String(details.humanSchedule ?? details.expression ?? "on its configured schedule")}${details.timeZone ? ` in the ${String(details.timeZone)} timezone` : ""}.`
+      : `Scheduled job${file}: ${String(details.humanSchedule ?? details.expression ?? "configured schedule")}.`;
+    case "workflow": return plain
+      ? `Automates delivery through ${countOutgoing(["contains"])} detected pipeline jobs.`
+      : `CI/CD workflow${file} containing ${countOutgoing(["contains"])} detected jobs.`;
+    case "pipeline_job": return plain
+      ? `Runs one CI/CD job${environment} and passes work to ${countOutgoing(["builds", "publishes", "deploys"])} detected delivery targets.`
+      : `CI/CD pipeline job${file}${environment}.`;
+    case "build_stage": return plain
+      ? `Builds one stage of the application container image.`
+      : `Docker build stage${file}${details.baseImage ? ` based on ${String(details.baseImage)}` : ""}.`;
+    case "container_image": return plain
+      ? `Packages the application and its runtime dependencies for deployment.`
+      : `Container image${file}.`;
+    case "container": return plain
+      ? `Runs ${node.label}${environment}${details.image ? ` from image ${String(details.image)}` : ""}.`
+      : `Runtime container${file}${environment}${details.image ? ` using ${String(details.image)}` : ""}.`;
+    case "deployment": return plain
+      ? `Keeps ${String(details.replicas ?? "the configured number of")} application instances running${environment}.`
+      : `${String(details.kind ?? "Runtime")} deployment${file}${environment}.`;
+    case "infrastructure_service": return plain
+      ? `Provides stable network access to a deployed workload${environment}.`
+      : `Runtime network service${file}${environment}.`;
+    case "ingress": return plain
+      ? `Routes traffic from outside the cluster to ${countOutgoing(["exposes"])} detected internal services${environment}.`
+      : `Kubernetes ingress${file}${environment}.`;
+    case "config_map": return plain
+      ? `Provides non-secret runtime settings${environment}; ${Array.isArray(details.keys) ? details.keys.length : 0} setting names were detected.`
+      : `Kubernetes ConfigMap${file}${environment}; values are not stored by Atlas.`;
+    case "secret": return plain
+      ? `Provides protected runtime settings${environment}; Atlas keeps names only and never stores their values.`
+      : `Kubernetes Secret${file}${environment}; values are never stored by Atlas.`;
+    case "environment": return plain
+      ? `Groups the delivery and runtime configuration for ${node.label}.`
+      : `Runtime environment${file}.`;
+    case "environment_variable": return plain
+      ? `${details.purpose ? String(details.purpose) : "Provides a named runtime setting"}. ${details.sensitive ? "Its value is hidden." : "Atlas records only safe example values."}`
+      : `Environment variable contract${file}${details.sensitive ? "; value redacted" : ""}.`;
+    default: return "";
+  }
 }
 
 function describePlainModule(node: GraphNode, index: GraphIndex): string {

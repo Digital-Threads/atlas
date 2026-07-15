@@ -1,0 +1,17 @@
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres@database/app
+    depends_on:
+      - database
+  database:
+    image: postgres:17-alpine
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+volumes:
+  pg-data:
+

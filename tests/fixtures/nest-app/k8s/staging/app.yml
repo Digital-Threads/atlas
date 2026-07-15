@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atlas-api
+  namespace: staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: atlas-api
+  template:
+    metadata:
+      labels:
+        app: atlas-api
+    spec:
+      containers:
+        - name: api
+          image: registry.example.test/atlas-api:staging
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+          envFrom:
+            - configMapRef:
+                name: atlas-api
+            - secretRef:
+                name: atlas-api-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atlas-api
+  namespace: staging
+spec:
+  selector:
+    app: atlas-api
+  ports:
+    - port: 80
+      targetPort: 3000
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atlas-api
+  namespace: staging
+data:
+  NODE_ENV: staging
+  PUBLIC_APP_URL: https://staging.example.test
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: atlas-api-secrets
+  namespace: staging
+stringData:
+  JWT_SECRET: must-never-be-stored
+
