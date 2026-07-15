@@ -9,6 +9,8 @@ interface ViewerNode {
   file: string;
   domain: string;
   desc: string;
+  confidence?: number;
+  source?: GraphNode["source"];
   metrics?: Record<string, string | number>;
   severity?: string;
   details?: Record<string, string | number | boolean | string[]>;
@@ -20,6 +22,8 @@ interface ViewerEdge {
   verb: string;
   kind: ViewerKind;
   relation?: GraphEdge["type"];
+  confidence?: number;
+  source?: GraphEdge["source"];
   details?: Record<string, string | number | boolean | string[]>;
   count?: number;
   n?: number;
@@ -96,6 +100,8 @@ export function generateViewerData(
     file: risk.file ?? graphNodeMap.get(risk.nodeId ?? "")?.file ?? "",
     domain: domainByNode.get(risk.nodeId ?? "") ?? domainFromFile(risk.file ?? ""),
     desc: `${risk.description} Recommendation: ${risk.recommendation}`,
+    confidence: 1,
+    source: "static_analysis",
     severity: risk.severity,
     } satisfies ViewerNode];
   });
@@ -163,6 +169,8 @@ function toViewerNode(node: GraphNode, domain: string): ViewerNode {
     file: node.file ?? node.sourceLocation?.file ?? "",
     domain,
     desc: desc || fallbackDescription(type, node.label),
+    confidence: node.confidence ?? 1,
+    source: node.source ?? "ast",
     ...(details ? { details } : {}),
     ...(Object.keys(metrics).length ? { metrics } : {}),
     ...(type === "risk" && typeof metadata.severity === "string" ? { severity: metadata.severity } : {}),
@@ -186,6 +194,8 @@ function toViewerEdge(edge: GraphEdge): ViewerEdge {
     verb: customLabel || edgeVerb(edge.type),
     kind: edgeKind(edge.type),
     relation: edge.type,
+    confidence: edge.confidence ?? 1,
+    source: edge.source ?? "ast",
     ...(details ? { details } : {}),
   };
 }
@@ -346,6 +356,13 @@ function mapEndpoint(node: ViewerNode, dataOwners: Map<string, string>): string 
 
 function buildFlows(nodes: ViewerNode[], edges: ViewerEdge[], mode: "route" | "async"): Record<string, ViewerFlow> {
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const outgoing = new Map<string, ViewerEdge[]>();
+  for (const edge of edges) {
+    if (!flowEdgeForViewer(edge)) continue;
+    const list = outgoing.get(edge.from) ?? [];
+    list.push(edge);
+    outgoing.set(edge.from, list);
+  }
   const roots = nodes.filter((node) => mode === "route" ? node.type === "route" : ["topic", "queue"].includes(node.type));
   const result: Record<string, ViewerFlow> = {};
   for (const root of roots) {
@@ -356,7 +373,7 @@ function buildFlows(nodes: ViewerNode[], edges: ViewerEdge[], mode: "route" | "a
       const current = queue.shift()!;
       const depth = visited.get(current)!;
       if (depth >= 6) continue;
-      const nextEdges = edges.filter((edge) => edge.from === current && flowEdgeForViewer(edge));
+      const nextEdges = outgoing.get(current) ?? [];
       for (const edge of nextEdges.slice(0, 10)) {
         if (!nodeMap.has(edge.to)) continue;
         selectedEdges.push(edge);
@@ -374,7 +391,7 @@ function buildFlows(nodes: ViewerNode[], edges: ViewerEdge[], mode: "route" | "a
     const numbered = links.map((edge) => ({ ...edge, ...(visited.get(edge.to) === (visited.get(edge.from) ?? 0) + 1 ? { n: sequence++ } : {}) }));
     const id = mode === "route" ? `flow.${slug(root.id)}` : root.id;
     result[id] = {
-      title: `${root.label} — full ${mode === "route" ? "request" : "asynchronous"} flow`,
+      title: `${root.label} — focused ${mode === "route" ? "request" : "asynchronous"} flow`,
       summary: root.desc,
       root: root.id,
       steps,
