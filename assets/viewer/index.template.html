@@ -82,7 +82,7 @@
     </nav>
     <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
       <div style="position: relative;">
-        <input class="atlas-top-search" value="{{ searchQ }}" onChange="{{ onSearch }}" onFocus="{{ onSearchFocus }}" onBlur="{{ onSearchBlur }}" placeholder="Search routes, services, topics, files…" aria-label="Search project" style="width: 300px; height: 30px; border: 1px solid #3a4843; border-radius: 6px; background: #1f2c27; color: #e9efec; padding: 0 10px 0 30px; font-size: 12px; outline: none;" style-focus="border-color: #6f8f84; background: #24332d;">
+        <input class="atlas-top-search" value="{{ searchQ }}" onChange="{{ onSearch }}" onFocus="{{ onSearchFocus }}" onBlur="{{ onSearchBlur }}" placeholder="Search endpoint, function, service, table…" aria-label="Search project" style="width: 300px; height: 30px; border: 1px solid #3a4843; border-radius: 6px; background: #1f2c27; color: #e9efec; padding: 0 10px 0 30px; font-size: 12px; outline: none;" style-focus="border-color: #6f8f84; background: #24332d;">
         <svg viewBox="0 0 16 16" style="position: absolute; left: 9px; top: 8px; width: 14px; height: 14px; fill: none; stroke: #7d8d87; stroke-width: 1.6;"><circle cx="7" cy="7" r="4.4"></circle><line x1="10.4" y1="10.4" x2="14" y2="14"></line></svg>
         <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
           <div style="position: absolute; top: 36px; right: 0; width: 380px; max-height: 420px; overflow: auto; background: #fff; border: 1px solid #d4dbd7; border-radius: 8px; box-shadow: 0 18px 44px rgba(22,33,29,0.22); z-index: 60; animation: atlasFade 0.12s ease;">
@@ -149,6 +149,9 @@
           </sc-if>
           <sc-if value="{{ showTechToggle }}" hint-placeholder-val="{{ false }}">
             <button onClick="{{ toggleTech }}" aria-pressed="{{ techPressed }}" title="Show every raw relationship of the selected element" style="height: 28px; border: 1px solid {{ techBorder }}; border-radius: 6px; padding: 0 10px; font-size: 11.5px; font-weight: 600; background: {{ techBg }}; color: {{ techFg }};" style-hover="border-color: #9fb0a9;">{{ techLabel }}</button>
+          </sc-if>
+          <sc-if value="{{ showTraceToggle }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ toggleTrace }}" aria-pressed="{{ tracePressed }}" title="Follow every detected downstream branch from this element" style="height: 28px; border: 1px solid {{ traceBorder }}; border-radius: 6px; padding: 0 10px; font-size: 11.5px; font-weight: 600; background: {{ traceBg }}; color: {{ traceFg }};" style-hover="border-color: #9fb0a9;">{{ traceLabel }}</button>
           </sc-if>
           <sc-if value="{{ showGraphControls }}" hint-placeholder-val="{{ true }}">
             <div style="display: flex; gap: 6px;">
@@ -460,7 +463,10 @@
                   <rect x="0" y="0" width="4" sc-camel-height="{{ node.h }}" rx="2" sc-camel-fill="{{ node.accent }}"></rect>
                   <foreignObject x="10" y="5" sc-camel-width="{{ node.tw }}" sc-camel-height="{{ node.th }}">
                     <div style="font-family: 'IBM Plex Sans', sans-serif; overflow: hidden; height: 100%;">
-                      <div style="font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: {{ node.accent }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ node.typeLabel }}</div>
+                      <div style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: {{ node.accent }}; white-space: nowrap;">
+                        <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis;">{{ node.typeLabel }}</span>
+                        <sc-if value="{{ node.inferred }}" hint-placeholder-val="{{ false }}"><span title="{{ node.evidenceTip }}" style="flex: 0 0 auto; border-radius: 3px; padding: 1px 4px; background: #fff3d6; color: #8a6207; font-size: 7.5px; letter-spacing: 0.04em;">inferred</span></sc-if>
+                      </div>
                       <div style="font-size: {{ node.fs }}; font-weight: 600; color: #1a2321; line-height: 1.25; margin-top: 1px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: {{ node.font }};">{{ node.label }}</div>
                       <sc-if value="{{ node.sub }}" hint-placeholder-val="{{ false }}">
                         <div style="font-size: 9px; color: #77837e; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ node.sub }}</div>
@@ -489,6 +495,21 @@
                 <button onClick="{{ clearFocus }}" style="pointer-events: auto; height: 27px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #3c4744; padding: 0 10px; font-size: 11.5px; font-weight: 600;" style-hover="background: #f2f5f4;">Clear selection</button>
               </sc-if>
             </div>
+
+            <!-- full trace controls -->
+            <sc-if value="{{ traceActive }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; left: 12px; top: 46px; z-index: 8; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: calc(100% - 24px); padding: 6px 8px; border: 1px solid #d4dbd7; border-radius: 7px; background: rgba(255,255,255,0.97); box-shadow: 0 5px 16px rgba(22,33,29,0.08);">
+                <div role="group" aria-label="Trace direction" style="display: flex; border: 1px solid #d4dbd7; border-radius: 5px; overflow: hidden;">
+                  <sc-for list="{{ traceDirectionBtns }}" as="tb" hint-placeholder-count="2"><button onClick="{{ tb.go }}" title="{{ tb.tip }}" style="height: 24px; border: 0; border-right: 1px solid #e4e9e6; padding: 0 8px; font-size: 10.5px; font-weight: {{ tb.fw }}; color: {{ tb.fg }}; background: {{ tb.bg }};">{{ tb.label }}</button></sc-for>
+                </div>
+                <div role="group" aria-label="Relationship filters" style="display: flex; align-items: center; gap: 4px;">
+                  <sc-for list="{{ traceKindBtns }}" as="tb" hint-placeholder-count="5"><button onClick="{{ tb.go }}" aria-pressed="{{ tb.pressed }}" title="{{ tb.tip }}" style="height: 24px; border: 1px solid {{ tb.border }}; border-radius: 5px; padding: 0 7px; font-size: 10.5px; font-weight: 600; color: {{ tb.fg }}; background: {{ tb.bg }};">{{ tb.label }}</button></sc-for>
+                </div>
+                <div role="group" aria-label="Trace depth" style="display: flex; border: 1px solid #d4dbd7; border-radius: 5px; overflow: hidden;">
+                  <sc-for list="{{ traceDepthBtns }}" as="tb" hint-placeholder-count="4"><button onClick="{{ tb.go }}" title="{{ tb.tip }}" style="height: 24px; border: 0; border-right: 1px solid #e4e9e6; padding: 0 7px; font-size: 10.5px; font-weight: {{ tb.fw }}; color: {{ tb.fg }}; background: {{ tb.bg }};">{{ tb.label }}</button></sc-for>
+                </div>
+              </div>
+            </sc-if>
 
             <!-- legend -->
             <div style="position: absolute; left: 12px; bottom: 10px; display: flex; align-items: center; gap: 13px; padding: 6px 10px; border: 1px solid #d4dbd7; border-radius: 6px; background: rgba(255,255,255,0.94); font-size: 10px; color: #57635e; max-width: {{ legendMaxW }}; overflow: hidden; white-space: nowrap;">
@@ -709,7 +730,9 @@
 class Component extends DCLogic {
   state = {
     D: null, mode: 'map', sel: null, activeFlow: null, expandedOp: null,
-    tech: false, tab: 'overview', hist: [], q: '', catQ: '', searchOpen: false,
+    tech: false, trace: false, traceRoot: null, traceDirection: 'outgoing', traceDepth: '3',
+    traceSync: true, traceAsync: true, traceData: true, traceExternal: true, traceStructure: false,
+    tab: 'overview', hist: [], q: '', catQ: '', searchOpen: false,
     vb: null, hover: null, panning: false, domainFilter: null,
     dataVariant: 'overview', deliveryEnv: 'production',
     daQ: '', daDb: 'all', migQ: '', migOp: 'all', migDestr: false,
@@ -815,7 +838,7 @@ class Component extends DCLogic {
   select(id, opts = {}) {
     this.setState((s) => {
       const hist = s.sel && s.sel !== id ? s.hist.concat(s.sel) : s.hist;
-      return { sel: id, hist, tab: opts.tab || 'overview', tech: false, vb: null, hover: null,
+      return { sel: id, hist, tab: opts.tab || 'overview', tech: false, trace: false, traceRoot: null, vb: null, hover: null,
         mode: opts.mode || s.mode, activeFlow: opts.flow !== undefined ? opts.flow : s.activeFlow,
         expandedOp: opts.expandedOp !== undefined ? opts.expandedOp : null, searchOpen: false,
         panelHidden: !!opts.flow, storyOpen: !!opts.flow,
@@ -845,7 +868,7 @@ class Component extends DCLogic {
     this.select(id, { mode, flow, dbDetail });
   }
 
-  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, hist: [], vb: null, hover: null, catQ: '', domainFilter: null, mapExpanded: false, dbDetail: 'overview' }); }
+  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, hist: [], vb: null, hover: null, catQ: '', domainFilter: null, mapExpanded: false, dbDetail: 'overview' }); }
 
   // ---------- code highlighting ----------
   highlight(code) {
@@ -901,12 +924,14 @@ class Component extends DCLogic {
     else if (b.y > a.y) { x1 = a.x + a.w / 2; y1 = a.y + a.h; x2 = b.x + b.w / 2; y2 = b.y; }
     else { x1 = a.x + a.w / 2; y1 = a.y; x2 = b.x + b.w / 2; y2 = b.y + b.h; }
     const st = this.edgeStyle(e.kind, e.relation, e.verb);
+    const inferred = (e.confidence ?? 1) < 0.9 || e.source === 'heuristic';
+    if (inferred && !st.dash) st.dash = '2 4';
     const clickId = this.node(e.to) ? e.to : (this.node(e.from) ? e.from : null);
     const horizontal = Math.abs(x2 - x1) > Math.abs(y2 - y1);
     const d = horizontal ? this.bez(x1, y1, x2, y2) : `M ${x1} ${y1} C ${x1} ${y1 + (y2 - y1) * 0.45}, ${x2} ${y2 - (y2 - y1) * 0.45}, ${x2} ${y2 > y1 ? y2 - 8 : y2 + 8}`;
     return {
       id: 'e:' + e.from + '>' + e.to, d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
-      w: hi ? 2.6 : (e.kind === 'async' ? 2 : (e.relation === 'writes' ? 1.8 : 1.5)), op: dim ? 0.14 : (hi ? 1 : (e.kind === 'async' ? 0.96 : 0.74)),
+      w: hi ? 2.6 : (e.kind === 'async' ? 2 : (e.relation === 'writes' ? 1.8 : 1.5)), op: dim ? 0.14 : (hi ? 1 : (inferred ? 0.58 : (e.kind === 'async' ? 0.96 : 0.74))),
       showLabel: !!(showLabels && e.verb && !dim), verb: e.verb, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 7,
       moving: e.kind === 'async' && !dim, stationary: e.kind !== 'async' || dim,
       onEnter: (ev) => this.hoverEdge(ev, e),
@@ -918,12 +943,14 @@ class Component extends DCLogic {
     const sel = this.state.sel === n.id;
     const accent = this.color(n.type);
     const activate = extra.onClick || (() => this.reveal(n.id));
+    const inferred = (n.confidence ?? 1) < 0.9 || n.source === 'heuristic';
     return Object.assign({
       id: n.id, x, y, w, h, tw: w - 18, th: h - 8,
       label: n.label, sub: extra.sub !== undefined ? extra.sub : '', typeLabel: this.tLabel(n.type),
       accent, fill: sel ? '#fdf3ec' : '#fff', stroke: sel ? '#df642d' : '#ccd5d1', sw: sel ? 2 : 1,
       fs: n.label.length > 44 ? '8.8px' : n.label.length > 34 ? '9.4px' : n.label.length > 26 ? '10.2px' : '11.5px',
       font: (n.type === 'route' || n.type === 'topic' || n.type === 'queue' || n.type === 'table' || n.type === 'env') ? "'IBM Plex Mono', monospace" : "'IBM Plex Sans', sans-serif",
+      inferred, evidenceTip: inferred ? `Inferred by ${n.source || 'static analysis'} · ${Math.round((n.confidence ?? 0.7) * 100)}% confidence` : '',
       op: extra.dim ? 0.3 : 1, step: extra.step || false, expandLabel: extra.expandLabel || false,
       onClick: (ev) => {
         if (this._suppressClick) {
@@ -939,7 +966,8 @@ class Component extends DCLogic {
   }
   hoverNode(ev, n) {
     const box = ev.currentTarget.ownerSVGElement.getBoundingClientRect();
-    this.setState({ hover: { nodeId: n.id, x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: n.label, body: n.desc || this.tLabel(n.type) } });
+    const evidence = (n.confidence ?? 1) < 0.9 || n.source === 'heuristic' ? ` Inferred by ${n.source || 'static analysis'} (${Math.round((n.confidence ?? 0.7) * 100)}% confidence).` : '';
+    this.setState({ hover: { nodeId: n.id, x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: n.label, body: (n.desc || this.tLabel(n.type)) + evidence } });
   }
   hoverEdge(ev, e) {
     const a = this.node(e.from), b = this.node(e.to); if (!a || !b) return;
@@ -950,14 +978,16 @@ class Component extends DCLogic {
     }[e.relation];
     const kindNote = relationNote || { sync: 'synchronous call — the caller waits', async: 'event or queue — work happens later', data: 'data relationship', external: 'call outside the system' }[e.kind] || '';
     const relationDetails = e.details ? Object.entries(e.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : '';
-    this.setState({ hover: { edgeFrom: e.from, edgeTo: e.to, x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: `${a.label} → ${b.label}`, body: `${a.label} ${e.verb} ${b.label}. ${kindNote ? '(' + kindNote + ')' : ''}${relationDetails ? ' ' + relationDetails : ''}` } });
+    const evidence = (e.confidence ?? 1) < 0.9 || e.source === 'heuristic' ? ` Inferred by ${e.source || 'static analysis'} (${Math.round((e.confidence ?? 0.7) * 100)}% confidence).` : '';
+    this.setState({ hover: { edgeFrom: e.from, edgeTo: e.to, x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: `${a.label} → ${b.label}`, body: `${a.label} ${e.verb} ${b.label}. ${kindNote ? '(' + kindNote + ')' : ''}${relationDetails ? ' ' + relationDetails : ''}${evidence}` } });
   }
 
   // ---------- scenes ----------
   scene() {
-    const { D, mode, sel, tech, activeFlow, expandedOp, domainFilter } = this.state;
+    const { D, mode, sel, tech, trace, traceRoot, activeFlow, expandedOp, domainFilter } = this.state;
     if (!D) return { nodes: [], edges: [], groups: [], cols: [], status: 'Loading…' };
     if (tech && sel) return this.sceneTech(sel);
+    if (trace && (traceRoot || sel)) return this.sceneTrace(traceRoot || sel);
     if (mode === 'map') return this.sceneMap();
     if (mode === 'modules') {
       if (sel && sel.startsWith('op.') && this._profHost) return this.sceneModule(this._profHost);
@@ -971,7 +1001,7 @@ class Component extends DCLogic {
     if (mode === 'routes') {
       if (activeFlow && D.flows[activeFlow]) return this.sceneFlow(D.flows[activeFlow]);
       if (sel && this.node(sel)?.type === 'controller') return this.sceneController(sel);
-      return sel ? this.sceneDirectional(sel) : this.sceneGrid(['route'], 'Select a route on the left to trace its full request flow.');
+      return sel ? this.sceneDirectional(sel) : this.sceneGrid(['route'], 'Select a route on the left to open a readable request flow, then use Full trace for every detected branch.');
     }
     if (mode === 'async') return activeFlow && D.asyncFlows[activeFlow] ? this.sceneFlow(D.asyncFlows[activeFlow]) : (sel ? this.sceneDirectional(sel) : this.sceneAsyncOverview());
     if (mode === 'services') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['service', 'use_case', 'port', 'adapter', 'provider', 'repository'], 'Select an application component to see who calls it and what it depends on.');
@@ -1335,7 +1365,7 @@ class Component extends DCLogic {
       const opNode = prof.generic ? this.node(op.id) : { id: op.id, type: 'method', label: op.name, desc: op.desc };
       N.push(this.mkNode(opNode, b.x, b.y, b.w, b.h, {
         dim: dimOf(op.id), sub: op.desc,
-        expandLabel: op.flow ? (isExp ? 'Open full request flow' : 'Click to expand') : false,
+        expandLabel: op.flow ? (isExp ? 'Open focused request flow' : 'Click to expand') : false,
         onClick: () => op.flow
           ? (isExp ? this.select(op.routes[0], { mode: 'routes', flow: op.flow }) : this.select(op.id, { expandedOp: op.id }))
           : this.select(isExp ? sel : op.id, { expandedOp: isExp ? null : op.id }),
@@ -1372,7 +1402,7 @@ class Component extends DCLogic {
     });
     const expanded = expandedOp ? prof.operations.find((op) => op.id === expandedOp) : null;
     const status = expandedOp
-      ? `Operation expanded — the orange chain shows exactly what ${expanded ? expanded.name : 'this operation'} touches.${expanded && expanded.flow ? ' Click it again to open the full request flow.' : ''}`
+      ? `Operation expanded — the orange chain shows exactly what ${expanded ? expanded.name : 'this operation'} touches.${expanded && expanded.flow ? ' Click it again to open the focused request flow.' : ''}`
       : hasFocus
         ? `Chain preview — orange shows everything connected to ${this.node(hoverId) ? this.node(hoverId).label : 'this item'}. Click an operation to keep the focus.`
       : `${mod.label}: ${this.plural(prof.starts.length, 'trigger')} · ${this.plural(prof.operations.length, 'operation')} · ${this.plural(prof.needs.length, 'dependency').replace('dependencys', 'dependencies')} · ${this.plural(prof.changes.length, 'effect')}. Click an operation to inspect its relationships.`;
@@ -1546,7 +1576,88 @@ class Component extends DCLogic {
       if (!pos[l.from] || !pos[l.to]) return;
       E.push(this.linkEdge(pos[l.from], pos[l.to], l, false, false, showLabels));
     });
-    return { nodes: N, edges: E, groups: [], cols: C, status: flow.ends ? 'Where it ends: ' + flow.ends : flow.summary, flowTitle: flow.title };
+    return { nodes: N, edges: E, groups: [], cols: C, status: `Focused view · ${flow.steps.length} elements. ${flow.ends ? 'Where it ends: ' + flow.ends : flow.summary} Use Full trace to inspect every detected branch.`, flowTitle: flow.title };
+  }
+
+  sceneTrace(rootId) {
+    const { D, traceDirection, traceDepth, traceSync, traceAsync, traceData, traceExternal, traceStructure } = this.state;
+    const root = this.node(rootId);
+    if (!root || rootId.startsWith('op.')) return this.sceneDirectional(rootId);
+    const structural = new Set(['contains', 'declares', 'has_method', 'has_column', 'imports', 'exports', 'provides']);
+    const enabled = { sync: traceSync, async: traceAsync, data: traceData, external: traceExternal };
+    const allowed = (edge) => !!enabled[edge.kind] && (traceStructure || !structural.has(edge.relation || String(edge.verb || '').replaceAll(' ', '_')));
+    if (this._traceIndexD !== D) {
+      const outgoing = new Map(), incoming = new Map();
+      D.edges.forEach((edge) => {
+        const out = outgoing.get(edge.from) || []; out.push(edge); outgoing.set(edge.from, out);
+        const inc = incoming.get(edge.to) || []; inc.push(edge); incoming.set(edge.to, inc);
+      });
+      this._traceIndex = { outgoing, incoming };
+      this._traceIndexD = D;
+    }
+    const depthLimit = traceDepth === 'all' ? Number.POSITIVE_INFINITY : Number(traceDepth);
+    const maxNodes = 400, maxEdges = 1200;
+    const depths = new Map([[rootId, 0]]);
+    let truncated = false;
+    const walk = (direction, sign) => {
+      const queue = [{ id: rootId, depth: 0 }];
+      const seen = new Set([rootId]);
+      while (queue.length) {
+        const current = queue.shift();
+        if (current.depth >= depthLimit) continue;
+        const candidates = (this._traceIndex[direction].get(current.id) || []).filter(allowed);
+        for (const edge of candidates) {
+          const next = direction === 'outgoing' ? edge.to : edge.from;
+          if (seen.has(next)) continue;
+          if (depths.size >= maxNodes) { truncated = true; continue; }
+          seen.add(next);
+          if (!depths.has(next)) depths.set(next, (current.depth + 1) * sign);
+          queue.push({ id: next, depth: current.depth + 1 });
+        }
+      }
+    };
+    walk('outgoing', 1);
+    if (traceDirection === 'both') walk('incoming', -1);
+    const visible = new Set(depths.keys());
+    const allVisibleEdges = D.edges.filter((edge) => visible.has(edge.from) && visible.has(edge.to) && allowed(edge));
+    if (allVisibleEdges.length > maxEdges) truncated = true;
+    const links = allVisibleEdges.slice(0, maxEdges);
+    const byDepth = new Map();
+    depths.forEach((depth, id) => { const list = byDepth.get(depth) || []; list.push(id); byDepth.set(depth, list); });
+    const typeOrder = ['route', 'controller', 'method', 'function', 'service', 'use_case', 'port', 'adapter', 'repository', 'provider', 'topic', 'queue', 'processor', 'table', 'entity', 'model', 'external'];
+    byDepth.forEach((ids) => ids.sort((a, b) => {
+      const an = this.node(a), bn = this.node(b);
+      return (typeOrder.indexOf(an.type) < 0 ? 99 : typeOrder.indexOf(an.type)) - (typeOrder.indexOf(bn.type) < 0 ? 99 : typeOrder.indexOf(bn.type)) || an.label.localeCompare(bn.label);
+    }));
+    const orderedDepths = Array.from(byDepth.keys()).sort((a, b) => a - b);
+    const N = [], E = [], C = [], pos = {};
+    const colW = 300, rowH = 72, cardW = 250, cardH = 54;
+    orderedDepths.forEach((depth, column) => {
+      const ids = byDepth.get(depth);
+      const x = 40 + column * colW;
+      const label = depth < 0 ? `UPSTREAM ${Math.abs(depth)}` : depth === 0 ? 'TRACE ORIGIN' : `DOWNSTREAM ${depth}`;
+      C.push({ x, y: 46, x2: x + cardW, ly: 54, label, sub: `${ids.length} element${ids.length === 1 ? '' : 's'}`, subY: 68, fill: depth === 0 ? '#df642d' : '#8b9793' });
+      ids.forEach((id, row) => {
+        const node = this.node(id); if (!node) return;
+        const box = { x, y: 86 + row * rowH, w: cardW, h: cardH }; pos[id] = box;
+        N.push(this.mkNode(node, box.x, box.y, box.w, box.h, {
+          sub: node.file || node.desc || '',
+          onClick: () => this.setState({ sel: id, tab: 'overview', panelHidden: false, hover: null }),
+          over: id === rootId ? { fill: '#fdf3ec', stroke: '#df642d', sw: 2 } : {},
+        }));
+      });
+    });
+    links.forEach((edge) => {
+      if (!pos[edge.from] || !pos[edge.to]) return;
+      const visual = this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true);
+      visual.onClick = (ev) => { ev.stopPropagation(); this.setState({ sel: edge.to, tab: 'overview', panelHidden: false, hover: null }); };
+      E.push(visual);
+    });
+    const inferred = links.filter((edge) => (edge.confidence ?? 1) < 0.9 || edge.source === 'heuristic').length;
+    const depthScope = traceDepth === 'all' ? 'Full trace' : `Depth ${traceDepth} trace`;
+    const completeness = truncated ? `Safety limit reached at ${N.length} elements / ${E.length} links; narrow the filters or depth to inspect this branch without freezing the browser.` : traceDepth === 'all' ? `Complete for the selected filters: ${N.length} elements and ${E.length} links.` : `${N.length} elements and ${E.length} links are visible. Choose All to verify the complete reachable path.`;
+    const evidence = inferred ? ` ${inferred} inferred link${inferred === 1 ? '' : 's'} are dotted and labelled on hover.` : ' Every shown link is directly supported by the scanner.';
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${depthScope} from ${root.label}. ${completeness}${evidence}` };
   }
 
   sceneDirectional(sel) {
@@ -2023,7 +2134,7 @@ class Component extends DCLogic {
 
   // ---------- render ----------
   renderVals() {
-    const { D, mode, sel, tab, hist, q, catQ, searchOpen, hover, tech, activeFlow, domainFilter, panning } = this.state;
+    const { D, mode, sel, tab, hist, q, catQ, searchOpen, hover, tech, trace, activeFlow, domainFilter, panning } = this.state;
     const loading = !D;
     const scn = loading ? { nodes: [], edges: [], groups: [], cols: [], status: 'Loading project graph…' } : this.scene();
     const vbStr = this.state.vb ? `${this.state.vb.x} ${this.state.vb.y} ${this.state.vb.w} ${this.state.vb.h}` : this.fitVb(scn);
@@ -2143,10 +2254,18 @@ class Component extends DCLogic {
     }
 
     // search
-    const searchResults = (q && D) ? D.nodes
-      .filter((n) => (n.label + ' ' + (n.file || '') + ' ' + n.type).toLowerCase().includes(q.toLowerCase()))
-      .slice(0, 9)
-      .map((n) => ({ label: n.label, sub: n.file || n.desc || '', type: this.tLabel(n.type), color: this.color(n.type), go: () => { this.setState({ q: '', searchOpen: false }); this.reveal(n.id); } })) : [];
+    const searchResults = (q && D) ? (() => {
+      const needle = q.trim().toLowerCase();
+      const important = new Set(['route', 'method', 'function', 'controller', 'service', 'use_case', 'port', 'adapter', 'repository', 'table', 'topic', 'queue', 'processor']);
+      return D.nodes.map((n) => {
+        const label = String(n.label || '').toLowerCase(), file = String(n.file || '').toLowerCase();
+        const desc = String(n.desc || '').toLowerCase(), path = String(n.details?.path || n.details?.route || '').toLowerCase();
+        let score = label === needle ? 120 : path === needle ? 115 : label.startsWith(needle) ? 90 : path.startsWith(needle) ? 85 : label.includes(needle) ? 70 : path.includes(needle) ? 65 : file.includes(needle) ? 35 : desc.includes(needle) ? 15 : 0;
+        if (score && important.has(n.type)) score += 8;
+        return { n, score };
+      }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || a.n.label.localeCompare(b.n.label)).slice(0, 12)
+        .map(({ n }) => ({ label: n.label, sub: n.details?.path || n.file || n.desc || '', type: this.tLabel(n.type), color: this.color(n.type), go: () => { this.setState({ q: '', searchOpen: false }); this.reveal(n.id); } }));
+    })() : [];
 
     // panel
     const panelOpen = !!selNode && !this.state.panelHidden;
@@ -2177,12 +2296,14 @@ class Component extends DCLogic {
           const other = this.node(dir === 'in' ? e.from : e.to);
           if (!other) return;
           if (e.kind !== lastKind) { items.push({ isHeading: true, isItem: false, label: kindName[e.kind] || e.kind }); lastKind = e.kind; }
-          const detail = e.details ? Object.entries(e.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : '';
+          const evidence = (e.confidence ?? 1) < 0.9 || e.source === 'heuristic' ? `inferred ${Math.round((e.confidence ?? 0.7) * 100)}%` : `evidence: ${e.source || 'AST'}`;
+          const detail = [e.details ? Object.entries(e.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : '', evidence].filter(Boolean).join(' · ');
           items.push({ isHeading: false, isItem: true, label: other.label, verb: `${dir === 'in' ? `${other.label} ${e.verb} ${selNode.label}` : `${selNode.label} ${e.verb} ${other.label}`}${detail ? ' · ' + detail : ''}`, color: this.color(other.type), tip: `${other.desc || this.typeExplain(other.type)}${detail ? ' ' + detail : ''}`, go: () => this.reveal(other.id) });
         });
         return items;
       };
       const facts = [];
+      facts.push({ k: 'Evidence', v: (selNode.confidence ?? 1) < 0.9 || selNode.source === 'heuristic' ? `Inferred by ${selNode.source || 'static analysis'} · ${Math.round((selNode.confidence ?? 0.7) * 100)}% confidence` : `Directly detected from ${selNode.source || 'AST'}` });
       facts.push({ k: 'Used by', v: inc.length ? `${inc.length} element${inc.length > 1 ? 's' : ''} (see Incoming)` : 'nothing directly' });
       facts.push({ k: 'Uses', v: out.length ? `${out.length} element${out.length > 1 ? 's' : ''} (see Outgoing)` : 'nothing directly' });
       if (flowsOf.length) facts.push({ k: 'In flows', v: flowsOf.map((f) => f.label).join(', ') });
@@ -2206,7 +2327,8 @@ class Component extends DCLogic {
 
       const actions = [];
       const flowForSel = D.routeFlowIndex[sel] || (D.asyncFlows[sel] ? sel : null);
-      if (flowForSel && !activeFlow) actions.push({ label: 'View full flow', bg: '#df642d', fg: '#fff', border: '#df642d', go: () => this.select(D.flows[flowForSel] ? (D.flows[flowForSel].root) : sel, { mode: D.flows[flowForSel] ? 'routes' : 'async', flow: flowForSel }) });
+      if (flowForSel && !activeFlow) actions.push({ label: 'View focused flow', bg: '#df642d', fg: '#fff', border: '#df642d', go: () => this.select(D.flows[flowForSel] ? (D.flows[flowForSel].root) : sel, { mode: D.flows[flowForSel] ? 'routes' : 'async', flow: flowForSel }) });
+      if (!sel.startsWith('op.')) actions.push({ label: 'Trace dependencies', bg: '#fff', fg: '#1f6f5b', border: '#9fbeb3', go: () => this.setState({ trace: true, traceRoot: sel, traceDepth: '3', tech: false, vb: null, panelHidden: false }) });
       if (src) actions.push({ label: 'View source', bg: '#fff', fg: '#333e3a', border: '#d4dbd7', go: () => this.setState({ tab: 'source' }) });
       if (selNode.file && selNode.type !== 'file') {
         const fn = D.nodes.find((x) => x.type === 'file' && x.file === selNode.file);
@@ -2420,10 +2542,28 @@ class Component extends DCLogic {
         fw: variantConfig.value === id ? 700 : 500, hoverBg: variantConfig.value === id ? '#16211d' : '#f2f5f4',
       })),
       showTechToggle: !listScreen && !!selNode && !sel?.startsWith('op.'),
-      toggleTech: () => this.setState((s) => ({ tech: !s.tech, vb: null })),
+      toggleTech: () => this.setState((s) => ({ tech: !s.tech, trace: false, traceRoot: null, vb: null })),
       techPressed: tech ? 'true' : 'false', techLabel: tech ? '← Semantic view' : 'Technical graph',
       techBg: tech ? '#16211d' : '#fff', techFg: tech ? '#fff' : '#4e5a56', techBorder: tech ? '#16211d' : '#d4dbd7',
-      goBack: () => this.setState((s) => { const h = s.hist.slice(); const prev = h.pop(); return prev ? { sel: prev, hist: h, vb: null, tech: false, expandedOp: null } : {}; }),
+      showTraceToggle: !listScreen && (trace || (!!selNode && !sel?.startsWith('op.'))),
+      toggleTrace: () => this.setState((s) => {
+        if (s.trace) return { trace: false, traceRoot: null, vb: null };
+        const flow = s.activeFlow ? (s.D.flows[s.activeFlow] || s.D.asyncFlows[s.activeFlow]) : null;
+        return { trace: true, traceRoot: flow?.root || s.sel, tech: false, vb: null, panelHidden: false };
+      }),
+      tracePressed: trace ? 'true' : 'false', traceLabel: trace ? '← Focused view' : 'Trace flow',
+      traceBg: trace ? '#16211d' : '#fff', traceFg: trace ? '#fff' : '#4e5a56', traceBorder: trace ? '#16211d' : '#d4dbd7',
+      traceActive: trace,
+      traceDirectionBtns: [['outgoing', 'Downstream', 'Follow what this element starts, calls, changes, or publishes.'], ['both', 'Both directions', 'Also include everything that can lead into this element.']].map(([id, label, tip]) => ({ label, tip, go: () => this.setState({ traceDirection: id, vb: null }), bg: this.state.traceDirection === id ? '#16211d' : '#fff', fg: this.state.traceDirection === id ? '#fff' : '#4e5a56', fw: this.state.traceDirection === id ? 700 : 500 })),
+      traceKindBtns: [
+        ['traceSync', 'Calls', '#7d8a84', 'Synchronous calls, uses, handlers, ports, and adapters.'],
+        ['traceAsync', 'Events', '#0f7895', 'Topics, queues, jobs, and processors that run later.'],
+        ['traceData', 'Data', '#1e8068', 'Reads, writes, migrations, indexes, and data changes.'],
+        ['traceExternal', 'External', '#c94747', 'Calls that leave the analyzed system.'],
+        ['traceStructure', 'Structure', '#7452a8', 'Imports, declarations, containment, and module wiring.'],
+      ].map(([key, label, color, tip]) => ({ label, tip, pressed: this.state[key] ? 'true' : 'false', go: () => this.setState((s) => ({ [key]: !s[key], vb: null })), bg: this.state[key] ? color : '#fff', fg: this.state[key] ? '#fff' : '#4e5a56', border: this.state[key] ? color : '#d4dbd7' })),
+      traceDepthBtns: [['3', '3', 'Show three relationship steps.'], ['6', '6', 'Show six relationship steps.'], ['12', '12', 'Show twelve relationship steps.'], ['all', 'All', 'Follow every reachable branch until the graph ends or the browser safety limit is reached.']].map(([id, label, tip]) => ({ label, tip, go: () => this.setState({ traceDepth: id, vb: null }), bg: String(this.state.traceDepth) === id ? '#16211d' : '#fff', fg: String(this.state.traceDepth) === id ? '#fff' : '#4e5a56', fw: String(this.state.traceDepth) === id ? 700 : 500 })),
+      goBack: () => this.setState((s) => { const h = s.hist.slice(); const prev = h.pop(); return prev ? { sel: prev, hist: h, vb: null, tech: false, trace: false, traceRoot: null, expandedOp: null } : {}; }),
       backDisabled: !hist.length, backOpacity: hist.length ? '1' : '0.4',
       doFit: () => this.setState({ vb: null }),
       zoomIn: () => this.zoom(0.78), zoomOut: () => this.zoom(1.28),
@@ -2439,8 +2579,8 @@ class Component extends DCLogic {
       statusText: scn.status || '', graphEmpty: !!scn.emptyOk,
       emptyTitle: catQ ? 'Nothing matches the current filter' : (mode === 'data' ? 'No data structures detected' : 'Nothing was detected in this section'),
       emptyHint: catQ ? 'Clear the filter in the list on the left to see all elements.' : (mode === 'data' ? 'Atlas did not recognize database schemas, tables, entities, or models in this scan.' : 'This scan did not produce any elements for this view.'),
-      showClearFocus: !!sel || !!activeFlow,
-      clearFocus: () => this.setState({ sel: null, activeFlow: null, expandedOp: null, tech: false, vb: null, hist: [], dbDetail: 'overview' }),
+      showClearFocus: !!sel || !!activeFlow || trace,
+      clearFocus: () => this.setState({ sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, vb: null, hist: [], dbDetail: 'overview' }),
       onHoverOut: () => this.setState({ hover: null }),
       onCanvasClick: (e) => {
         if (e.target !== e.currentTarget || this._suppressClick || !this.state.expandedOp) return;
@@ -2501,7 +2641,7 @@ class Component extends DCLogic {
       onSearchFocus: () => this.setState({ searchOpen: true }),
       onSearchBlur: () => setTimeout(() => this.setState({ searchOpen: false }), 180),
 
-      panelOpen, closePanel: () => this.setState({ sel: null, tech: false, expandedOp: null, vb: null }),
+      panelOpen, closePanel: () => this.setState(trace ? { panelHidden: true } : { sel: null, tech: false, expandedOp: null, vb: null }),
       ...pVals,
       ...ov,
       goMap: () => this.setMode('map'), goRisks: () => this.setMode('risks'),
