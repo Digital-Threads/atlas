@@ -1,6 +1,6 @@
 export const graphNodeTypes = [
   "project", "folder", "file", "package", "module", "controller", "service",
-  "provider", "repository", "entity", "dto", "method", "function", "route",
+  "provider", "repository", "use_case", "port", "adapter", "entity", "dto", "method", "function", "route",
   "guard", "pipe", "interceptor", "middleware", "decorator", "database",
   "table", "column", "model", "environment_variable", "external_api",
   "message_broker", "message_topic", "queue", "processor",
@@ -11,7 +11,7 @@ export const graphNodeTypes = [
 ] as const;
 
 export const graphEdgeTypes = [
-  "contains", "imports", "exports", "declares", "provides", "injects", "calls",
+  "contains", "imports", "exports", "declares", "provides", "injects", "implements", "calls",
   "uses", "reads", "writes", "handles", "depends_on", "decorates", "validates",
   "returns", "references", "connects_to", "tests", "has_method", "has_column",
   "publishes_to", "delivers_to", "enqueues", "processes",
