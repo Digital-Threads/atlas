@@ -1684,14 +1684,27 @@ class Component extends DCLogic {
     const { D } = this.state;
     const roots = D.nodes.filter((node) => ['topic', 'queue'].includes(node.type));
     const brokers = D.nodes.filter((node) => node.type === 'broker');
-    const consumers = D.nodes.filter((node) => node.type === 'processor' || (node.type === 'method' && D.edges.some((edge) => roots.some((root) => root.id === edge.from) && edge.to === node.id && ['delivered to', 'processed by'].includes(edge.verb))));
+    const rootIds = new Set(roots.map((node) => node.id));
+    const outgoing = new Map();
+    D.edges.forEach((edge) => {
+      if (!rootIds.has(edge.from) || !['delivered to', 'processed by'].includes(edge.verb)) return;
+      outgoing.set(edge.from, [...(outgoing.get(edge.from) || []), edge]);
+    });
+    const keyRoots = roots.slice().sort((a, b) => (outgoing.get(b.id)?.length || 0) - (outgoing.get(a.id)?.length || 0) || a.label.localeCompare(b.label)).slice(0, 10);
+    const consumerIds = [];
+    const consumerSeen = new Set();
+    keyRoots.forEach((root) => (outgoing.get(root.id) || []).slice(0, 2).forEach((edge) => {
+      if (!consumerSeen.has(edge.to) && consumerIds.length < 14) { consumerSeen.add(edge.to); consumerIds.push(edge.to); }
+    }));
+    const consumers = consumerIds.map((id) => this.node(id)).filter(Boolean);
+    const visibleIds = new Set([...brokers.map((node) => node.id), ...keyRoots.map((node) => node.id), ...consumerIds]);
     const N = [], E = [], C = [], pos = {};
-    [[40, 'BROKERS', 'message transports'], [350, 'TOPICS & QUEUES', 'all asynchronous entry points'], [700, 'CONSUMERS & PROCESSORS', 'what receives and runs next']].forEach(([x, label, sub]) => C.push({ x, y: 34, subY: 47, x2: Number(x) + 260, ly: 56, label, sub, fill: '#8b9793' }));
+    [[40, 'BROKERS', 'message transports'], [360, 'KEY TOPICS & QUEUES', `${keyRoots.length} most active of ${roots.length}`], [720, 'CONSUMERS & PROCESSORS', 'representative downstream handlers']].forEach(([x, label, sub]) => C.push({ x, y: 34, subY: 47, x2: Number(x) + 280, ly: 56, label, sub, fill: '#8b9793' }));
     brokers.forEach((node, index) => { const b = { x: 40, y: 76 + index * 70, w: 260, h: 56 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: node.details?.transport || '' })); });
-    roots.forEach((node, index) => { const b = { x: 350, y: 76 + index * 66, w: 270, h: 52 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: node.details?.transport || 'detected message channel' })); });
-    consumers.forEach((node, index) => { const b = { x: 700, y: 76 + index * 66, w: 270, h: 52 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h)); });
-    D.edges.filter((edge) => pos[edge.from] && pos[edge.to]).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
-    return { nodes: N, edges: E, groups: [], cols: C, status: `${brokers.length} brokers · ${D.nodes.filter((n) => n.type === 'topic').length} topics · ${D.nodes.filter((n) => n.type === 'queue').length} queues · ${D.nodes.filter((n) => n.type === 'processor').length} processors. Select a topic or queue to open its complete publisher-to-consumer flow.` };
+    keyRoots.forEach((node, index) => { const b = { x: 360, y: 76 + index * 72, w: 290, h: 56 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: `${outgoing.get(node.id)?.length || 0} downstream handlers` })); });
+    consumers.forEach((node, index) => { const b = { x: 720, y: 76 + index * 66, w: 300, h: 52 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h)); });
+    D.edges.filter((edge) => visibleIds.has(edge.from) && visibleIds.has(edge.to)).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
+    return { nodes: N, edges: E, groups: [], cols: C, status: `Showing ${keyRoots.length} of ${roots.length} channels and ${consumers.length} representative handlers. Use the complete catalog on the left, then select a topic or queue to open its focused publisher-to-consumer flow.` };
   }
 
   sceneScheduleOverview() {
