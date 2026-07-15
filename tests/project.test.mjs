@@ -198,6 +198,9 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(Object.keys(viewerData.flows).length > 0);
   assert.ok(Object.keys(viewerData.asyncFlows).length > 0);
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "async"));
+  assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "external"));
+  assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "data" && [edge.from, edge.to].some((id) => id.startsWith("database:"))));
+  assert.ok(viewerData.mapEdges.every((edge) => edge.relation !== "has_column"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "reads" && edge.kind === "data"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "writes" && edge.kind === "data"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "references" && edge.details?.relation));
