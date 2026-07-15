@@ -1017,7 +1017,11 @@ class Component extends DCLogic {
     };
     // Pick connected async chains first, so a processor is not shown without its topic or queue.
     D.mapEdges.filter((edge) => edge.kind === 'async' && (runtimeNodeIds.has(edge.from) || runtimeNodeIds.has(edge.to)))
-      .sort((a, b) => (b.count || 0) - (a.count || 0))
+      .sort((a, b) => {
+        const aInternal = runtimeNodeIds.has(a.from) && runtimeNodeIds.has(a.to) ? 1 : 0;
+        const bInternal = runtimeNodeIds.has(b.from) && runtimeNodeIds.has(b.to) ? 1 : 0;
+        return bInternal - aInternal || (b.count || 0) - (a.count || 0);
+      })
       .forEach((edge) => { addRuntime(edge.from); addRuntime(edge.to); });
     D.mapEdges.filter((edge) => runtimeNodeIds.has(edge.from) || runtimeNodeIds.has(edge.to))
       .sort((a, b) => (b.count || 0) - (a.count || 0))
