@@ -20,6 +20,7 @@ interface ViewerEdge {
   verb: string;
   kind: ViewerKind;
   relation?: GraphEdge["type"];
+  details?: Record<string, string | number | boolean | string[]>;
   count?: number;
   n?: number;
 }
@@ -176,12 +177,14 @@ function viewerType(type: GraphNode["type"]): string {
 
 function toViewerEdge(edge: GraphEdge): ViewerEdge {
   const customLabel = edge.label && edge.label !== edge.type ? edge.label : "";
+  const details = safeDetails(edge.metadata ?? {});
   return {
     from: edge.from,
     to: edge.to,
     verb: customLabel || edgeVerb(edge.type),
     kind: edgeKind(edge.type),
     relation: edge.type,
+    ...(details ? { details } : {}),
   };
 }
 
