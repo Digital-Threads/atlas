@@ -30,6 +30,7 @@
     ::-webkit-scrollbar-thumb { background: #c9d1cd; border-radius: 5px; border: 2px solid #f2f4f3; }
     @keyframes atlasFade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes atlasDash { to { stroke-dashoffset: -20; } }
+    .atlas-edge-async { animation: atlasDash 1.8s linear infinite; }
     @media (prefers-reduced-motion: reduce) { .atlas-edge { animation: none !important; } }
     .atlas-scroll-screen { scrollbar-gutter: stable; }
     .atlas-table-row { transition: background 120ms ease, border-color 120ms ease; }
@@ -440,7 +441,12 @@
               <sc-for list="{{ gEdges }}" as="edge" hint-placeholder-count="0">
                 <g sc-camel-opacity="{{ edge.op }}" onClick="{{ edge.onClick }}" onMouseEnter="{{ edge.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: {{ edge.cursor }};">
                   <path sc-camel-d="{{ edge.d }}" fill="none" stroke="transparent" stroke-width="12"></path>
-                  <path class="atlas-edge" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}" sc-camel-style="{{ edge.anim }}"></path>
+                  <sc-if value="{{ edge.moving }}" hint-placeholder-val="{{ false }}">
+                    <path class="atlas-edge atlas-edge-async" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}"></path>
+                  </sc-if>
+                  <sc-if value="{{ edge.stationary }}" hint-placeholder-val="{{ true }}">
+                    <path class="atlas-edge" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}"></path>
+                  </sc-if>
                   <sc-if value="{{ edge.showLabel }}" hint-placeholder-val="{{ false }}">
                     <text sc-camel-x="{{ edge.lx }}" sc-camel-y="{{ edge.ly }}" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; font-weight: 600; fill: {{ edge.labelFill }}; paint-order: stroke; stroke: #f7f9f8; stroke-width: 4px; stroke-linejoin: round;">{{ edge.verb }}</text>
                   </sc-if>
@@ -897,9 +903,9 @@ class Component extends DCLogic {
     const d = horizontal ? this.bez(x1, y1, x2, y2) : `M ${x1} ${y1} C ${x1} ${y1 + (y2 - y1) * 0.45}, ${x2} ${y2 - (y2 - y1) * 0.45}, ${x2} ${y2 > y1 ? y2 - 8 : y2 + 8}`;
     return {
       id: 'e:' + e.from + '>' + e.to, d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
-      w: hi ? 2.6 : (e.relation === 'writes' ? 1.8 : 1.5), op: dim ? 0.14 : (hi ? 1 : 0.82),
+      w: hi ? 2.6 : (e.kind === 'async' ? 2 : (e.relation === 'writes' ? 1.8 : 1.5)), op: dim ? 0.14 : (hi ? 1 : (e.kind === 'async' ? 0.96 : 0.74)),
       showLabel: !!(showLabels && e.verb && !dim), verb: e.verb, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 7,
-      anim: `${e.kind === 'async' && !dim ? `animation: atlasDash ${hi ? 1.1 : 2.2}s linear infinite;` : ''}${hi ? `filter: drop-shadow(0 0 2px ${st.color});` : ''}`,
+      moving: e.kind === 'async' && !dim, stationary: e.kind !== 'async' || dim,
       onEnter: (ev) => this.hoverEdge(ev, e),
       cursor: clickId ? 'pointer' : 'default',
       onClick: clickId ? (ev) => { ev.stopPropagation(); this.reveal(clickId); } : () => {},
@@ -913,7 +919,7 @@ class Component extends DCLogic {
       id: n.id, x, y, w, h, tw: w - 18, th: h - 8,
       label: n.label, sub: extra.sub !== undefined ? extra.sub : '', typeLabel: this.tLabel(n.type),
       accent, fill: sel ? '#fdf3ec' : '#fff', stroke: sel ? '#df642d' : '#ccd5d1', sw: sel ? 2 : 1,
-      fs: n.label.length > 26 ? '10.5px' : '11.5px',
+      fs: n.label.length > 44 ? '8.8px' : n.label.length > 34 ? '9.4px' : n.label.length > 26 ? '10.2px' : '11.5px',
       font: (n.type === 'route' || n.type === 'topic' || n.type === 'queue' || n.type === 'table' || n.type === 'env') ? "'IBM Plex Mono', monospace" : "'IBM Plex Sans', sans-serif",
       op: extra.dim ? 0.3 : 1, step: extra.step || false, expandLabel: extra.expandLabel || false,
       onClick: (ev) => {
@@ -1001,8 +1007,22 @@ class Component extends DCLogic {
     const keyIds = (types, limit) => D.nodes.filter((n) => types.includes(n.type))
       .sort((a, b) => relationCount(b.id) - relationCount(a.id) || a.label.localeCompare(b.label))
       .map((n) => n.id).slice(0, limit);
-    const runtimeTotal = D.nodes.filter((n) => ['broker', 'topic', 'queue', 'processor'].includes(n.type)).length;
-    const runtime = keyIds(['broker', 'topic', 'queue', 'processor'], 14);
+    const runtimeTypes = ['broker', 'topic', 'queue', 'processor'];
+    const runtimeNodeIds = new Set(D.nodes.filter((n) => runtimeTypes.includes(n.type)).map((n) => n.id));
+    const runtimeTotal = runtimeNodeIds.size;
+    const runtime = [];
+    const runtimeSeen = new Set();
+    const addRuntime = (id) => {
+      if (runtimeNodeIds.has(id) && !runtimeSeen.has(id) && runtime.length < 15) { runtimeSeen.add(id); runtime.push(id); }
+    };
+    // Pick connected async chains first, so a processor is not shown without its topic or queue.
+    D.mapEdges.filter((edge) => edge.kind === 'async' && (runtimeNodeIds.has(edge.from) || runtimeNodeIds.has(edge.to)))
+      .sort((a, b) => (b.count || 0) - (a.count || 0))
+      .forEach((edge) => { addRuntime(edge.from); addRuntime(edge.to); });
+    D.mapEdges.filter((edge) => runtimeNodeIds.has(edge.from) || runtimeNodeIds.has(edge.to))
+      .sort((a, b) => (b.count || 0) - (a.count || 0))
+      .forEach((edge) => { addRuntime(edge.from); addRuntime(edge.to); });
+    keyIds(runtimeTypes, 15).forEach(addRuntime);
     const dataIds = D.nodes.filter((n) => n.type === 'database').map((n) => n.id);
     const dataTotal = dataIds.length || D.nodes.filter((n) => ['table', 'entity', 'model'].includes(n.type)).length;
     const visibleDataIds = (dataIds.length ? dataIds : keyIds(['table', 'entity', 'model'], 5)).slice(0, 5);
@@ -1073,15 +1093,16 @@ class Component extends DCLogic {
       }
       // runtime band
       const ry = runtimeY;
-      const runtimeRows = Math.max(1, Math.ceil(runtime.length / 7));
-      const runtimeH = 50 + runtimeRows * 54;
+      const runtimeCols = 5;
+      const runtimeRows = Math.max(1, Math.ceil(runtime.length / runtimeCols));
+      const runtimeH = 50 + runtimeRows * 62;
       G.push({ x: 40, y: ry, w: 4 * (cardW + 56) - 56, h: runtimeH, fill: '#f2f7f9', stroke: '#c3d6dd', label: 'Async runtime — topics, queues, processors', sub: runtimeTotal > runtime.length ? `${runtime.length} key components of ${runtimeTotal}` : `${runtimeTotal} components — all shown`, footY: 0 });
       runtime.forEach((rid, i) => {
         const n = this.node(rid);
-        const col = i % 7, row = Math.floor(i / 7);
-        const bx = 56 + col * 194, by = ry + 36 + row * 54;
-        pos[rid] = { x: bx, y: by, w: 180, h: 44 };
-        N.push(this.mkNode(n, bx, by, 180, 44));
+        const col = i % runtimeCols, row = Math.floor(i / runtimeCols);
+        const bx = 56 + col * 264, by = ry + 36 + row * 62;
+        pos[rid] = { x: bx, y: by, w: 250, h: 52 };
+        N.push(this.mkNode(n, bx, by, 250, 52));
       });
       // data + external column
       const dx = 40 + 4 * (cardW + 56) + 10;
@@ -1160,7 +1181,7 @@ class Component extends DCLogic {
       if (previous) previous.count = (previous.count || 1) + (edge.count || 1);
       else sceneEdges.set(key, { ...edge, from, to });
     });
-    sceneEdges.forEach((e) => {
+    [...sceneEdges.values()].sort((a, b) => (a.kind === 'async' ? 1 : 0) - (b.kind === 'async' ? 1 : 0)).forEach((e) => {
       const a = pos[e.from], b = pos[e.to];
       if (!a || !b) return;
       E.push(this.linkEdge(a, b, e, false, false, showLabels && variant !== 'clusters'));
