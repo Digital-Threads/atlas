@@ -236,7 +236,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /this\._suppressClick = true/);
   assert.match(viewerHtml, /Showing \$\{visible\.length\} key items of \$\{items\.length\}/);
   assert.match(viewerHtml, /const doms = allDoms\.slice\(0, domainFilter \? 1 : 9\)/);
-  assert.match(viewerHtml, /const runtimeTypes = \['broker', 'topic', 'queue', 'processor'\]/);\n  assert.match(viewerHtml, /edge\\.kind === 'async'.*runtimeNodeIds/s);
+  assert.match(viewerHtml, /const runtimeTypes = \['broker', 'topic', 'queue', 'processor'\]/);
+  assert.match(viewerHtml, /edge\.kind === 'async'.*runtimeNodeIds/s);
   assert.match(viewerHtml, /const directOwnerIds = new Set/);
   assert.match(viewerHtml, /handledOperationIds\.size \? allOperationNodes\.filter/);
   assert.match(viewerHtml, /\['method', 'service', 'provider', 'repository', 'guard', 'pipe', 'library', 'env'\]\.includes\(target\.type\)/);
