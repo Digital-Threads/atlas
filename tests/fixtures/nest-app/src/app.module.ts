@@ -12,11 +12,14 @@ import { SequelizeModule } from "@nestjs/sequelize";
 import { SequelizeAccount, SequelizeSession } from "./sequelize-models";
 import { SequelizeAccountsService } from "./sequelize-accounts.service";
 import { DrizzleEventsRepository } from "./drizzle-events.repository";
+import { CreateUserUseCase } from "./application/create-user.use-case";
+import { CreateUserPort } from "./application/create-user.port";
+import { CreateUserAdapter } from "./infrastructure/create-user.adapter";
 
 @Module({
   imports: [TypeOrmModule.forFeature([UserEntity]), SequelizeModule.forFeature([SequelizeAccount, SequelizeSession]), SettingsModule, WorkerModule],
   controllers: [UsersController],
-  providers: [UsersService, PrismaService, AuditService, SequelizeAccountsService, DrizzleEventsRepository, { provide: "MAILER", useClass: PrismaService }],
+  providers: [UsersService, PrismaService, AuditService, SequelizeAccountsService, DrizzleEventsRepository, CreateUserUseCase, CreateUserPort, CreateUserAdapter, { provide: "MAILER", useClass: PrismaService }],
   exports: [UsersService],
 })
 export class AppModule implements NestModule {
