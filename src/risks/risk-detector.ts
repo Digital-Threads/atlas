@@ -48,6 +48,34 @@ export function detectRisks(graph: ArchitectureGraph): ArchitectureRisk[] {
     }
   }
 
+  for (const container of graph.nodes.filter((node) => node.type === "container" && node.framework === "kubernetes")) {
+    if (!container.metadata?.resources) {
+      risks.push(risk("missing-container-resources", "medium", `${container.label} has no detected resource policy`, "The Kubernetes container has no detected CPU or memory requests/limits.", "Define resource requests and limits for predictable scheduling and capacity planning.", container));
+    }
+    if (!container.metadata?.readinessProbe || !container.metadata?.livenessProbe) {
+      risks.push(risk("missing-container-probes", "high", `${container.label} has incomplete health probes`, "The Kubernetes container is missing a readiness or liveness probe.", "Add both probes so traffic and restarts follow application health.", container));
+    }
+  }
+
+  for (const image of graph.nodes.filter((node) => node.type === "container_image" && !node.metadata?.baseImage && !node.metadata?.localBuild)) {
+    if (!image.label.includes(":") || /:latest$/i.test(image.label)) {
+      risks.push(risk("mutable-container-image", "high", `${image.label} uses a mutable image reference`, "The deployment cannot be reliably reproduced from an unpinned container tag.", "Publish and deploy an immutable version or digest.", image));
+    }
+  }
+
+  for (const migration of graph.nodes.filter((node) => node.type === "migration")) {
+    const destructive = (outgoing.get(migration.id) ?? []).filter((edge) => edge.type === "drops");
+    if (destructive.length) {
+      risks.push(risk("destructive-migration", "high", `${migration.label} contains destructive changes`, `The migration drops ${destructive.length} detected database structure(s).`, "Review rollback, backup, and zero-downtime compatibility before deployment.", migration));
+    }
+  }
+
+  for (const deployment of graph.nodes.filter((node) => node.type === "deployment" && node.metadata?.environment === "production" && node.framework === "kubernetes")) {
+    if (typeof deployment.metadata?.replicas === "number" && deployment.metadata.replicas < 2) {
+      risks.push(risk("single-production-replica", "high", `${deployment.label} has one production replica`, "A single replica creates an availability gap during failure or rollout.", "Run at least two replicas when the workload and budget allow it.", deployment));
+    }
+  }
+
   for (const cycle of findImportCycles(graph)) {
     const first = nodes.get(cycle[0]);
     risks.push({

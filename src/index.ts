@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import { NestAdapter } from "./adapters/nest-adapter.js";
+import { ProjectAdapter } from "./adapters/project-adapter.js";
 import { enrichGraphDescriptions } from "./core/descriptions.js";
 import { GraphBuilder } from "./core/graph.js";
 import type { ArchitectureGraph, ArchitectureRisk, ScanOptions, ScanResult } from "./core/types.js";
@@ -64,6 +65,16 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
     const adapterResult = await adapter.scan(adapterContext);
     for (const node of await adapter.buildNodes(adapterResult)) builder.addNode(node);
     for (const edge of await adapter.buildEdges(adapterResult)) builder.addEdge(edge);
+    if (options.debug) for (const warning of adapterResult.warnings) console.error(`[debug] ${warning}`);
+  }
+
+  const projectAdapter = new ProjectAdapter();
+  const projectAdapterDetection = await projectAdapter.detect(adapterContext);
+  if (projectAdapterDetection.detected) {
+    options.onProgress?.({ stage: "parse_architecture", message: "Parsing data, schedules, and delivery configuration..." });
+    const adapterResult = await projectAdapter.scan(adapterContext);
+    for (const node of await projectAdapter.buildNodes(adapterResult)) builder.addNode(node);
+    for (const edge of await projectAdapter.buildEdges(adapterResult)) builder.addEdge(edge);
     if (options.debug) for (const warning of adapterResult.warnings) console.error(`[debug] ${warning}`);
   }
 

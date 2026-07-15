@@ -30,6 +30,35 @@
     ::-webkit-scrollbar-thumb { background: #c9d1cd; border-radius: 5px; border: 2px solid #f2f4f3; }
     @keyframes atlasFade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes atlasDash { to { stroke-dashoffset: -20; } }
+    @media (prefers-reduced-motion: reduce) { .atlas-edge { animation: none !important; } }
+    .atlas-scroll-screen { scrollbar-gutter: stable; }
+    .atlas-table-row { transition: background 120ms ease, border-color 120ms ease; }
+    @media (max-width: 1100px) {
+      .atlas-top-search { width: 210px !important; }
+      .atlas-sidebar { width: 164px !important; }
+      .atlas-details { width: 320px !important; }
+      .atlas-view-description { max-width: 420px !important; }
+    }
+    @media (max-width: 820px) {
+      .atlas-topbar { gap: 8px !important; }
+      .atlas-top-search { width: 160px !important; }
+      .atlas-scanned-top, .atlas-breadcrumbs { display: none !important; }
+      .atlas-shell { position: relative; }
+      .atlas-sidebar { width: 54px !important; padding-inline: 6px !important; }
+      .atlas-sidebar button { justify-content: center !important; padding-inline: 5px !important; }
+      .atlas-sidebar button > span:first-child { font-size: 0 !important; }
+      .atlas-sidebar button > span:first-child::first-letter { font-size: 12px !important; }
+      .atlas-sidebar-footer, .atlas-nav-heading { display: none !important; }
+      .atlas-view-header { align-items: flex-start !important; flex-wrap: wrap; }
+      .atlas-view-actions { margin-left: 0 !important; width: 100%; overflow-x: auto; }
+      .atlas-view-description { white-space: normal !important; }
+      .atlas-catalog { width: 190px !important; }
+      .atlas-details { position: absolute !important; inset: 0 0 0 auto; width: min(360px, calc(100% - 54px)) !important; z-index: 45; box-shadow: -16px 0 36px rgba(22,33,29,0.18); }
+      .atlas-data-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)) !important; }
+      .atlas-job-row { grid-template-columns: 1fr !important; }
+      .atlas-config-row { grid-template-columns: minmax(150px, 1fr) 70px minmax(180px, 1.5fr) !important; }
+      .atlas-config-row > :nth-child(4), .atlas-config-row > :nth-child(5) { grid-column: 3; }
+    }
   </style>
 </helmet>
 
@@ -37,14 +66,14 @@
 <div data-screen-label="Atlas app" style="height: 100vh; display: flex; flex-direction: column; overflow: hidden;">
 
   <!-- ======= Top bar ======= -->
-  <header style="height: 46px; flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: #16211d; color: #fff;">
+  <header class="atlas-topbar" style="height: 46px; flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 0 14px; background: #16211d; color: #fff;">
     <div style="display: flex; align-items: center; gap: 9px; flex: 0 0 auto;">
       <div style="width: 22px; height: 22px; border-radius: 5px; background: #df642d; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff;">A</div>
       <strong style="font-size: 14px; letter-spacing: 0.2px;">Atlas</strong>
       <span style="color: #6f7d78;">/</span>
       <span style="font-size: 13px; color: #d5ddd9; font-weight: 600;">{{ projectName }}</span>
     </div>
-    <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; overflow: hidden; font-size: 12px; color: #93a29c; margin-left: 2px;">
+    <nav class="atlas-breadcrumbs" aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; overflow: hidden; font-size: 12px; color: #93a29c; margin-left: 2px;">
       <sc-for list="{{ crumbs }}" as="crumb" hint-placeholder-count="2">
         <span style="color: #4e5c56;">›</span>
         <button onClick="{{ crumb.go }}" style="border: 0; background: transparent; color: #b9c6c1; padding: 2px 4px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px;" style-hover="background: #24322c; color: #fff;">{{ crumb.label }}</button>
@@ -52,7 +81,7 @@
     </nav>
     <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
       <div style="position: relative;">
-        <input value="{{ searchQ }}" onChange="{{ onSearch }}" onFocus="{{ onSearchFocus }}" onBlur="{{ onSearchBlur }}" placeholder="Search routes, services, topics, files…" aria-label="Search project" style="width: 300px; height: 30px; border: 1px solid #3a4843; border-radius: 6px; background: #1f2c27; color: #e9efec; padding: 0 10px 0 30px; font-size: 12px; outline: none;" style-focus="border-color: #6f8f84; background: #24332d;">
+        <input class="atlas-top-search" value="{{ searchQ }}" onChange="{{ onSearch }}" onFocus="{{ onSearchFocus }}" onBlur="{{ onSearchBlur }}" placeholder="Search routes, services, topics, files…" aria-label="Search project" style="width: 300px; height: 30px; border: 1px solid #3a4843; border-radius: 6px; background: #1f2c27; color: #e9efec; padding: 0 10px 0 30px; font-size: 12px; outline: none;" style-focus="border-color: #6f8f84; background: #24332d;">
         <svg viewBox="0 0 16 16" style="position: absolute; left: 9px; top: 8px; width: 14px; height: 14px; fill: none; stroke: #7d8d87; stroke-width: 1.6;"><circle cx="7" cy="7" r="4.4"></circle><line x1="10.4" y1="10.4" x2="14" y2="14"></line></svg>
         <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
           <div style="position: absolute; top: 36px; right: 0; width: 380px; max-height: 420px; overflow: auto; background: #fff; border: 1px solid #d4dbd7; border-radius: 8px; box-shadow: 0 18px 44px rgba(22,33,29,0.22); z-index: 60; animation: atlasFade 0.12s ease;">
@@ -72,19 +101,19 @@
           </div>
         </sc-if>
       </div>
-      <span style="font-size: 11px; color: #7d8d87; white-space: nowrap;">{{ scanned }}</span>
+      <span class="atlas-scanned-top" style="font-size: 11px; color: #7d8d87; white-space: nowrap;">{{ scanned }}</span>
     </div>
   </header>
 
   <!-- ======= Shell ======= -->
-  <div style="flex: 1; min-height: 0; display: flex;">
+  <div class="atlas-shell" style="flex: 1; min-height: 0; display: flex;">
 
     <!-- Sidebar: modes -->
-    <aside aria-label="Views" style="width: 196px; flex: 0 0 auto; background: #fff; border-right: 1px solid #dde3e0; display: flex; flex-direction: column; padding: 12px 8px 10px;">
+    <aside class="atlas-sidebar" aria-label="Views" style="width: 196px; flex: 0 0 auto; background: #fff; border-right: 1px solid #dde3e0; display: flex; flex-direction: column; padding: 12px 8px 10px;">
       <div style="flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 1px;">
         <sc-for list="{{ navItems }}" as="nav" hint-placeholder-count="10">
           <sc-if value="{{ nav.isHeading }}" hint-placeholder-val="{{ false }}">
-            <div style="margin: {{ nav.mt }} 0 4px; padding: 0 8px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: #8b9793;">{{ nav.label }}</div>
+            <div class="atlas-nav-heading" style="margin: {{ nav.mt }} 0 4px; padding: 0 8px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: #8b9793;">{{ nav.label }}</div>
           </sc-if>
           <sc-if value="{{ nav.isItem }}" hint-placeholder-val="{{ true }}">
             <button onClick="{{ nav.go }}" aria-current="{{ nav.current }}" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 32px; border: 0; border-radius: 6px; background: {{ nav.bg }}; color: {{ nav.fg }}; font-weight: {{ nav.fw }}; font-size: 12.5px; padding: 0 9px; text-align: left;" style-hover="background: {{ nav.hoverBg }};">
@@ -94,7 +123,7 @@
           </sc-if>
         </sc-for>
       </div>
-      <div style="flex: 0 0 auto; border-top: 1px solid #e6eae8; padding: 10px 8px 2px; display: grid; gap: 2px;">
+      <div class="atlas-sidebar-footer" style="flex: 0 0 auto; border-top: 1px solid #e6eae8; padding: 10px 8px 2px; display: grid; gap: 2px;">
         <span style="font-size: 11.5px; font-weight: 600;">{{ stackName }}</span>
         <small style="font-size: 10.5px; color: #8b9793;">{{ scanned }}</small>
       </div>
@@ -104,14 +133,14 @@
     <main style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #fff;">
 
       <!-- View header -->
-      <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid #dde3e0; min-height: 58px;">
+      <div class="atlas-view-header" style="flex: 0 0 auto; display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid #dde3e0; min-height: 58px;">
         <div style="min-width: 0;">
           <h1 style="margin: 0; font-size: 16.5px; line-height: 1.2; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ viewTitle }}</h1>
-          <p style="margin: 1px 0 0; font-size: 11.5px; color: #6b7873; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 640px;">{{ viewDesc }}</p>
+          <p class="atlas-view-description" style="margin: 1px 0 0; font-size: 11.5px; color: #6b7873; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 640px;">{{ viewDesc }}</p>
         </div>
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
+        <div class="atlas-view-actions" style="margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
           <sc-if value="{{ showVariantSwitch }}" hint-placeholder-val="{{ false }}">
-            <div role="group" aria-label="Map layout" style="display: flex; border: 1px solid #d4dbd7; border-radius: 6px; overflow: hidden;">
+            <div role="group" aria-label="View options" style="display: flex; border: 1px solid #d4dbd7; border-radius: 6px; overflow: hidden;">
               <sc-for list="{{ variantBtns }}" as="vb" hint-placeholder-count="3">
                 <button onClick="{{ vb.go }}" style="height: 28px; border: 0; padding: 0 10px; font-size: 11.5px; background: {{ vb.bg }}; color: {{ vb.fg }}; font-weight: {{ vb.fw }}; border-right: 1px solid #e4e9e6;" style-hover="background: {{ vb.hoverBg }};">{{ vb.label }}</button>
               </sc-for>
@@ -193,12 +222,142 @@
           </div>
         </sc-if>
 
+        <!-- ======= DATA CATALOG ======= -->
+        <sc-if value="{{ isDataCatalog }}" hint-placeholder-val="{{ false }}">
+          <div class="atlas-scroll-screen" data-screen-label="Data Architecture" style="flex: 1; min-width: 0; overflow: auto; padding: 16px 22px 40px; background: #f7f9f8;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <div style="position: relative;">
+                <input value="{{ daQ }}" onChange="{{ onDaQ }}" placeholder="Search every table..." aria-label="Search tables" style="width: 270px; height: 30px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 0 10px 0 30px; font-size: 12px; outline: none;" style-focus="border-color: #77978c;">
+                <svg viewBox="0 0 16 16" style="position: absolute; left: 9px; top: 8px; width: 14px; height: 14px; fill: none; stroke: #8b9793; stroke-width: 1.6;"><circle cx="7" cy="7" r="4.4"></circle><line x1="10.4" y1="10.4" x2="14" y2="14"></line></svg>
+              </div>
+              <div role="group" aria-label="Database filter" style="display: flex; border: 1px solid #d4dbd7; border-radius: 6px; overflow: hidden; max-width: 100%;">
+                <sc-for list="{{ daDbBtns }}" as="db" hint-placeholder-count="3">
+                  <button onClick="{{ db.go }}" style="height: 28px; border: 0; padding: 0 10px; font-size: 11.5px; white-space: nowrap; background: {{ db.bg }}; color: {{ db.fg }}; font-weight: {{ db.fw }}; border-right: 1px solid #e4e9e6;" style-hover="opacity: 0.86;">{{ db.label }}</button>
+                </sc-for>
+              </div>
+              <span style="font-size: 11px; color: #8b9793;">{{ daSummary }}</span>
+            </div>
+            <sc-for list="{{ daDbs }}" as="db" hint-placeholder-count="2">
+              <section style="margin-top: 16px; background: #fff; border: 1px solid #dde3e0; border-radius: 8px; overflow: hidden;">
+                <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 16px; border-bottom: 1px solid #e6eae8; background: #fafbfa;">
+                  <strong style="font-size: 13px; overflow-wrap: anywhere;">{{ db.name }}</strong>
+                  <span style="font-size: 11px; color: #8b9793;">{{ db.engine }}</span>
+                  <span style="margin-left: auto; font-size: 11px; color: #6b7873; white-space: nowrap; font-variant-numeric: tabular-nums;">{{ db.tables }} tables</span>
+                  <sc-if value="{{ db.isCh }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ db.goCh }}" style="border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #1f6f5b; padding: 4px 10px; font-size: 11.5px; font-weight: 600; white-space: nowrap;" style-hover="background: #f0f5f3;">Open ClickHouse map</button>
+                  </sc-if>
+                </div>
+                <sc-for list="{{ db.schemas }}" as="schema" hint-placeholder-count="2">
+                  <div style="padding: 12px 16px 14px; border-bottom: 1px solid #eef1ef;">
+                    <div style="display: flex; align-items: baseline; gap: 8px;">
+                      <span style="font-size: 11px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: #3d6a94; overflow-wrap: anywhere;">{{ schema.name }}</span>
+                      <span style="font-size: 10.5px; color: #8b9793;">{{ schema.count }}</span>
+                    </div>
+                    <div class="atlas-data-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin-top: 9px;">
+                      <sc-for list="{{ schema.tables }}" as="tbl" hint-placeholder-count="8">
+                        <button onClick="{{ tbl.go }}" class="atlas-table-row" title="{{ tbl.tip }}" style="display: grid; gap: 3px; min-width: 0; border: 1px solid #dde3e0; border-radius: 7px; background: #fff; padding: 9px 11px; text-align: left;" style-hover="border-color: #77978c; background: #f4f8f6;">
+                          <span style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+                            <strong style="font-size: 12px; font-family: 'IBM Plex Mono', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ tbl.label }}</strong>
+                            <sc-if value="{{ tbl.hot }}" hint-placeholder-val="{{ false }}"><i style="font-style: normal; flex: 0 0 auto; font-size: 8.5px; font-weight: 700; text-transform: uppercase; color: #a34517; background: #fdeee5; border-radius: 3px; padding: 1px 5px;">hub</i></sc-if>
+                          </span>
+                          <small style="font-size: 10.5px; color: #6b7873; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ tbl.desc }}</small>
+                          <small style="font-size: 10px; color: #8b9793; font-variant-numeric: tabular-nums;">{{ tbl.counts }}</small>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </section>
+            </sc-for>
+            <sc-if value="{{ daNoResults }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top: 40px; text-align: center;">
+                <div style="font-size: 13px; font-weight: 600; color: #4e5a56;">No tables match the current search</div>
+                <button onClick="{{ clearDaQ }}" style="margin-top: 10px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 6px 12px; font-size: 11.5px;" style-hover="background: #f2f5f4;">Clear search</button>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ======= MIGRATION HISTORY ======= -->
+        <sc-if value="{{ isMigrationCatalog }}" hint-placeholder-val="{{ false }}">
+          <div class="atlas-scroll-screen" data-screen-label="Migration History" style="flex: 1; min-width: 0; overflow: auto; padding: 16px 22px 40px; background: #f7f9f8;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <input value="{{ migQ }}" onChange="{{ onMigQ }}" placeholder="Filter by table, column or file..." aria-label="Filter migrations" style="width: 260px; height: 30px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 0 10px; font-size: 12px; outline: none;" style-focus="border-color: #77978c;">
+              <div role="group" aria-label="Migration operation" style="display: flex; border: 1px solid #d4dbd7; border-radius: 6px; overflow: hidden; max-width: 100%;">
+                <sc-for list="{{ migOpBtns }}" as="ob" hint-placeholder-count="6"><button onClick="{{ ob.go }}" style="height: 28px; border: 0; padding: 0 9px; font-size: 11px; background: {{ ob.bg }}; color: {{ ob.fg }}; font-weight: {{ ob.fw }}; border-right: 1px solid #e4e9e6;" style-hover="opacity: 0.86;">{{ ob.label }}</button></sc-for>
+              </div>
+              <button onClick="{{ migDestrBtn.go }}" style="height: 28px; border: 1px solid {{ migDestrBtn.border }}; border-radius: 6px; padding: 0 10px; font-size: 11px; font-weight: 600; background: {{ migDestrBtn.bg }}; color: {{ migDestrBtn.fg }};" style-hover="opacity: 0.86;">{{ migDestrBtn.label }}</button>
+            </div>
+            <div style="position: relative; margin-top: 18px; padding-left: 26px; max-width: 980px;">
+              <div style="position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: #dde3e0;"></div>
+              <sc-for list="{{ migRows }}" as="mig" hint-placeholder-count="6">
+                <div style="position: relative; margin-bottom: 12px;">
+                  <i style="position: absolute; left: -24px; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: {{ mig.dotColor }}; border: 2px solid #f7f9f8;"></i>
+                  <button onClick="{{ mig.go }}" class="atlas-table-row" style="display: grid; gap: 7px; width: 100%; border: 1px solid {{ mig.border }}; border-radius: 8px; background: {{ mig.bg }}; padding: 11px 14px; text-align: left;" style-hover="border-color: #9fb0a9;">
+                    <span style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0;">
+                      <span style="font-size: 10px; font-weight: 700; color: #8b9793;">{{ mig.seq }}</span>
+                      <strong style="font-size: 12px; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ mig.name }}</strong>
+                      <sc-if value="{{ mig.destructive }}" hint-placeholder-val="{{ false }}"><i style="font-style: normal; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #a83a3a; background: #fbeaea; border-radius: 4px; padding: 2px 6px;">destructive</i></sc-if>
+                    </span>
+                    <span style="display: grid; gap: 4px;">
+                      <sc-for list="{{ mig.ops }}" as="op" hint-placeholder-count="3"><span style="display: flex; align-items: baseline; gap: 7px; min-width: 0;"><i style="font-style: normal; flex: 0 0 auto; font-size: 9px; font-weight: 700; text-transform: uppercase; color: {{ op.fg }}; background: {{ op.bg }}; border-radius: 4px; padding: 2px 6px;">{{ op.op }}</i><strong style="font-size: 11.5px; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ op.target }}</strong><small style="font-size: 10.5px; color: #6b7873; overflow-wrap: anywhere;">{{ op.detail }}</small></span></sc-for>
+                    </span>
+                    <small style="font-size: 10px; color: #8b9793; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ mig.file }}</small>
+                  </button>
+                </div>
+              </sc-for>
+              <sc-if value="{{ migEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding: 30px 0; text-align: center; color: #6b7873; font-size: 12px;">No migrations match the current filters. <button onClick="{{ clearMigFilters }}" style="margin-left: 8px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 5px 9px;">Clear filters</button></div></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ======= SCHEDULED JOBS CATALOG ======= -->
+        <sc-if value="{{ isJobCatalog }}" hint-placeholder-val="{{ false }}">
+          <div class="atlas-scroll-screen" data-screen-label="Scheduled Jobs" style="flex: 1; min-width: 0; overflow: auto; padding: 16px 22px 40px; background: #f7f9f8;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <input value="{{ jobQ }}" onChange="{{ onJobQ }}" placeholder="Search jobs..." aria-label="Search jobs" style="width: 230px; height: 30px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 0 10px; font-size: 12px; outline: none;" style-focus="border-color: #77978c;">
+              <div role="group" aria-label="Job type" style="display: flex; border: 1px solid #d4dbd7; border-radius: 6px; overflow: hidden; max-width: 100%;"><sc-for list="{{ jobKindBtns }}" as="kb" hint-placeholder-count="6"><button onClick="{{ kb.go }}" style="height: 28px; border: 0; padding: 0 9px; font-size: 11px; background: {{ kb.bg }}; color: {{ kb.fg }}; font-weight: {{ kb.fw }}; border-right: 1px solid #e4e9e6;" style-hover="opacity: 0.86;">{{ kb.label }}</button></sc-for></div>
+              <span style="font-size: 11px; color: #8b9793;">Click a job to trace Schedule -> Handler -> Work -> Effects</span>
+            </div>
+            <div style="display: grid; gap: 10px; margin-top: 16px; max-width: 1040px;">
+              <sc-for list="{{ jobRows }}" as="job" hint-placeholder-count="6">
+                <button onClick="{{ job.go }}" class="atlas-job-row atlas-table-row" style="display: grid; grid-template-columns: 220px minmax(0,1fr); gap: 14px; border: 1px solid #dde3e0; border-radius: 8px; background: #fff; padding: 12px 14px; text-align: left;" style-hover="border-color: #77978c; background: #fdfefd;">
+                  <span style="display: grid; gap: 3px; align-content: start;"><strong style="font-size: 12.5px; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ job.label }}</strong><small style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #6e4a9e;">{{ job.kindLabel }}</small><sc-if value="{{ job.suspended }}" hint-placeholder-val="{{ false }}"><i style="font-style: normal; justify-self: start; font-size: 9px; font-weight: 700; color: #8a6207; background: #fdf4dd; border-radius: 4px; padding: 2px 6px;">SUSPENDED</i></sc-if></span>
+                  <span style="display: grid; gap: 4px;"><span style="display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;"><strong style="font-size: 12.5px;">{{ job.human }}</strong><code style="font-size: 10.5px; color: #6b7873; font-family: 'IBM Plex Mono', monospace;">{{ job.expression }}</code><small style="font-size: 10.5px; color: #8b9793;">{{ job.timeZone }}</small></span><small style="font-size: 11.5px; color: #333e3a; line-height: 1.45;">{{ job.action }}</small><span style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 10.5px; color: #6b7873;"><span>owner: <strong>{{ job.owner }}</strong></span><span>concurrency: {{ job.concurrency }}</span><span style="font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ job.file }}</span><sc-if value="{{ job.environment }}" hint-placeholder-val="{{ false }}"><i style="font-style: normal; font-size: 9px; font-weight: 700; background: #eef1ef; border-radius: 4px; padding: 2px 6px;">{{ job.environment }}</i></sc-if></span></span>
+                </button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ jobsEmpty }}" hint-placeholder-val="{{ false }}"><div style="margin-top: 40px; text-align: center; color: #6b7873; font-size: 12px;">No scheduled jobs match the current filters. <button onClick="{{ clearJobFilters }}" style="margin-left: 8px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 5px 9px;">Clear filters</button></div></sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ======= CONFIGURATION CONTRACT ======= -->
+        <sc-if value="{{ isConfigCatalog }}" hint-placeholder-val="{{ false }}">
+          <div class="atlas-scroll-screen" data-screen-label="Configuration Contract" style="flex: 1; min-width: 0; overflow: auto; padding: 16px 22px 40px; background: #f7f9f8;">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #d9e2de; border-radius: 7px; background: #eef5f2; font-size: 11.5px; color: #2c4a40; max-width: 820px;"><strong style="font-size: 10px; letter-spacing: 0.06em;">PROTECTED</strong><span>Atlas stores variable names and safe template examples only. Secret-like values are always hidden.</span></div>
+            <sc-for list="{{ cfgGroups }}" as="grp" hint-placeholder-count="3">
+              <section style="margin-top: 16px; background: #fff; border: 1px solid #dde3e0; border-radius: 8px; overflow: hidden; max-width: 1120px;">
+                <div style="display: flex; justify-content: space-between; gap: 12px; padding: 9px 14px; border-bottom: 1px solid #e6eae8; background: #fafbfa; font-size: 12px; font-weight: 700;"><span>{{ grp.name }}</span><small style="font-weight: 500; color: #8b9793;">{{ grp.count }}</small></div>
+                <sc-for list="{{ grp.vars }}" as="cv" hint-placeholder-count="5">
+                  <button onClick="{{ cv.go }}" class="atlas-config-row atlas-table-row" style="display: grid; grid-template-columns: 210px 74px minmax(0,1.3fr) minmax(0,1fr) 160px; gap: 12px; align-items: start; width: 100%; border: 0; border-bottom: 1px solid #eef1ef; background: #fff; padding: 9px 14px; text-align: left; opacity: {{ cv.rowOp }};" style-hover="background: #f4f8f6;">
+                    <span style="display: flex; align-items: center; gap: 6px; min-width: 0;"><sc-if value="{{ cv.secret }}" hint-placeholder-val="{{ false }}"><span title="Secret value hidden" style="font-size: 9px; font-weight: 700; color: #a83a3a;">LOCK</span></sc-if><strong style="font-size: 11.5px; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ cv.name }}</strong></span>
+                    <i style="font-style: normal; justify-self: start; font-size: 9px; font-weight: 700; text-transform: uppercase; color: {{ cv.reqFg }}; background: {{ cv.reqBg }}; border-radius: 4px; padding: 2px 6px;">{{ cv.reqLabel }}</i>
+                    <span style="display: grid; gap: 2px; min-width: 0;"><small style="font-size: 11px; color: #333e3a; line-height: 1.4;">{{ cv.purpose }}</small><small style="font-size: 10px; color: #8b9793; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ cv.usedBy }}</small></span>
+                    <small style="font-size: 10.5px; color: #4e5a56; line-height: 1.4;">{{ cv.environment }}</small>
+                    <code style="font-size: 10.5px; color: #6b7873; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ cv.value }}</code>
+                  </button>
+                </sc-for>
+              </section>
+            </sc-for>
+          </div>
+        </sc-if>
+
         <!-- ======= EXPLORER (all graph modes) ======= -->
         <sc-if value="{{ isExplorer }}" hint-placeholder-val="{{ true }}">
 
           <!-- Catalog -->
           <sc-if value="{{ catalogVisible }}" hint-placeholder-val="{{ true }}">
-            <aside aria-label="Catalog" style="width: 236px; flex: 0 0 auto; border-right: 1px solid #dde3e0; background: #fafbfa; display: flex; flex-direction: column; min-height: 0;">
+            <aside class="atlas-catalog" aria-label="Catalog" style="width: 236px; flex: 0 0 auto; border-right: 1px solid #dde3e0; background: #fafbfa; display: flex; flex-direction: column; min-height: 0;">
               <div style="flex: 0 0 auto; padding: 10px 10px 8px; display: grid; gap: 7px;">
                 <div style="display: flex; justify-content: space-between; align-items: baseline;">
                   <strong style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #4e5a56;">{{ catalogTitle }}</strong>
@@ -239,9 +398,11 @@
               <defs>
                 <marker id="arr-sync" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7d8a84"></path></marker>
                 <marker id="arr-async" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#0f7895"></path></marker>
+                <marker id="arr-data-read" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#3c987c"></path></marker>
+                <marker id="arr-data-write" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#176f59"></path></marker>
                 <marker id="arr-data" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#1e8068"></path></marker>
                 <marker id="arr-external" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#c94747"></path></marker>
-                <marker id="arr-hi" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#df642d"></path></marker>
+                <marker id="arr-destructive" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#b93c3c"></path></marker>
               </defs>
 
               <!-- group / domain boxes -->
@@ -279,7 +440,7 @@
               <sc-for list="{{ gEdges }}" as="edge" hint-placeholder-count="0">
                 <g sc-camel-opacity="{{ edge.op }}" onClick="{{ edge.onClick }}" onMouseEnter="{{ edge.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: {{ edge.cursor }};">
                   <path sc-camel-d="{{ edge.d }}" fill="none" stroke="transparent" stroke-width="12"></path>
-                  <path sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}" sc-camel-style="{{ edge.anim }}"></path>
+                  <path class="atlas-edge" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}" sc-camel-style="{{ edge.anim }}"></path>
                   <sc-if value="{{ edge.showLabel }}" hint-placeholder-val="{{ false }}">
                     <text sc-camel-x="{{ edge.lx }}" sc-camel-y="{{ edge.ly }}" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; font-weight: 600; fill: {{ edge.labelFill }}; paint-order: stroke; stroke: #f7f9f8; stroke-width: 4px; stroke-linejoin: round;">{{ edge.verb }}</text>
                   </sc-if>
@@ -325,10 +486,10 @@
 
             <!-- legend -->
             <div style="position: absolute; left: 12px; bottom: 10px; display: flex; align-items: center; gap: 13px; padding: 6px 10px; border: 1px solid #d4dbd7; border-radius: 6px; background: rgba(255,255,255,0.94); font-size: 10px; color: #57635e; max-width: {{ legendMaxW }}; overflow: hidden; white-space: nowrap;">
-              <span style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#7d8a84" stroke-width="1.6"></line></svg>direct call — waits for result</span>
-              <span style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#0f7895" stroke-width="1.6" stroke-dasharray="4 3"></line></svg>event / queue — runs later</span>
-              <span style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#1e8068" stroke-width="1.6"></line></svg>reads / writes data</span>
-              <span style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#c94747" stroke-width="1.6"></line></svg>external service</span>
+              <span title="A direct call. The caller waits for a result." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#7d8a84" stroke-width="1.6"></line></svg>direct call</span>
+              <span title="An event or queued job. The moving dash shows that work happens later." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#0f7895" stroke-width="1.6" stroke-dasharray="4 3"></line></svg>event / queue</span>
+              <span title="Light dashed green reads data; dark solid green writes or changes data." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="8" style="flex: 0 0 auto;"><line x1="0" y1="2" x2="22" y2="2" stroke="#3c987c" stroke-width="1.4" stroke-dasharray="2 3"></line><line x1="0" y1="6" x2="22" y2="6" stroke="#176f59" stroke-width="1.8"></line></svg>read / write</span>
+              <span title="A call that leaves the analyzed system boundary." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#c94747" stroke-width="1.6"></line></svg>external</span>
               <button onClick="{{ openGuide }}" style="pointer-events: auto; border: 0; background: transparent; color: #1f6f5b; font-size: 10px; font-weight: 700; padding: 0;" style-hover="text-decoration: underline;">How to read this map?</button>
             </div>
 
@@ -408,7 +569,7 @@
 
         <!-- ======= Details panel ======= -->
         <sc-if value="{{ panelOpen }}" hint-placeholder-val="{{ false }}">
-          <aside data-screen-label="Details panel" aria-label="Details" style="width: 348px; flex: 0 0 auto; border-left: 1px solid #dde3e0; background: #fff; display: flex; flex-direction: column; min-height: 0; animation: atlasFade 0.15s ease;">
+          <aside class="atlas-details" data-screen-label="Details panel" aria-label="Details" style="width: 348px; flex: 0 0 auto; border-left: 1px solid #dde3e0; background: #fff; display: flex; flex-direction: column; min-height: 0; animation: atlasFade 0.15s ease;">
             <div style="flex: 0 0 auto; padding: 14px 16px 0; position: relative;">
               <button onClick="{{ closePanel }}" aria-label="Close details" style="position: absolute; right: 12px; top: 12px; width: 26px; height: 26px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #57635e; font-size: 13px; line-height: 1;" style-hover="background: #f2f5f4;">✕</button>
               <span title="{{ pTypeExplain }}" style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 5px; background: {{ pBadgeBg }}; color: {{ pBadgeFg }}; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; cursor: help;"><i style="width: 7px; height: 7px; border-radius: 50%; background: {{ pAccent }};"></i>{{ pType }}</span>
@@ -544,6 +705,9 @@ class Component extends DCLogic {
     D: null, mode: 'map', sel: null, activeFlow: null, expandedOp: null,
     tech: false, tab: 'overview', hist: [], q: '', catQ: '', searchOpen: false,
     vb: null, hover: null, panning: false, domainFilter: null,
+    dataVariant: 'overview', deliveryEnv: 'production',
+    daQ: '', daDb: 'all', migQ: '', migOp: 'all', migDestr: false,
+    jobQ: '', jobKind: 'all',
   };
 
   componentDidMount() {
@@ -573,9 +737,13 @@ class Component extends DCLogic {
   // ---------- helpers ----------
   node(id) { const { D } = this.state; if (!D) return null; if (id && id.startsWith('op.')) return this._opNode(id); if (this._syn && this._syn[id]) return this._syn[id]; return D.nodes.find((n) => n.id === id) || null; }
   _opNode(id) {
-    const prof = this.state.D.moduleProfiles['m.items'];
-    const op = prof.operations.find((o) => o.id === id);
-    return op ? { id, type: 'method', label: op.name, file: 'src/items/items.service.ts', desc: op.desc + '. Operation of ItemsModule.', op } : null;
+    const profiles = Object.entries(this.state.D.moduleProfiles || {});
+    for (const [moduleId, prof] of profiles) {
+      const op = (prof.operations || []).find((item) => item.id === id);
+      const owner = this.state.D.nodes.find((node) => node.id === moduleId);
+      if (op) return { id, type: 'method', label: op.name, file: owner?.file || '', desc: op.desc || `Operation of ${owner?.label || 'module'}.`, op };
+    }
+    return null;
   }
   color(type) { return this.state.D.typeColors[type] || '#56635e'; }
   plural(n, w) { return `${n} ${w}${n === 1 ? '' : 's'}`; }
@@ -594,12 +762,29 @@ class Component extends DCLogic {
       table: 'A database table — where data actually changes.',
       database: 'A data store used by the application.',
       external: 'A third-party API outside the system boundary — failures here are not under your control.',
-      env: 'A configuration value read at startup. Atlas never stores its value.',
+      env: 'A named runtime setting. Atlas shows safe template examples only and always hides real or secret-like values.',
       guard: 'Runs before the controller and can reject the request (e.g. no valid token).',
       dto: 'Describes and validates the shape of incoming data.',
       file: 'A source file. Its role = what it declares, who uses it, and which flows pass through it.',
       risk: 'A detected architecture concern with a suggested fix.',
       method: 'One meaningful operation of a module.',
+      schema: 'A database namespace that groups related tables and views.',
+      index: 'A database access structure that speeds up reads for specific columns.',
+      constraint: 'A rule enforced by the database, such as a primary key, unique key, or check.',
+      migration: 'A versioned change that creates or alters database structures.',
+      materialized_view: 'A stored query result, refreshed from one or more source tables.',
+      scheduled_job: 'Work started automatically by a cron expression, interval, timeout, or repeat rule.',
+      workflow: 'An automated CI/CD pipeline triggered by repository activity.',
+      pipeline_job: 'One test, build, publish, or deployment stage in a CI/CD workflow.',
+      build_stage: 'A named Docker image build stage.',
+      container_image: 'A packaged runtime image used to start containers.',
+      container: 'A configured runtime container and its ports, probes, resources, and configuration.',
+      deployment: 'A deployed workload for a specific environment.',
+      infrastructure_service: 'A runtime network service that directs traffic to workloads.',
+      ingress: 'The external HTTP entry point into a runtime environment.',
+      config_map: 'Non-secret runtime configuration supplied to containers.',
+      secret: 'Secret runtime configuration. Atlas stores names only, never secret values.',
+      environment: 'An isolated runtime environment such as development, staging, or production.',
     }[type] || '';
   }
   risksFor(n) {
@@ -630,8 +815,13 @@ class Component extends DCLogic {
     if (n.type === 'module') mode = 'modules';
     else if (n.type === 'route') { mode = 'routes'; flow = D.routeFlowIndex[id] || null; }
     else if (['topic', 'queue', 'processor', 'consumer', 'broker'].includes(n.type)) { mode = 'async'; flow = D.asyncFlows[id] ? id : null; }
-    else if (['table', 'database'].includes(n.type)) mode = 'data';
-    else if (['external', 'env', 'library'].includes(n.type)) mode = 'external';
+    else if (n.type === 'migration') mode = 'migrations';
+    else if (n.type === 'materialized_view' || /clickhouse/i.test(`${n.id} ${n.label} ${n.file || ''} ${n.details?.engine || ''}`)) mode = 'clickhouse';
+    else if (['table', 'database', 'schema', 'column', 'index', 'constraint'].includes(n.type)) mode = 'database';
+    else if (n.type === 'scheduled_job') mode = 'schedules';
+    else if (['workflow', 'pipeline_job', 'build_stage', 'container_image', 'container', 'deployment', 'infrastructure_service', 'ingress', 'config_map', 'secret', 'environment'].includes(n.type)) mode = 'delivery';
+    else if (n.type === 'env') mode = 'configuration';
+    else if (['external', 'library'].includes(n.type)) mode = 'external';
     else if (n.type === 'risk') mode = 'risks';
     else if (n.type === 'file') mode = 'files';
     else if (['controller', 'guard', 'dto'].includes(n.type)) mode = 'routes';
@@ -676,10 +866,14 @@ class Component extends DCLogic {
   }
 
   // ---------- geometry ----------
-  edgeStyle(kind, hi) {
+  edgeStyle(kind, relation, verb) {
+    const rel = relation || String(verb || '').toLowerCase().replaceAll(' ', '_');
+    if (rel === 'drops' || rel === 'drop') return { color: '#b93c3c', dash: '7 4', marker: 'url(#arr-destructive)', labelFill: '#963131' };
+    if (rel === 'reads' || rel === 'read') return { color: '#3c987c', dash: '2 3', marker: 'url(#arr-data-read)', labelFill: '#27765f' };
+    if (rel === 'writes' || rel === 'write' || ['creates', 'alters', 'indexes'].includes(rel)) return { color: '#176f59', dash: '', marker: 'url(#arr-data-write)', labelFill: '#135c4a' };
     const map = { sync: ['#7d8a84', '', 'url(#arr-sync)', '#4f5a55'], async: ['#0f7895', '5 4', 'url(#arr-async)', '#0f6478'], data: ['#1e8068', '', 'url(#arr-data)', '#176a56'], external: ['#c94747', '', 'url(#arr-external)', '#a83a3a'] };
     const [color, dash, marker, labelFill] = map[kind] || map.sync;
-    return hi ? { color: '#df642d', dash, marker: 'url(#arr-hi)', labelFill: '#b1481c' } : { color, dash, marker, labelFill };
+    return { color, dash, marker, labelFill };
   }
   bez(x1, y1, x2, y2) { const dx = Math.max(36, Math.abs(x2 - x1) * 0.45); return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2 - 8} ${y2}`; }
   linkEdge(a, b, e, hi, dim, showLabels) {
@@ -689,15 +883,15 @@ class Component extends DCLogic {
     else if (a.x >= b.x + b.w) { x1 = a.x; y1 = a.y + a.h / 2; x2 = b.x + b.w; y2 = b.y + b.h / 2; }
     else if (b.y > a.y) { x1 = a.x + a.w / 2; y1 = a.y + a.h; x2 = b.x + b.w / 2; y2 = b.y; }
     else { x1 = a.x + a.w / 2; y1 = a.y; x2 = b.x + b.w / 2; y2 = b.y + b.h; }
-    const st = this.edgeStyle(e.kind, hi);
+    const st = this.edgeStyle(e.kind, e.relation, e.verb);
     const clickId = this.node(e.to) ? e.to : (this.node(e.from) ? e.from : null);
     const horizontal = Math.abs(x2 - x1) > Math.abs(y2 - y1);
     const d = horizontal ? this.bez(x1, y1, x2, y2) : `M ${x1} ${y1} C ${x1} ${y1 + (y2 - y1) * 0.45}, ${x2} ${y2 - (y2 - y1) * 0.45}, ${x2} ${y2 > y1 ? y2 - 8 : y2 + 8}`;
     return {
       id: 'e:' + e.from + '>' + e.to, d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
-      w: hi ? 2.2 : 1.5, op: dim ? 0.14 : (hi ? 1 : 0.82),
+      w: hi ? 2.6 : (e.relation === 'writes' ? 1.8 : 1.5), op: dim ? 0.14 : (hi ? 1 : 0.82),
       showLabel: !!(showLabels && e.verb && !dim), verb: e.verb, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 7,
-      anim: e.kind === 'async' && !dim ? `animation: atlasDash ${hi ? 1.1 : 2.2}s linear infinite;` : '',
+      anim: `${e.kind === 'async' && !dim ? `animation: atlasDash ${hi ? 1.1 : 2.2}s linear infinite;` : ''}${hi ? `filter: drop-shadow(0 0 2px ${st.color});` : ''}`,
       onEnter: (ev) => this.hoverEdge(ev, e),
       cursor: clickId ? 'pointer' : 'default',
       onClick: clickId ? (ev) => { ev.stopPropagation(); this.reveal(clickId); } : () => {},
@@ -733,8 +927,13 @@ class Component extends DCLogic {
   hoverEdge(ev, e) {
     const a = this.node(e.from), b = this.node(e.to); if (!a || !b) return;
     const box = ev.currentTarget.ownerSVGElement.getBoundingClientRect();
-    const kindNote = { sync: 'synchronous call', async: 'event / queue — happens after the response', data: 'data read or write', external: 'call outside the system' }[e.kind] || '';
-    this.setState({ hover: { edgeFrom: e.from, edgeTo: e.to, x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: `${a.label} → ${b.label}`, body: `${a.label} ${e.verb} ${b.label}. ${kindNote ? '(' + kindNote + ')' : ''}` } });
+    const relationNote = {
+      reads: 'reads data without changing it', writes: 'changes stored data', creates: 'creates a data structure',
+      alters: 'changes a data structure', drops: 'removes a data structure', indexes: 'defines an index',
+    }[e.relation];
+    const kindNote = relationNote || { sync: 'synchronous call — the caller waits', async: 'event or queue — work happens later', data: 'data relationship', external: 'call outside the system' }[e.kind] || '';
+    const relationDetails = e.details ? Object.entries(e.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : '';
+    this.setState({ hover: { edgeFrom: e.from, edgeTo: e.to, x: ev.clientX - box.left + 14, y: ev.clientY - box.top + 10, title: `${a.label} → ${b.label}`, body: `${a.label} ${e.verb} ${b.label}. ${kindNote ? '(' + kindNote + ')' : ''}${relationDetails ? ' ' + relationDetails : ''}` } });
   }
 
   // ---------- scenes ----------
@@ -752,10 +951,22 @@ class Component extends DCLogic {
       return this.sceneDirectional(sel);
     }
     if (mode === 'routes') return activeFlow && D.flows[activeFlow] ? this.sceneFlow(D.flows[activeFlow]) : (sel ? this.sceneDirectional(sel) : this.sceneGrid(['route'], 'Select a route on the left to trace its full request flow.'));
-    if (mode === 'async') return activeFlow && D.asyncFlows[activeFlow] ? this.sceneFlow(D.asyncFlows[activeFlow]) : (sel ? this.sceneDirectional(sel) : this.sceneGrid(['broker', 'topic', 'queue', 'processor'], 'Select a topic, queue or processor to follow the async flow.'));
+    if (mode === 'async') return activeFlow && D.asyncFlows[activeFlow] ? this.sceneFlow(D.asyncFlows[activeFlow]) : (sel ? this.sceneDirectional(sel) : this.sceneAsyncOverview());
     if (mode === 'services') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['service', 'provider', 'repository'], 'Select a service to see who calls it and what it depends on.');
-    if (mode === 'data') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['database', 'table', 'entity', 'model'], 'Select a data structure to see who reads and writes it.');
-    if (mode === 'external') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['external', 'env', 'library'], 'Select an integration to see which code depends on it.');
+    if (mode === 'data') return this.sceneDataOverview();
+    if (mode === 'database') {
+      if (!sel) return this.sceneDataErd();
+      const dataNode = this.node(sel);
+      if (dataNode && dataNode.type === 'table') return this.sceneDataTable(sel);
+      if (dataNode && ['database', 'schema'].includes(dataNode.type)) return this.sceneDataGroup(sel);
+      return this.sceneDirectional(sel);
+    }
+    if (mode === 'migrations') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['migration'], 'Select a migration to inspect every structure it changes.');
+    if (mode === 'clickhouse') return this.sceneClickHouse();
+    if (mode === 'schedules') return sel ? this.sceneScheduled(sel) : this.sceneScheduleOverview();
+    if (mode === 'delivery') return this.state.deliveryEnv === 'compare' ? this.sceneDeliveryCompare() : this.sceneDelivery(this.state.deliveryEnv || 'production');
+    if (mode === 'configuration') return sel ? this.sceneDirectional(sel) : this.sceneConfiguration();
+    if (mode === 'external') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['external', 'library'], 'Select an integration to see which code depends on it.');
     if (mode === 'risks') return sel ? this.sceneRisk(sel) : this.sceneGrid(['risk'], 'Select a risk to see the affected code.');
     if (mode === 'files') return sel ? this.sceneFile(sel) : this.sceneGrid(['file'], 'Select a file to understand its role in the architecture.');
     return { nodes: [], edges: [], groups: [], cols: [], status: '' };
@@ -1257,6 +1468,298 @@ class Component extends DCLogic {
     return { nodes: N, edges: E, groups: [], cols: C, status: role.role };
   }
 
+  sceneDataOverview() {
+    const { D } = this.state;
+    const databases = D.nodes.filter((n) => n.type === 'database');
+    const tables = D.nodes.filter((n) => n.type === 'table');
+    const migrations = D.nodes.filter((n) => n.type === 'migration');
+    const schemas = D.nodes.filter((n) => n.type === 'schema');
+    const N = [], G = [], C = [];
+    C.push({ x: 40, y: 34, subY: 47, x2: 340, ly: 56, label: 'DATA STORES', sub: 'select one to browse its schemas and tables', fill: '#8b9793' });
+    const stores = databases.length ? databases : [{ id: 'database:detected', type: 'database', label: 'Detected data model', desc: `${tables.length} tables` }];
+    if (!databases.length && tables.length) { this._syn = this._syn || {}; this._syn['database:detected'] = stores[0]; }
+    stores.forEach((database, index) => {
+      const direct = D.edges.filter((edge) => edge.from === database.id && edge.verb === 'contains').map((edge) => edge.to);
+      const schemaIds = direct.filter((id) => this.node(id)?.type === 'schema');
+      const tableIds = new Set(direct.filter((id) => this.node(id)?.type === 'table'));
+      D.edges.filter((edge) => schemaIds.includes(edge.from) && edge.verb === 'contains').forEach((edge) => tableIds.add(edge.to));
+      const relatedTables = tableIds.size || (databases.length === 1 ? tables.length : 0);
+      const x = 40 + (index % 3) * 360, y = 76 + Math.floor(index / 3) * 170;
+      G.push({ x, y, w: 320, h: 132, fill: database.label === 'ClickHouse' ? '#eef8fa' : '#f1f8f5', stroke: database.label === 'ClickHouse' ? '#9bc9d4' : '#bcd8cd', label: database.label, sub: `${relatedTables} tables · ${schemaIds.length} schemas`, footY: y + 98 });
+      N.push(this.mkNode(database, x + 12, y + 38, 296, 58, { sub: database.label === 'ClickHouse' ? 'Analytical store · engines, partitions, TTL and views' : 'Open schemas, tables and relationships' }));
+    });
+    if (!tables.length && !databases.length) return { nodes: [], edges: [], groups: [], cols: C, status: 'No data stores detected.', emptyOk: true };
+    return { nodes: N, edges: [], groups: G, cols: C, status: `${tables.length} tables · ${schemas.length} schemas · ${migrations.length} migrations. The complete table catalog is available on the left; select a table for its focused ER diagram.` };
+  }
+
+  sceneDataErd() {
+    const { D } = this.state;
+    const tables = D.nodes.filter((node) => node.type === 'table');
+    const degrees = new Map();
+    D.edges.filter((edge) => edge.verb === 'references').forEach((edge) => {
+      degrees.set(edge.from, (degrees.get(edge.from) || 0) + 1);
+      degrees.set(edge.to, (degrees.get(edge.to) || 0) + 1);
+    });
+    const visible = tables.slice().sort((a, b) => (degrees.get(b.id) || 0) - (degrees.get(a.id) || 0) || a.label.localeCompare(b.label));
+    const visibleIds = new Set(visible.map((node) => node.id));
+    const N = [], E = [], C = [], pos = {};
+    C.push({ x: 40, y: 34, subY: 47, x2: 1200, ly: 56, label: 'COMPLETE CROSS-SCHEMA ERD', sub: 'every detected table · highest-connectivity tables first', fill: '#8b9793' });
+    visible.forEach((node, index) => {
+      const col = index % 8, row = Math.floor(index / 8);
+      const box = { x: 40 + col * 245, y: 76 + row * 76, w: 220, h: 56 };
+      pos[node.id] = box;
+      const columns = D.edges.filter((edge) => edge.from === node.id && edge.verb === 'has column').length;
+      N.push(this.mkNode(node, box.x, box.y, box.w, box.h, { sub: `${columns} columns · ${degrees.get(node.id) || 0} relations` }));
+    });
+    D.edges.filter((edge) => edge.verb === 'references' && visibleIds.has(edge.from) && visibleIds.has(edge.to)).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
+    return { nodes: N, edges: E, groups: [], cols: C, status: `Showing all ${visible.length} detected tables across every schema. Select a table to isolate its columns, indexes, migrations, readers, writers and foreign-key relationships.`, emptyOk: tables.length === 0 };
+  }
+
+  sceneDataGroup(sel) {
+    const { D } = this.state;
+    const root = this.node(sel);
+    const direct = D.edges.filter((edge) => edge.from === sel && edge.verb === 'contains').map((edge) => edge.to);
+    const schemaIds = direct.filter((id) => this.node(id)?.type === 'schema');
+    const allIds = new Set(direct);
+    D.edges.filter((edge) => schemaIds.includes(edge.from) && edge.verb === 'contains').forEach((edge) => allIds.add(edge.to));
+    const tables = D.nodes.filter((node) => node.type === 'table' && (sel === 'database:detected' || allIds.has(node.id)));
+    const degrees = new Map();
+    D.edges.filter((edge) => edge.verb === 'references').forEach((edge) => { degrees.set(edge.from, (degrees.get(edge.from) || 0) + 1); degrees.set(edge.to, (degrees.get(edge.to) || 0) + 1); });
+    const visible = tables.slice().sort((a, b) => (degrees.get(b.id) || 0) - (degrees.get(a.id) || 0) || a.label.localeCompare(b.label));
+    const visibleIds = new Set(visible.map((node) => node.id));
+    const N = [], E = [], C = [];
+    C.push({ x: 40, y: 34, subY: 47, x2: 1160, ly: 56, label: root.type === 'schema' ? 'SCHEMA TABLES' : 'DATABASE TABLES', sub: 'relationship-rich structures first · select any table for all columns and indexes', fill: '#8b9793' });
+    const pos = {};
+    visible.forEach((node, index) => {
+      const col = index % 5, row = Math.floor(index / 5);
+      const box = { x: 40 + col * 245, y: 76 + row * 76, w: 220, h: 56 };
+      pos[node.id] = box;
+      const columnCount = D.edges.filter((edge) => edge.from === node.id && edge.verb === 'has column').length;
+      N.push(this.mkNode(node, box.x, box.y, box.w, box.h, { sub: `${columnCount} columns · ${degrees.get(node.id) || 0} relations` }));
+    });
+    D.edges.filter((edge) => edge.verb === 'references' && visibleIds.has(edge.from) && visibleIds.has(edge.to)).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, false)));
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${root.label}: showing ${visible.length} relationship-rich tables of ${tables.length}. Search the complete catalog and select a table to inspect every column, key, index, migration, reader and writer.` };
+  }
+
+  sceneDataTable(sel) {
+    const { D } = this.state;
+    const table = this.node(sel);
+    const columns = D.edges.filter((edge) => edge.from === sel && edge.verb === 'has column').map((edge) => this.node(edge.to)).filter(Boolean);
+    const structures = D.edges.filter((edge) => (edge.from === sel && edge.verb === 'contains') || (edge.to === sel && edge.verb === 'indexes')).map((edge) => this.node(edge.from === sel ? edge.to : edge.from)).filter((node) => node && ['index', 'constraint'].includes(node.type));
+    const relations = D.edges.filter((edge) => edge.verb === 'references' && (edge.from === sel || edge.to === sel)).map((edge) => ({ node: this.node(edge.from === sel ? edge.to : edge.from), edge })).filter((item) => item.node);
+    const migrations = D.edges.filter((edge) => edge.to === sel && ['creates', 'alters', 'drops'].includes(edge.verb)).map((edge) => ({ node: this.node(edge.from), verb: edge.verb, details: edge.details })).filter((item) => item.node);
+    const access = D.edges.filter((edge) => edge.to === sel && ['reads', 'writes'].includes(edge.verb)).map((edge) => ({ node: this.node(edge.from), verb: edge.verb })).filter((item) => item.node);
+    const N = [], E = [], C = [], pos = {};
+    const defs = [
+      ['MIGRATIONS', 'how the structure changed', 40], ['SELECTED TABLE', 'the structure you picked', 320],
+      ['COLUMNS', 'names, types and key properties', 600], ['INDEXES & RULES', 'access paths and constraints', 880],
+      ['RELATIONS & ACCESS', 'linked tables, readers and writers', 1160],
+    ];
+    defs.forEach(([label, sub, x]) => C.push({ x, y: 34, subY: 47, x2: Number(x) + 230, ly: 56, label, sub, fill: label === 'SELECTED TABLE' ? '#df642d' : '#8b9793' }));
+    const tableBox = { x: 320, y: 88, w: 230, h: 76 }; pos[sel] = tableBox;
+    const engine = table.details && table.details.engine ? ` · ${table.details.engine}` : '';
+    N.push(this.mkNode(table, tableBox.x, tableBox.y, tableBox.w, tableBox.h, { sub: `${columns.length} columns${engine}` }));
+    migrations.forEach((item, index) => { const b = { x: 40, y: 76 + index * 68, w: 230, h: 52 }; pos[item.node.id] = b; const change = item.details?.statement ? `${item.verb} · ${item.details.statement}` : item.verb; N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: change })); E.push(this.linkEdge(b, tableBox, { from: item.node.id, to: sel, verb: item.verb, kind: 'data', relation: item.verb, details: item.details }, false, false, true)); });
+    columns.forEach((node, index) => { const b = { x: 600, y: 76 + index * 62, w: 230, h: 48 }; pos[node.id] = b; const flags = [node.details?.primaryKey ? 'PK' : '', node.details?.unique ? 'unique' : '', node.details?.nullable === false ? 'required' : ''].filter(Boolean).join(' · '); N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: `${node.details?.type || ''}${flags ? ' · ' + flags : ''}` })); E.push(this.linkEdge(tableBox, b, { from: sel, to: node.id, verb: 'has column', kind: 'data' }, false, false, false)); });
+    structures.forEach((node, index) => { const b = { x: 880, y: 76 + index * 68, w: 230, h: 52 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: Array.isArray(node.details?.columns) ? node.details.columns.join(', ') : '' })); E.push(this.linkEdge(tableBox, b, { from: sel, to: node.id, verb: node.type === 'index' ? 'indexed by' : 'enforces', kind: 'data' }, false, false, true)); });
+    const targets = [...relations.map((item) => ({ node: item.node, verb: 'references', access: false, edge: item.edge })), ...access.map((item) => ({ ...item, access: true }))]
+      .filter((item, index, all) => all.findIndex((other) => other.node.id === item.node.id && other.verb === item.verb) === index);
+    targets.forEach((item, index) => {
+      const b = { x: 1160, y: 76 + index * 68, w: 230, h: 52 }; pos[item.node.id] = b;
+      const relationship = item.edge?.details ? Object.entries(item.edge.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : item.verb;
+      N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: item.access ? `${item.verb} this table` : relationship }));
+      const edge = item.access
+        ? { from: item.node.id, to: sel, verb: item.verb, kind: 'data' }
+        : { from: sel, to: item.node.id, verb: item.verb, kind: 'sync', relation: item.edge?.relation, details: item.edge?.details };
+      E.push(this.linkEdge(item.access ? b : tableBox, item.access ? tableBox : b, edge, false, false, true));
+    });
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${table.label}: ${columns.length} columns · ${structures.length} indexes/constraints · ${relations.length} table relationships · ${access.length} detected readers/writers · ${migrations.length} migrations.` };
+  }
+
+  sceneClickHouse() {
+    const { D } = this.state;
+    const isClickHouse = (node) => node && /clickhouse/i.test(`${node.id} ${node.label} ${node.file || ''} ${node.details?.engine || ''}`);
+    const databases = D.nodes.filter((node) => node.type === 'database' && isClickHouse(node));
+    const included = new Set(databases.map((node) => node.id));
+    let changed = true;
+    while (changed) {
+      changed = false;
+      D.edges.forEach((edge) => {
+        if (included.has(edge.from) && ['contains', 'has column', 'creates', 'indexes'].includes(edge.verb) && !included.has(edge.to)) { included.add(edge.to); changed = true; }
+        if (included.has(edge.to) && ['contains', 'has column'].includes(edge.verb) && !included.has(edge.from) && isClickHouse(this.node(edge.from))) { included.add(edge.from); changed = true; }
+      });
+    }
+    D.nodes.filter((node) => ['schema', 'table', 'materialized_view'].includes(node.type) && isClickHouse(node)).forEach((node) => included.add(node.id));
+    const dataIds = new Set([...included].filter((id) => ['database', 'schema', 'table', 'materialized_view', 'column', 'index', 'constraint'].includes(this.node(id)?.type)));
+    D.edges.forEach((edge) => {
+      if ((dataIds.has(edge.from) || dataIds.has(edge.to)) && ['reads', 'writes', 'publishes', 'delivered to', 'processed by', 'connects to'].includes(edge.verb)) {
+        included.add(edge.from); included.add(edge.to);
+      }
+    });
+    const columnFor = (node) => {
+      if (['topic', 'queue', 'broker', 'processor', 'consumer'].includes(node.type)) return 0;
+      if (['database', 'schema'].includes(node.type)) return 1;
+      if (node.type === 'table' && /kafka/i.test(String(node.details?.engine || ''))) return 0;
+      if (node.type === 'table') return 2;
+      if (node.type === 'materialized_view') return 3;
+      return 4;
+    };
+    const columns = [
+      ['EVENT SOURCES', 'Kafka engines, topics and ingest'],
+      ['CLICKHOUSE', 'database and schemas'],
+      ['STORAGE', 'raw and aggregate tables'],
+      ['TRANSFORMS', 'materialized views'],
+      ['STRUCTURE', 'columns, indexes and constraints'],
+    ];
+    const N = [], E = [], C = [], pos = {}, rows = [0, 0, 0, 0, 0];
+    columns.forEach(([label, sub], index) => C.push({ x: 40 + index * 285, y: 34, subY: 47, x2: 270 + index * 285, ly: 56, label, sub, fill: index === 1 ? '#df642d' : '#8b9793' }));
+    [...included].map((id) => this.node(id)).filter(Boolean).sort((a, b) => a.label.localeCompare(b.label)).forEach((node) => {
+      const col = columnFor(node), row = rows[col]++;
+      const b = { x: 40 + col * 285, y: 76 + row * 68, w: 230, h: 52 }; pos[node.id] = b;
+      const sub = node.details?.engine || node.details?.type || this.tLabel(node.type);
+      N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: String(sub) }));
+    });
+    D.edges.filter((edge) => pos[edge.from] && pos[edge.to]).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${dataIds.size} ClickHouse data structures and ${N.length - dataIds.size} connected producers or consumers detected.`, emptyOk: N.length === 0 };
+  }
+
+  sceneAsyncOverview() {
+    const { D } = this.state;
+    const roots = D.nodes.filter((node) => ['topic', 'queue'].includes(node.type));
+    const brokers = D.nodes.filter((node) => node.type === 'broker');
+    const consumers = D.nodes.filter((node) => node.type === 'processor' || (node.type === 'method' && D.edges.some((edge) => roots.some((root) => root.id === edge.from) && edge.to === node.id && ['delivered to', 'processed by'].includes(edge.verb))));
+    const N = [], E = [], C = [], pos = {};
+    [[40, 'BROKERS', 'message transports'], [350, 'TOPICS & QUEUES', 'all asynchronous entry points'], [700, 'CONSUMERS & PROCESSORS', 'what receives and runs next']].forEach(([x, label, sub]) => C.push({ x, y: 34, subY: 47, x2: Number(x) + 260, ly: 56, label, sub, fill: '#8b9793' }));
+    brokers.forEach((node, index) => { const b = { x: 40, y: 76 + index * 70, w: 260, h: 56 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: node.details?.transport || '' })); });
+    roots.forEach((node, index) => { const b = { x: 350, y: 76 + index * 66, w: 270, h: 52 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: node.details?.transport || 'detected message channel' })); });
+    consumers.forEach((node, index) => { const b = { x: 700, y: 76 + index * 66, w: 270, h: 52 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h)); });
+    D.edges.filter((edge) => pos[edge.from] && pos[edge.to]).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${brokers.length} brokers · ${D.nodes.filter((n) => n.type === 'topic').length} topics · ${D.nodes.filter((n) => n.type === 'queue').length} queues · ${D.nodes.filter((n) => n.type === 'processor').length} processors. Select a topic or queue to open its complete publisher-to-consumer flow.` };
+  }
+
+  sceneScheduleOverview() {
+    const { D } = this.state;
+    const jobs = D.nodes.filter((node) => node.type === 'scheduled_job');
+    const N = [], C = [];
+    C.push({ x: 40, y: 34, subY: 47, x2: 1160, ly: 56, label: 'SCHEDULED JOBS', sub: 'cron, intervals, startup timeouts, repeatable queues and Kubernetes CronJobs', fill: '#8b9793' });
+    jobs.slice(0, 40).forEach((node, index) => { const col = index % 4, row = Math.floor(index / 4); const expression = node.details?.humanSchedule || node.details?.expression || ''; N.push(this.mkNode(node, 40 + col * 290, 76 + row * 76, 260, 58, { sub: String(expression) })); });
+    return { nodes: N, edges: [], groups: [], cols: C, status: `${jobs.length} scheduled jobs detected. Select one to see its schedule, timezone, handler and downstream effects.`, emptyOk: jobs.length === 0 };
+  }
+
+  sceneScheduled(sel) {
+    const { D } = this.state;
+    const root = this.node(sel);
+    const visited = new Map([[sel, 0]]), queue = [sel], links = [];
+    while (queue.length && visited.size < 36) {
+      const current = queue.shift(), depth = visited.get(current);
+      if (depth >= 4) continue;
+      D.edges.filter((edge) => edge.from === current && ['runs', 'triggers', 'calls', 'reads', 'writes', 'publishes', 'enqueues', 'configures', 'uses'].includes(edge.verb)).slice(0, 12).forEach((edge) => { links.push(edge); if (!visited.has(edge.to)) { visited.set(edge.to, depth + 1); queue.push(edge.to); } });
+    }
+    const N = [], E = [], C = [], pos = {}, rows = {};
+    const stages = ['SCHEDULE', 'HANDLER', 'WORK', 'DATA / EVENTS', 'EXTERNAL EFFECTS'];
+    stages.forEach((label, index) => C.push({ x: 40 + index * 285, y: 34, x2: 270 + index * 285, ly: 56, label, fill: index === 0 ? '#df642d' : '#8b9793' }));
+    visited.forEach((depth, id) => { const row = rows[depth] || 0; rows[depth] = row + 1; const node = this.node(id); const b = { x: 40 + depth * 285, y: 76 + row * 72, w: 230, h: 54 }; pos[id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: id === sel ? String(root.details?.humanSchedule || root.details?.expression || '') : '' })); });
+    links.filter((edge) => pos[edge.from] && pos[edge.to]).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${root.label}: ${root.details?.humanSchedule || root.details?.expression || 'configured schedule'}${root.details?.timeZone ? ' · timezone ' + root.details.timeZone : ''}.` };
+  }
+
+  sceneDelivery(environment) {
+    const { D } = this.state;
+    const deliveryTypes = new Set(['workflow', 'pipeline_job', 'build_stage', 'container_image', 'container', 'deployment', 'infrastructure_service', 'ingress', 'config_map', 'secret']);
+    const environmentMatches = (node) => !node.details?.environment || node.details.environment === environment;
+    const candidates = D.nodes.filter((node) => deliveryTypes.has(node.type) && environmentMatches(node));
+    const seed = new Set(candidates.filter((node) => node.details?.environment === environment || ['workflow', 'pipeline_job', 'build_stage'].includes(node.type)).map((node) => node.id));
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      D.edges.forEach((edge) => {
+        const fromDelivery = deliveryTypes.has(this.node(edge.from)?.type), toDelivery = deliveryTypes.has(this.node(edge.to)?.type);
+        if (seed.has(edge.from) && toDelivery && !seed.has(edge.to)) { seed.add(edge.to); expanded = true; }
+        if (seed.has(edge.to) && fromDelivery && !seed.has(edge.from)) { seed.add(edge.from); expanded = true; }
+      });
+    }
+    const nodes = candidates.filter((node) => seed.has(node.id));
+    const columns = [
+      { label: 'CI / CD', sub: 'workflows and jobs', types: ['workflow', 'pipeline_job'] },
+      { label: 'BUILD', sub: 'Docker stages and images', types: ['build_stage', 'container_image'] },
+      { label: 'DEPLOY', sub: `workloads in ${environment}`, types: ['deployment', 'container'] },
+      { label: 'NETWORK', sub: 'services and ingress', types: ['infrastructure_service', 'ingress'] },
+      { label: 'CONFIGURATION', sub: 'ConfigMaps and Secrets', types: ['config_map', 'secret'] },
+    ];
+    const N = [], E = [], C = [], pos = {};
+    columns.forEach((column, col) => {
+      const x = 40 + col * 285;
+      C.push({ x, y: 34, subY: 47, x2: x + 230, ly: 56, label: column.label, sub: column.sub, fill: col === 2 ? '#df642d' : '#8b9793' });
+      nodes.filter((node) => column.types.includes(node.type)).forEach((node, row) => { const b = { x, y: 76 + row * 72, w: 230, h: 54 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: node.type === 'secret' ? 'names only · values never stored' : node.details?.image || node.details?.kind || '' })); });
+    });
+    D.edges.filter((edge) => pos[edge.from] && pos[edge.to]).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
+    const exact = nodes.filter((node) => node.details?.environment === environment).length;
+    const status = exact ? `${environment}: ${exact} environment-specific components · ${nodes.length} delivery/runtime components shown.` : `${environment}: no environment-specific runtime configuration detected. Shared CI/build stages are shown where available.`;
+    return { nodes: N, edges: E, groups: [], cols: C, status, emptyOk: nodes.length === 0 };
+  }
+
+  sceneDeliveryCompare() {
+    const { D } = this.state;
+    const types = new Set(['workflow', 'pipeline_job', 'build_stage', 'container_image', 'container', 'deployment', 'infrastructure_service', 'ingress', 'config_map', 'secret']);
+    const candidates = D.nodes.filter((node) => types.has(node.type) && (!node.details?.environment || ['staging', 'production'].includes(node.details.environment)));
+    const groups = new Map();
+    candidates.forEach((node) => {
+      const key = `${node.type}:${node.label.toLowerCase().replace(/\b(staging|production|prod|stage)\b/g, '').replace(/[^a-z0-9]+/g, '-')}`;
+      const group = groups.get(key) || { key, staging: null, production: null, shared: null };
+      const env = node.details?.environment;
+      if (env === 'staging') group.staging = node; else if (env === 'production') group.production = node; else group.shared = node;
+      groups.set(key, group);
+    });
+    const columnFor = (node) => ['workflow', 'pipeline_job'].includes(node.type) ? 0 : ['build_stage', 'container_image'].includes(node.type) ? 1 : ['deployment', 'container'].includes(node.type) ? 2 : ['infrastructure_service', 'ingress'].includes(node.type) ? 3 : 4;
+    const columns = [['CI / CD', 'shared workflows'], ['BUILD', 'shared image pipeline'], ['DEPLOY', 'staging vs production'], ['NETWORK', 'services and ingress'], ['CONFIGURATION', 'ConfigMaps and secret names']];
+    const N = [], E = [], C = [], posById = {}, rows = [0, 0, 0, 0, 0], statusCounts = { same: 0, changed: 0, missing: 0 };
+    columns.forEach(([label, sub], index) => C.push({ x: 40 + index * 285, y: 34, subY: 47, x2: 270 + index * 285, ly: 56, label, sub, fill: index === 2 ? '#df642d' : '#8b9793' }));
+    [...groups.values()].sort((a, b) => (a.production || a.staging || a.shared).label.localeCompare((b.production || b.staging || b.shared).label)).forEach((group) => {
+      const node = group.production || group.staging || group.shared;
+      const comparable = (value) => JSON.stringify(Object.fromEntries(Object.entries(value?.details || {}).filter(([key]) => key !== 'environment')));
+      const missing = !group.shared && (!group.production || !group.staging);
+      const changed = !missing && group.production && group.staging && comparable(group.production) !== comparable(group.staging);
+      const status = missing ? 'missing' : changed ? 'changed' : 'same'; statusCounts[status] += 1;
+      const col = columnFor(node), row = rows[col]++, b = { x: 40 + col * 285, y: 76 + row * 72, w: 230, h: 56 };
+      const sub = group.shared ? 'shared by staging and production' : missing ? `${group.production ? 'production only' : 'staging only'}` : changed ? 'configuration differs' : 'same in both environments';
+      const over = status === 'missing' ? { stroke: '#1e8068', fill: '#eef7f3', sw: 2 } : status === 'changed' ? { stroke: '#b27a12', fill: '#fdf6e5', sw: 1.6 } : {};
+      N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub, over }));
+      [group.shared, group.staging, group.production].filter(Boolean).forEach((item) => { posById[item.id] = b; });
+    });
+    const seen = new Set();
+    D.edges.forEach((edge) => {
+      const a = posById[edge.from], b = posById[edge.to]; if (!a || !b || a === b) return;
+      const key = `${a.x}:${a.y}>${b.x}:${b.y}:${edge.verb}`; if (seen.has(key)) return; seen.add(key);
+      E.push(this.linkEdge(a, b, edge, false, false, true));
+    });
+    return { nodes: N, edges: E, groups: [], cols: C, status: `Staging vs production: ${statusCounts.same} matching · ${statusCounts.changed} changed · ${statusCounts.missing} present in one environment only.`, emptyOk: N.length === 0 };
+  }
+
+  sceneConfiguration() {
+    const { D } = this.state;
+    const variables = D.nodes.filter((node) => node.type === 'env').sort((a, b) => {
+      const aSensitive = a.details?.sensitive ? 1 : 0, bSensitive = b.details?.sensitive ? 1 : 0;
+      return aSensitive - bSensitive || a.label.localeCompare(b.label);
+    });
+    const groups = [
+      { label: 'DOCUMENTED', sub: 'safe examples and purpose', test: (node) => node.details?.example && !node.details?.sensitive },
+      { label: 'REQUIRED', sub: 'declared without a sample', test: (node) => node.details?.required },
+      { label: 'PROTECTED', sub: 'secret-like names · values hidden', test: (node) => node.details?.sensitive },
+      { label: 'RUNTIME', sub: 'found in code and deployment', test: () => true },
+    ];
+    const assigned = new Set(), N = [], C = [];
+    groups.forEach((group, col) => {
+      const x = 40 + col * 305;
+      C.push({ x, y: 34, subY: 47, x2: x + 260, ly: 56, label: group.label, sub: group.sub, fill: col === 2 ? '#a83a3a' : '#8b9793' });
+      variables.filter((node) => !assigned.has(node.id) && group.test(node)).forEach((node, row) => {
+        assigned.add(node.id);
+        const example = node.details?.sensitive ? 'value hidden' : node.details?.exampleValue ? `example: ${node.details.exampleValue}` : node.details?.purpose || node.details?.environment || 'configuration name';
+        N.push(this.mkNode(node, x, 76 + row * 72, 260, 54, { sub: String(example) }));
+      });
+    });
+    return { nodes: N, edges: [], groups: [], cols: C, status: `${variables.length} configuration variables detected. Safe examples come only from template files; real and secret-like values are never stored.`, emptyOk: variables.length === 0 };
+  }
+
   sceneGrid(types, hint) {
     const { D, catQ } = this.state;
     const items = D.nodes.filter((n) => types.includes(n.type) && (!catQ || (n.label + ' ' + (n.file || '')).toLowerCase().includes(catQ.toLowerCase())));
@@ -1309,9 +1812,17 @@ class Component extends DCLogic {
       { id: 'routes', label: 'Routes & Flows', count: loading ? '' : D.project.stats.routes },
       { id: 'async', label: 'Async Flows', count: loading ? '' : D.nodes.filter((n) => ['broker', 'topic', 'queue', 'processor'].includes(n.type)).length },
       { id: 'services', label: 'Services', count: loading ? '' : D.project.stats.services },
-      { id: 'data', label: 'Data Model', count: loading ? '' : D.project.stats.tables },
+      { id: 'schedules', label: 'Scheduled Jobs', count: loading ? '' : D.project.stats.schedules || 0 },
+      { h: 'Data & Storage' },
+      { id: 'data', label: 'Data Catalog', count: loading ? '' : D.project.stats.tables },
+      { id: 'database', label: 'Database Schema', count: loading ? '' : D.project.stats.tables },
+      { id: 'migrations', label: 'Migrations', count: loading ? '' : D.project.stats.migrations || 0 },
+      { id: 'clickhouse', label: 'ClickHouse', count: loading ? '' : D.nodes.filter((n) => /clickhouse/i.test(`${n.id} ${n.label} ${n.file || ''} ${n.details?.engine || ''}`)).length },
+      { h: 'Delivery & Runtime' },
+      { id: 'delivery', label: 'Environments', count: loading ? '' : D.nodes.filter((n) => n.type === 'deployment').length },
+      { id: 'configuration', label: 'Configuration', count: loading ? '' : D.nodes.filter((n) => n.type === 'env').length },
       { h: 'Boundary' },
-      { id: 'external', label: 'External', count: loading ? '' : D.nodes.filter((n) => ['external', 'env', 'library'].includes(n.type)).length },
+      { id: 'external', label: 'External', count: loading ? '' : D.nodes.filter((n) => ['external', 'library'].includes(n.type)).length },
       { h: 'Quality' },
       { id: 'risks', label: 'Risks', count: loading ? '' : D.nodes.filter((n) => n.type === 'risk').length },
       { id: 'files', label: 'Files & Code', count: loading ? '' : D.project.stats.files },
@@ -1335,8 +1846,14 @@ class Component extends DCLogic {
       routes: ['Routes & Flows', 'Follow an HTTP request from its endpoint to the data it changes and the events it publishes.'],
       async: ['Async Flows', 'Kafka topics, queues, publishers, consumers and processors — who sends what, and what runs next.'],
       services: ['Services', 'Business logic: who calls each service, and what it depends on.'],
-      data: ['Data Model', 'Tables and stores: who reads and writes each one.'],
-      external: ['External', 'APIs, libraries and environment variables used outside the application boundary.'],
+      data: ['Data Catalog', 'Every detected database, schema and table — searchable, complete, and ordered by architectural importance.'],
+      database: ['Database Schema', 'Table relationships with readers, writers, columns, keys, indexes, constraints and migration history.'],
+      migrations: ['Migration History', 'Every detected database change, including created, altered and removed structures.'],
+      clickhouse: ['ClickHouse Architecture', 'The analytical data path: event sources, ClickHouse schemas, storage tables, materialized views and indexes.'],
+      schedules: ['Scheduled Jobs', 'Cron, interval, timeout, repeatable queue and Kubernetes jobs — when they run and what they change.'],
+      delivery: ['Delivery & Runtime', 'How code is tested, built and deployed across development, staging and production.'],
+      configuration: ['Configuration Contract', 'Required settings, safe examples, protected names, owning environments and runtime consumers.'],
+      external: ['External', 'APIs and libraries used outside the application boundary.'],
       risks: ['Risks', 'Detected architecture concerns, with the affected code.'],
       files: ['Files & Code', 'Pick a file to understand its role: what it declares, who uses it, and which flows pass through it.'],
     };
@@ -1359,8 +1876,14 @@ class Component extends DCLogic {
       routes: { title: 'Routes', types: ['route'], groupBy: null },
       async: { title: 'Topics · Queues · Processors', types: ['broker', 'topic', 'queue', 'processor'], groupBy: 'type' },
       services: { title: 'Services', types: ['service', 'provider', 'repository'], groupBy: null },
-      data: { title: 'Tables & stores', types: ['database', 'table', 'entity', 'model'], groupBy: 'type' },
-      external: { title: 'Integrations', types: ['external', 'env', 'library'], groupBy: 'type' },
+      data: null,
+      database: { title: 'Database structures', types: ['database', 'schema', 'table', 'column', 'index', 'constraint'], groupBy: 'type' },
+      migrations: null,
+      clickhouse: { title: 'ClickHouse structures', types: ['database', 'schema', 'table', 'materialized_view', 'index'], groupBy: 'type' },
+      schedules: { title: 'Scheduled jobs', types: ['scheduled_job'], groupBy: 'type' },
+      delivery: { title: 'Delivery & runtime', types: ['workflow', 'pipeline_job', 'build_stage', 'container_image', 'container', 'deployment', 'infrastructure_service', 'ingress', 'config_map', 'secret', 'environment'], groupBy: 'type' },
+      configuration: { title: 'Configuration contract', types: ['env'], groupBy: 'type' },
+      external: { title: 'Integrations', types: ['external', 'library'], groupBy: 'type' },
       risks: { title: 'Findings', types: ['risk'], groupBy: null },
       files: { title: 'Files', types: ['file'], groupBy: null },
     };
@@ -1368,6 +1891,17 @@ class Component extends DCLogic {
     let catalogItems = [], catalogCount = '';
     if (cd && D) {
       let list = D.nodes.filter((n) => cd.types.includes(n.type));
+      if (mode === 'clickhouse') {
+        const clickHouseIds = new Set(D.nodes.filter((node) => node.type === 'database' && /clickhouse/i.test(`${node.id} ${node.label} ${node.file || ''} ${node.details?.engine || ''}`)).map((node) => node.id));
+        let expanded = true;
+        while (expanded) {
+          expanded = false;
+          D.edges.forEach((edge) => {
+            if (clickHouseIds.has(edge.from) && ['contains', 'has column', 'indexes', 'creates'].includes(edge.verb) && !clickHouseIds.has(edge.to)) { clickHouseIds.add(edge.to); expanded = true; }
+          });
+        }
+        list = list.filter((node) => clickHouseIds.has(node.id) || /clickhouse/i.test(`${node.id} ${node.label} ${node.file || ''} ${node.details?.engine || ''}`));
+      }
       const total = list.length;
       if (catQ) list = list.filter((n) => (n.label + ' ' + (n.file || '')).toLowerCase().includes(catQ.toLowerCase()));
       catalogCount = catQ ? `${list.length} of ${total}` : String(total);
@@ -1420,7 +1954,8 @@ class Component extends DCLogic {
           const other = this.node(dir === 'in' ? e.from : e.to);
           if (!other) return;
           if (e.kind !== lastKind) { items.push({ isHeading: true, isItem: false, label: kindName[e.kind] || e.kind }); lastKind = e.kind; }
-          items.push({ isHeading: false, isItem: true, label: other.label, verb: dir === 'in' ? `${other.label} ${e.verb} ${selNode.label}` : `${selNode.label} ${e.verb} ${other.label}`, color: this.color(other.type), tip: other.desc || this.typeExplain(other.type), go: () => this.reveal(other.id) });
+          const detail = e.details ? Object.entries(e.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : '';
+          items.push({ isHeading: false, isItem: true, label: other.label, verb: `${dir === 'in' ? `${other.label} ${e.verb} ${selNode.label}` : `${selNode.label} ${e.verb} ${other.label}`}${detail ? ' · ' + detail : ''}`, color: this.color(other.type), tip: `${other.desc || this.typeExplain(other.type)}${detail ? ' ' + detail : ''}`, go: () => this.reveal(other.id) });
         });
         return items;
       };
@@ -1429,6 +1964,17 @@ class Component extends DCLogic {
       facts.push({ k: 'Uses', v: out.length ? `${out.length} element${out.length > 1 ? 's' : ''} (see Outgoing)` : 'nothing directly' });
       if (flowsOf.length) facts.push({ k: 'In flows', v: flowsOf.map((f) => f.label).join(', ') });
       if (selNode.metrics) Object.entries(selNode.metrics).forEach(([k, v]) => facts.push({ k: k[0].toUpperCase() + k.slice(1), v: String(v) }));
+      if (selNode.details) Object.entries(selNode.details).slice(0, 14).forEach(([k, v]) => facts.push({
+        k: k.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (char) => char.toUpperCase()),
+        v: Array.isArray(v) ? v.join(', ') : String(v),
+      }));
+      if (selNode.type === 'table') {
+        facts.push({ k: 'Columns', v: String(D.edges.filter((e) => e.from === sel && e.verb === 'has column').length) });
+        facts.push({ k: 'Indexes', v: String(D.edges.filter((e) => e.to === sel && e.verb === 'indexes').length) });
+        facts.push({ k: 'Relationships', v: String(D.edges.filter((e) => e.verb === 'references' && (e.from === sel || e.to === sel)).length) });
+        facts.push({ k: 'Readers / writers', v: String(D.edges.filter((e) => e.to === sel && ['reads', 'writes'].includes(e.verb)).length) });
+        facts.push({ k: 'Migrations', v: String(D.edges.filter((e) => e.to === sel && ['creates', 'alters', 'drops'].includes(e.verb)).length) });
+      }
       if (selNode.domain && D.domains.find((d) => d.id === selNode.domain)) facts.push({ k: 'Domain', v: D.domains.find((d) => d.id === selNode.domain).name });
       const roleRelated = (D.fileRoles[sel] ? D.fileRoles[sel].related : []).map((rid) => {
         const rn = this.node(rid);
@@ -1513,8 +2059,119 @@ class Component extends DCLogic {
     // so the two never fight for graph space
     const storyOpen = this.state.storyOpen ?? !(!!selNode && !this.state.panelHidden);
 
-    const variant = this.state.mapVariant ?? this.props.mapVariant ?? 'clusters';
+    // Full data catalog. Every detected table is assigned to a database/schema bucket;
+    // unlinked ORM models remain visible under a synthetic detected-data group.
+    let dataCatalog = { daDbs: [], daDbBtns: [], daQ: '', daNoResults: false, daSummary: '' };
+    if (D && mode === 'data') {
+      const qData = (this.state.daQ || '').trim().toLowerCase();
+      const dbFilter = this.state.daDb || 'all';
+      const databases = D.nodes.filter((node) => node.type === 'database');
+      const schemas = D.nodes.filter((node) => node.type === 'schema');
+      const tables = D.nodes.filter((node) => ['table', 'entity', 'model'].includes(node.type));
+      const contains = D.edges.filter((edge) => edge.verb === 'contains');
+      const tableOwner = new Map();
+      const databaseGroups = databases.map((database) => {
+        const schemaIds = new Set(contains.filter((edge) => edge.from === database.id).map((edge) => edge.to));
+        const ownedSchemas = schemas.filter((schema) => schemaIds.has(schema.id));
+        const schemaGroups = ownedSchemas.map((schema) => {
+          const ids = new Set(contains.filter((edge) => edge.from === schema.id).map((edge) => edge.to));
+          const list = tables.filter((table) => ids.has(table.id)); list.forEach((table) => tableOwner.set(table.id, database.id));
+          return { id: schema.id, name: schema.label, list };
+        });
+        const directIds = new Set(contains.filter((edge) => edge.from === database.id).map((edge) => edge.to));
+        const direct = tables.filter((table) => directIds.has(table.id));
+        direct.forEach((table) => tableOwner.set(table.id, database.id));
+        if (direct.length) schemaGroups.push({ id: `${database.id}:direct`, name: 'default', list: direct });
+        return { database, schemaGroups };
+      });
+      const orphanGroups = new Map();
+      tables.filter((table) => !tableOwner.has(table.id)).forEach((table) => {
+        const schema = String(table.details?.schema || (table.type === 'table' ? 'public' : 'ORM models'));
+        orphanGroups.set(schema, [...(orphanGroups.get(schema) || []), table]);
+      });
+      if (orphanGroups.size) databaseGroups.push({ database: { id: 'detected-data', label: 'Detected application data', details: {} }, schemaGroups: [...orphanGroups.entries()].map(([name, list]) => ({ id: `detected:${name}`, name, list })) });
+      const degree = (id) => D.edges.filter((edge) => edge.from === id || edge.to === id).length;
+      const tableCard = (table) => {
+        const columns = D.edges.filter((edge) => edge.from === table.id && edge.verb === 'has column').length;
+        const indexes = D.edges.filter((edge) => edge.to === table.id && edge.verb === 'indexes').length;
+        const refs = D.edges.filter((edge) => (edge.from === table.id || edge.to === table.id) && edge.verb === 'references').length;
+        return { label: table.label, desc: table.desc || this.typeExplain(table.type), hot: degree(table.id) >= 5, counts: `${columns || '?'} cols · ${indexes} idx · ${refs} relations`, tip: `${table.label}: ${columns || 'unknown'} columns, ${indexes} indexes, ${refs} relationships`, go: () => this.reveal(table.id) };
+      };
+      const visibleDbs = databaseGroups.filter(({ database }) => dbFilter === 'all' || database.id === dbFilter).map(({ database, schemaGroups }) => {
+        const visibleSchemas = schemaGroups.map((schema) => {
+          const list = schema.list.filter((table) => !qData || `${table.label} ${table.file || ''} ${table.desc || ''}`.toLowerCase().includes(qData)).sort((a, b) => degree(b.id) - degree(a.id) || a.label.localeCompare(b.label));
+          return { name: schema.name, count: `${list.length} tables`, tables: list.map(tableCard) };
+        }).filter((schema) => schema.tables.length);
+        const isCh = /clickhouse/i.test(`${database.id} ${database.label} ${database.details?.engine || ''}`);
+        return { id: database.id, name: database.label, engine: String(database.details?.engine || (isCh ? 'ClickHouse' : '')), tables: visibleSchemas.reduce((sum, schema) => sum + schema.tables.length, 0), schemas: visibleSchemas, isCh, goCh: () => this.setMode('clickhouse') };
+      }).filter((database) => database.schemas.length);
+      const dbOptions = [{ id: 'all', label: 'All databases' }, ...databaseGroups.map(({ database }) => ({ id: database.id, label: database.label }))];
+      dataCatalog = {
+        daDbs: visibleDbs, daQ: this.state.daQ || '', daNoResults: visibleDbs.length === 0,
+        daSummary: `${tables.length} tables across ${Math.max(1, databaseGroups.length)} detected data stores · most connected first`,
+        onDaQ: (event) => this.setState({ daQ: event.target.value }), clearDaQ: () => this.setState({ daQ: '' }),
+        daDbBtns: dbOptions.map((item) => ({ label: item.label, go: () => this.setState({ daDb: item.id }), bg: dbFilter === item.id ? '#16211d' : '#fff', fg: dbFilter === item.id ? '#fff' : '#4e5a56', fw: dbFilter === item.id ? 700 : 500 })),
+      };
+    }
+
+    let migrationCatalog = { migRows: [], migEmpty: false, migQ: '', migOpBtns: [], migDestrBtn: {} };
+    if (D && mode === 'migrations') {
+      const qMig = (this.state.migQ || '').trim().toLowerCase(), opFilter = this.state.migOp || 'all', destructiveOnly = !!this.state.migDestr;
+      const migrations = D.nodes.filter((node) => node.type === 'migration');
+      const opColors = { creates: ['#1e8068', '#eef7f3'], alters: ['#8a6207', '#fdf4dd'], drops: ['#a83a3a', '#fbeaea'], indexes: ['#3d5a94', '#eef2f8'] };
+      const rows = migrations.map((migration, index) => {
+        const ops = D.edges.filter((edge) => edge.from === migration.id && ['creates', 'alters', 'drops', 'indexes'].includes(edge.relation || edge.verb)).map((edge) => {
+          const relation = edge.relation || edge.verb, target = this.node(edge.to); const colors = opColors[relation] || opColors.alters;
+          return { relation, op: relation.replace(/s$/, ''), target: target?.label || edge.to, detail: edge.details?.statement || (target ? this.tLabel(target.type) : ''), fg: colors[0], bg: colors[1] };
+        });
+        const destructive = ops.some((op) => op.relation === 'drops');
+        const seqMatch = `${migration.label} ${migration.file}`.match(/(?:^|\D)(\d{4,})(?:\D|$)/);
+        return { raw: migration, seq: seqMatch ? `#${seqMatch[1]}` : `#${index + 1}`, name: migration.label, file: migration.file, ops, destructive, dotColor: sel === migration.id ? '#df642d' : destructive ? '#c94747' : '#b8c4bf', bg: sel === migration.id ? '#fdf3ec' : '#fff', border: sel === migration.id ? '#df642d' : '#dde3e0', go: () => this.select(migration.id, { mode: 'migrations' }) };
+      }).filter((row) => {
+        const hay = `${row.name} ${row.file} ${row.ops.map((op) => `${op.relation} ${op.target}`).join(' ')}`.toLowerCase();
+        return (!qMig || hay.includes(qMig)) && (opFilter === 'all' || row.ops.some((op) => op.relation.startsWith(opFilter))) && (!destructiveOnly || row.destructive);
+      }).reverse();
+      migrationCatalog = {
+        migRows: rows, migEmpty: rows.length === 0, migQ: this.state.migQ || '', onMigQ: (event) => this.setState({ migQ: event.target.value }), clearMigFilters: () => this.setState({ migQ: '', migOp: 'all', migDestr: false }),
+        migOpBtns: [['all', 'All'], ['create', 'Create'], ['alter', 'Alter'], ['drop', 'Drop'], ['index', 'Index']].map(([id, label]) => ({ label, go: () => this.setState({ migOp: id }), bg: opFilter === id ? '#16211d' : '#fff', fg: opFilter === id ? '#fff' : '#4e5a56', fw: opFilter === id ? 700 : 500 })),
+        migDestrBtn: { label: destructiveOnly ? 'Destructive only: on' : 'Destructive only', go: () => this.setState({ migDestr: !destructiveOnly }), bg: destructiveOnly ? '#fbeaea' : '#fff', fg: destructiveOnly ? '#a83a3a' : '#4e5a56', border: destructiveOnly ? '#e0b4b4' : '#d4dbd7' },
+      };
+    }
+
+    let jobCatalog = { jobRows: [], jobsEmpty: false, jobQ: '', jobKindBtns: [] };
+    if (D && mode === 'schedules' && !sel) {
+      const qJob = (this.state.jobQ || '').trim().toLowerCase(), kindFilter = this.state.jobKind || 'all';
+      const kindOf = (node) => String(node.details?.kind || node.details?.framework || 'scheduled').toLowerCase();
+      const normalizedKind = (node) => { const kind = kindOf(node); return kind.includes('cron') ? 'cron' : kind.includes('interval') ? 'interval' : kind.includes('timeout') ? 'timeout' : kind.includes('repeat') || node.framework === 'bull' ? 'repeatable' : 'other'; };
+      const rows = D.nodes.filter((node) => node.type === 'scheduled_job').filter((node) => {
+        const kind = normalizedKind(node), hay = `${node.label} ${node.file} ${node.desc} ${node.details?.expression || ''}`.toLowerCase(); return (kindFilter === 'all' || kind === kindFilter) && (!qJob || hay.includes(qJob));
+      }).sort((a, b) => a.label.localeCompare(b.label)).map((node) => ({
+        label: node.label, kindLabel: kindOf(node).replaceAll('_', ' '), human: String(node.details?.humanSchedule || 'Configured schedule'), expression: String(node.details?.expression || ''), timeZone: node.details?.timeZone ? `timezone ${node.details.timeZone}` : '', action: node.desc || this.typeExplain(node.type), owner: node.domain || 'project', concurrency: String(node.details?.concurrencyPolicy || 'not specified'), file: node.file, environment: String(node.details?.environment || ''), suspended: node.details?.suspend === true, go: () => this.reveal(node.id),
+      }));
+      jobCatalog = { jobRows: rows, jobsEmpty: rows.length === 0, jobQ: this.state.jobQ || '', onJobQ: (event) => this.setState({ jobQ: event.target.value }), clearJobFilters: () => this.setState({ jobQ: '', jobKind: 'all' }), jobKindBtns: [['all', 'All'], ['cron', 'Cron'], ['interval', 'Interval'], ['timeout', 'Timeout'], ['repeatable', 'Repeatable'], ['other', 'Other']].map(([id, label]) => ({ label, go: () => this.setState({ jobKind: id }), bg: kindFilter === id ? '#16211d' : '#fff', fg: kindFilter === id ? '#fff' : '#4e5a56', fw: kindFilter === id ? 700 : 500 })) };
+    }
+
+    let configCatalog = { cfgGroups: [] };
+    if (D && mode === 'configuration') {
+      const variables = D.nodes.filter((node) => node.type === 'env').sort((a, b) => a.label.localeCompare(b.label));
+      const grouped = new Map(); variables.forEach((node) => grouped.set(node.domain || 'Project', [...(grouped.get(node.domain || 'Project') || []), node]));
+      configCatalog = { cfgGroups: [...grouped.entries()].map(([name, list]) => ({ name, count: `${list.length} variables`, vars: list.map((node) => {
+        const consumers = D.edges.filter((edge) => edge.to === node.id || edge.from === node.id).map((edge) => this.node(edge.from === node.id ? edge.to : edge.from)).filter(Boolean);
+        const secret = node.details?.sensitive === true, required = node.details?.required === true;
+        return { name: node.label, secret, reqLabel: required ? 'required' : 'optional', reqFg: required ? '#a34517' : '#4e5a56', reqBg: required ? '#fdeee5' : '#eef1ef', purpose: node.details?.purpose || node.desc || 'Runtime configuration setting.', usedBy: consumers.length ? `used by ${consumers.slice(0, 4).map((item) => item.label).join(', ')}` : node.file || 'usage not linked', environment: String(node.details?.environment || 'all detected environments'), value: secret ? 'value hidden' : String(node.details?.exampleValue || node.details?.example || 'no safe example'), rowOp: '1', go: () => this.reveal(node.id) };
+      }) })) };
+    }
+
+    const mapVariant = this.state.mapVariant ?? this.props.mapVariant ?? 'clusters';
+    const variantConfig = mode === 'map'
+      ? { value: mapVariant, buttons: [['clusters', 'Clusters'], ['layers', 'Layers'], ['columns', 'Columns']], key: 'mapVariant' }
+      : mode === 'delivery'
+          ? { value: this.state.deliveryEnv || 'production', buttons: [['development', 'Development'], ['staging', 'Staging'], ['production', 'Production'], ['compare', 'Compare']], key: 'deliveryEnv' }
+          : null;
+    const isJobCatalog = mode === 'schedules' && !sel;
+    const listScreen = mode === 'data' || mode === 'migrations' || mode === 'configuration' || isJobCatalog;
     return {
+      ...dataCatalog, ...migrationCatalog, ...jobCatalog, ...configCatalog,
       legendMaxW: story ? 'calc(100% - 360px)' : 'calc(100% - 24px)',
       storyAvailable: !!story, storyOpen: !!story && storyOpen,
       storySteps: story ? story.steps : [], storyEnds: story ? story.ends : '',
@@ -1525,15 +2182,18 @@ class Component extends DCLogic {
       onCloseGuide: () => this.closeGuide(),
       projectName: D ? D.project.name : '…', stackName: D ? D.project.stack : '', scanned: D ? D.project.scanned : '',
       crumbs, navItems, viewTitle, viewDesc,
-      isOverview: mode === 'overview', isExplorer: mode !== 'overview',
-      showGraphControls: mode !== 'overview',
-      showVariantSwitch: mode === 'map',
-      variantBtns: [['clusters', 'Clusters'], ['layers', 'Layers'], ['columns', 'Columns']].map(([id, label]) => ({
-        label, go: () => this.setState({ mapVariant: id, mapExpanded: false, vb: null }),
-        bg: variant === id ? '#16211d' : '#fff', fg: variant === id ? '#fff' : '#4e5a56',
-        fw: variant === id ? 700 : 500, hoverBg: variant === id ? '#16211d' : '#f2f5f4',
+      isOverview: mode === 'overview',
+      isDataCatalog: mode === 'data', isMigrationCatalog: mode === 'migrations',
+      isJobCatalog, isConfigCatalog: mode === 'configuration',
+      isExplorer: mode !== 'overview' && !listScreen,
+      showGraphControls: mode !== 'overview' && !listScreen,
+      showVariantSwitch: !!variantConfig,
+      variantBtns: (variantConfig ? variantConfig.buttons : []).map(([id, label]) => ({
+        label, go: () => this.setState({ [variantConfig.key]: id, sel: null, activeFlow: null, mapExpanded: false, vb: null }),
+        bg: variantConfig.value === id ? '#16211d' : '#fff', fg: variantConfig.value === id ? '#fff' : '#4e5a56',
+        fw: variantConfig.value === id ? 700 : 500, hoverBg: variantConfig.value === id ? '#16211d' : '#f2f5f4',
       })),
-      showTechToggle: !!selNode && !sel?.startsWith('op.'),
+      showTechToggle: !listScreen && !!selNode && !sel?.startsWith('op.'),
       toggleTech: () => this.setState((s) => ({ tech: !s.tech, vb: null })),
       techPressed: tech ? 'true' : 'false', techLabel: tech ? '← Semantic view' : 'Technical graph',
       techBg: tech ? '#16211d' : '#fff', techFg: tech ? '#fff' : '#4e5a56', techBorder: tech ? '#16211d' : '#d4dbd7',

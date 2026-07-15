@@ -4,7 +4,10 @@ export const graphNodeTypes = [
   "guard", "pipe", "interceptor", "middleware", "decorator", "database",
   "table", "column", "model", "environment_variable", "external_api",
   "message_broker", "message_topic", "queue", "processor",
-  "config", "test", "library", "risk",
+  "schema", "index", "constraint", "migration", "materialized_view",
+  "scheduled_job", "workflow", "pipeline_job", "build_stage", "container_image",
+  "container", "deployment", "infrastructure_service", "ingress", "config_map",
+  "secret", "environment", "config", "test", "library", "risk",
 ] as const;
 
 export const graphEdgeTypes = [
@@ -12,6 +15,8 @@ export const graphEdgeTypes = [
   "uses", "reads", "writes", "handles", "depends_on", "decorates", "validates",
   "returns", "references", "connects_to", "tests", "has_method", "has_column",
   "publishes_to", "delivers_to", "enqueues", "processes",
+  "creates", "alters", "drops", "indexes", "schedules", "triggers", "builds",
+  "publishes", "deploys", "exposes", "configures", "runs_in", "targets",
 ] as const;
 
 export type GraphNodeType = (typeof graphNodeTypes)[number];

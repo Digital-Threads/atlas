@@ -47,6 +47,19 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     "library:@nestjs/core", "library:typeorm",
     "message_broker:kafka", "message_topic:orders.created", "queue:email-jobs", "processor:EmailProcessor",
     "method:OrderPublisher.publishOrder", "method:OrderEventsConsumer.handleOrder", "method:EmailProcessor.handleEmail",
+    "database:sql", "schema:public", "table:profiles", "column:public.profiles.display_name",
+    "index:public.profiles.profiles_user_id_unique", "constraint:public.profiles.profiles_display_name_check",
+    "migration:migrations/001_create_profiles.sql", "database:clickhouse", "schema:clickhouse.analytics",
+    "table:analytics.order_events", "materialized_view:analytics.order_events_daily",
+    "scheduled_job:ScheduledService.rebuildDailyStats:cron", "scheduled_job:ScheduledService.refreshRuntimeCache:interval",
+    "scheduled_job:kubernetes:cleanup-expired-sessions:production",
+    "container:cronjob:cleanup-expired-sessions:cleanup:production",
+    "workflow:.github:workflows:delivery.yml", "pipeline_job:.github:workflows:delivery.yml:deploy-staging",
+    "build_stage:Dockerfile:runtime", "container_image:registry.example.test:atlas-api:production",
+    "deployment:atlas-api:staging", "deployment:atlas-api:production",
+    "infrastructure_service:atlas-api:staging", "infrastructure_service:atlas-api:production",
+    "ingress:atlas-api:production", "config_map:atlas-api:production", "secret:atlas-api-secrets:production",
+    "environment:development", "environment:staging", "environment:production",
   ];
   for (const id of requiredNodes) assert.ok(query.getNode(id), `missing node ${id}`);
 
@@ -87,6 +100,18 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:OrderPublisher.scheduleEmail" && edge.to === "queue:email-jobs" && edge.type === "enqueues"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "queue:email-jobs" && edge.to === "processor:EmailProcessor" && edge.type === "processes"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "queue:email-jobs" && edge.to === "method:EmailProcessor.handleEmail" && edge.type === "delivers_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "migration:migrations/001_create_profiles.sql" && edge.to === "table:profiles" && edge.type === "creates"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "index:public.profiles.profiles_user_id_unique" && edge.to === "table:profiles" && edge.type === "indexes"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "table:profiles" && edge.to === "table:users" && edge.type === "references"));
+  assert.equal(query.getNode("table:analytics.order_events").metadata.engine, "MergeTree()");
+  assert.match(query.getNode("table:analytics.order_events").metadata.partitionBy, /toYYYYMM/);
+  assert.match(query.getNode("table:analytics.order_events").metadata.orderBy, /order_id/);
+  assert.match(query.getNode("table:analytics.order_events").metadata.ttl, /365 DAY/);
+  assert.ok(result.graph.edges.some((edge) => edge.from === "scheduled_job:ScheduledService.rebuildDailyStats:cron" && edge.to === "method:ScheduledService.rebuildDailyStats" && edge.type === "schedules"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "scheduled_job:kubernetes:cleanup-expired-sessions:production" && edge.to === "container:cronjob:cleanup-expired-sessions:cleanup:production" && edge.type === "triggers"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "infrastructure_service:atlas-api:production" && edge.to === "deployment:atlas-api:production" && edge.type === "targets"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "ingress:atlas-api:production" && edge.to === "infrastructure_service:atlas-api:production" && edge.type === "exposes"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "container:atlas-api:api:production" && edge.to === "secret:atlas-api-secrets:production" && edge.type === "configures"));
 
   const featureASettings = "module:SettingsModule@src/feature-a/settings.module.ts";
   const featureBSettings = "module:SettingsModule@src/feature-b/settings.module.ts";
@@ -99,6 +124,10 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     assert.ok(node.metadata?.description, `missing architecture description for ${node.id}`);
     assert.ok(node.metadata?.plainDescription, `missing plain-language description for ${node.id}`);
     assert.equal(node.metadata?.plainDescriptionSource, "inferred_from_code_structure");
+  }
+  for (const node of result.graph.nodes.filter((item) => ["database", "schema", "table", "column", "index", "constraint", "migration", "materialized_view", "scheduled_job", "workflow", "pipeline_job", "build_stage", "container_image", "container", "deployment", "infrastructure_service", "ingress", "config_map", "secret", "environment", "environment_variable"].includes(item.type))) {
+    assert.ok(node.metadata?.description, `missing intelligence description for ${node.id}`);
+    assert.ok(node.metadata?.plainDescription, `missing plain intelligence description for ${node.id}`);
   }
   assert.match(query.getNode("module:AppModule").metadata.description, /NestJS module/);
   assert.match(query.getNode("service:UsersService").metadata.description, /writes User/);
@@ -137,7 +166,10 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(query.search("UsersService")[0].matches.includes("label"));
 
   const serialized = JSON.stringify(result.graph);
-  assert.doesNotMatch(serialized, /secret-password|never-store-this-value|private\.example\.test/);
+  assert.doesNotMatch(serialized, /secret-password|never-store-this-value|private\.example\.test|example-secret-must-never-appear|must-never-be-stored|another-value-that-must-never-be-stored/);
+  assert.equal(query.getNode("environment_variable:PUBLIC_APP_URL").metadata.exampleValue, "https://staging.example.test");
+  assert.equal(query.getNode("environment_variable:JWT_SECRET").metadata.exampleValue, undefined);
+  assert.equal(query.getNode("secret:atlas-api-secrets:production").metadata.valuesStored, false);
   const envFileNode = query.getNode("file:.env");
   assert.equal(envFileNode.metadata.sensitive, true);
   assert.equal(envFileNode.metadata.hash, undefined);
@@ -149,17 +181,26 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   const report = await readFile(resolve(project, ".atlas/report.md"), "utf8");
   assert.match(report, /POST \/api\/users/);
   assert.match(report, /Database Models and Tables/);
-  assert.doesNotMatch(report, /never-store-this-value|private\.example\.test/);
+  assert.match(report, /Scheduled Jobs/);
+  assert.match(report, /Runtime Environments/);
+  assert.match(report, /ClickHouse/);
+  assert.doesNotMatch(report, /never-store-this-value|private\.example\.test|must-never-be-stored|another-value-that-must-never-be-stored/);
 
   const viewerHtml = await readFile(resolve(project, ".atlas/viewer/index.html"), "utf8");
   const viewerDataScript = await readFile(resolve(project, ".atlas/viewer/atlas-data.js"), "utf8");
   const viewerData = JSON.parse(viewerDataScript.slice("window.__ATLAS_DATA__=".length, -2));
   assert.equal(viewerData.project.name, result.graph.project.name);
   assert.equal(viewerData.nodes.filter((node) => node.type === "processor").length, 1);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "scheduled_job").length, 3);
+  assert.ok(viewerData.nodes.some((node) => node.id === "environment:staging"));
+  assert.ok(viewerData.nodes.some((node) => node.id === "environment:production"));
   assert.equal(viewerData.nodes.filter((node) => node.type === "risk").length, result.risks.length);
   assert.ok(Object.keys(viewerData.flows).length > 0);
   assert.ok(Object.keys(viewerData.asyncFlows).length > 0);
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "async"));
+  assert.ok(viewerData.edges.some((edge) => edge.relation === "reads" && edge.kind === "data"));
+  assert.ok(viewerData.edges.some((edge) => edge.relation === "writes" && edge.kind === "data"));
+  assert.ok(viewerData.edges.some((edge) => edge.relation === "references" && edge.details?.relation));
   assert.ok(viewerData.edges.some((edge) => edge.from === "controller:UsersController" && edge.to === "method:UsersController.create" && edge.verb === "declares"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "route:POST:/api/users" && edge.to === "method:UsersController.create" && edge.verb === "handled by"));
   assert.ok(Object.keys(viewerData.fileRoles).length > 0);
@@ -178,6 +219,9 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /@keyframes atlasFade/);
   assert.match(viewerHtml, /@keyframes atlasDash/);
   assert.match(viewerHtml, /animation: atlasDash/);
+  assert.match(viewerHtml, /arr-data-read/);
+  assert.match(viewerHtml, /arr-data-write/);
+  assert.match(viewerHtml, /prefers-reduced-motion/);
   assert.match(viewerHtml, /setPointerCapture/);
   assert.match(viewerHtml, /if \(!this\._pan\.moved\) \{[\s\S]*setPointerCapture/);
   assert.doesNotMatch(viewerHtml, /onPanStart:[\s\S]{0,700}setPointerCapture/);
@@ -200,6 +244,23 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /this\.reveal\(clickId\)/);
   assert.doesNotMatch(viewerHtml, /mod\.metrics\.routes/);
   assert.match(viewerHtml, /No data structures detected/);
+  assert.match(viewerHtml, /Scheduled jobs/);
+  assert.match(viewerHtml, /Delivery & Runtime/);
+  assert.match(viewerHtml, /Configuration Contract/);
+  assert.match(viewerHtml, /Database Schema/);
+  assert.match(viewerHtml, /COMPLETE CROSS-SCHEMA ERD/);
+  assert.match(viewerHtml, /ClickHouse Architecture/);
+  assert.match(viewerHtml, /Staging vs production/);
+  assert.match(viewerHtml, /every detected table/);
+  assert.match(viewerHtml, /Development/);
+  assert.match(viewerHtml, /Staging/);
+  assert.match(viewerHtml, /Production/);
+  assert.match(viewerHtml, /sceneDataTable/);
+  assert.match(viewerHtml, /sceneDataErd/);
+  assert.match(viewerHtml, /sceneAsyncOverview/);
+  assert.match(viewerHtml, /sceneScheduleOverview/);
+  assert.match(viewerHtml, /sceneDelivery/);
+  assert.match(viewerHtml, /sceneConfiguration/);
   assert.doesNotMatch(viewerHtml, /<(?:svg|g|rect|foreignObject|text|line|path)\b[^>]*\s(?:viewBox|x|y|width|height|x1|y1|x2|y2|d|transform|opacity)="\{\{/i);
   assert.doesNotMatch(viewerHtml, /shopcore|deleteUserItems|ItemsService/);
   assert.doesNotMatch(viewerHtml, /<(?:script|link)[^>]+https?:\/\//);
@@ -232,8 +293,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   await client.connect(transport);
   try {
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 12);
-    for (const name of ["atlas_find_node", "atlas_get_node", "atlas_get_dependencies", "atlas_get_dependents", "atlas_find_routes", "atlas_find_flow", "atlas_find_async_flows", "atlas_find_async_flow", "atlas_find_tables", "atlas_find_external_apis", "atlas_search", "atlas_project_summary"]) {
+    assert.equal(tools.tools.length, 18);
+    for (const name of ["atlas_find_node", "atlas_get_node", "atlas_get_dependencies", "atlas_get_dependents", "atlas_find_routes", "atlas_find_flow", "atlas_find_async_flows", "atlas_find_async_flow", "atlas_find_tables", "atlas_find_data_model", "atlas_get_table_profile", "atlas_find_migrations", "atlas_find_schedules", "atlas_find_delivery", "atlas_find_environments", "atlas_find_external_apis", "atlas_search", "atlas_project_summary"]) {
       assert.ok(tools.tools.some((tool) => tool.name === name), `missing MCP tool ${name}`);
     }
     const routes = await client.callTool({ name: "atlas_find_routes", arguments: {} });
@@ -256,6 +317,18 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     assert.match(JSON.stringify(tables), /table:User/);
     const externalApis = await client.callTool({ name: "atlas_find_external_apis", arguments: {} });
     assert.match(JSON.stringify(externalApis), /api\.example\.com/);
+    const dataModel = await client.callTool({ name: "atlas_find_data_model", arguments: {} });
+    assert.match(JSON.stringify(dataModel), /profiles_user_id_unique/);
+    const tableProfile = await client.callTool({ name: "atlas_get_table_profile", arguments: { query: "profiles" } });
+    assert.match(JSON.stringify(tableProfile), /display_name/);
+    const migrations = await client.callTool({ name: "atlas_find_migrations", arguments: {} });
+    assert.match(JSON.stringify(migrations), /001_create_profiles/);
+    const schedules = await client.callTool({ name: "atlas_find_schedules", arguments: {} });
+    assert.match(JSON.stringify(schedules), /rebuildDailyStats/);
+    const delivery = await client.callTool({ name: "atlas_find_delivery", arguments: {} });
+    assert.match(JSON.stringify(delivery), /atlas-api/);
+    const environments = await client.callTool({ name: "atlas_find_environments", arguments: {} });
+    assert.match(JSON.stringify(environments), /production/);
     const search = await client.callTool({ name: "atlas_search", arguments: { query: "CreateUserDto" } });
     assert.match(JSON.stringify(search), /dto:CreateUserDto/);
     const summary = await client.callTool({ name: "atlas_project_summary", arguments: {} });

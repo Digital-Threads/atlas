@@ -52,19 +52,34 @@ export async function startMcpServer(projectPath: string, outputPath = ".atlas")
   });
 
   server.registerTool("atlas_find_tables", { description: "List detected database tables." }, async () => result({ tables: query.findTables() }));
+  server.registerTool("atlas_find_data_model", { description: "List schemas, tables, indexes, constraints, migrations, and ClickHouse structures." }, async () => result({
+    schemas: query.findSchemas(), tables: query.findTables(), indexes: query.findIndexes(), constraints: query.findConstraints(), migrations: query.findMigrations(),
+  }));
+  server.registerTool("atlas_get_table_profile", {
+    description: "Return a table with its columns, indexes, constraints, relations, migrations, readers, and writers.",
+    inputSchema: { query: z.string().min(1) },
+  }, async ({ query: value }) => {
+    const table = query.findNode(value).find((node) => node.type === "table");
+    return result({ table: table ?? null, profile: table ? query.findTableProfile(table.id) : { nodes: [], edges: [] } });
+  });
+  server.registerTool("atlas_find_migrations", { description: "List migrations and the structures they create, alter, or drop." }, async () => result({ migrations: query.findMigrations() }));
   server.registerTool("atlas_find_external_apis", { description: "List detected external API hosts." }, async () => result({ externalApis: query.findExternalApis() }));
 
   server.registerTool("atlas_find_async_flows", {
-    description: "List detected Kafka topics, Bull queues, and background processors.",
+    description: "List detected Kafka or RabbitMQ topics, Bull/BullMQ queues, and background processors.",
   }, async () => result({ topics: query.findMessageTopics(), queues: query.findQueues(), processors: query.findProcessors() }));
 
   server.registerTool("atlas_find_async_flow", {
-    description: "Find a Kafka topic or Bull queue and return publishers, consumers, processors, and downstream calls.",
+    description: "Find a message topic or queue and return publishers, consumers, processors, and downstream calls.",
     inputSchema: { query: z.string().min(1) },
   }, async ({ query: value }) => {
     const root = query.findNode(value).find((node) => ["message_topic", "queue"].includes(node.type));
     return result({ root: root ?? null, flow: root ? query.findAsyncFlow(root.id) : { nodes: [], edges: [] } });
   });
+
+  server.registerTool("atlas_find_schedules", { description: "List cron, interval, timeout, repeatable queue, and Kubernetes scheduled jobs." }, async () => result({ schedules: query.findScheduledJobs() }));
+  server.registerTool("atlas_find_delivery", { description: "List CI/CD workflows and runtime deployments." }, async () => result({ workflows: query.findWorkflows(), deployments: query.findDeployments() }));
+  server.registerTool("atlas_find_environments", { description: "List detected development, staging, production, and custom runtime environments." }, async () => result({ environments: query.findEnvironments() }));
 
   server.registerTool("atlas_search", {
     description: "Search the complete architecture graph.",

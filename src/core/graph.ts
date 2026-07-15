@@ -118,10 +118,27 @@ export class GraphQuery {
   findServices(): GraphNode[] { return this.byType("service"); }
   findControllers(): GraphNode[] { return this.byType("controller"); }
   findTables(): GraphNode[] { return this.byType("table"); }
+  findSchemas(): GraphNode[] { return this.byType("schema"); }
+  findIndexes(): GraphNode[] { return this.byType("index"); }
+  findConstraints(): GraphNode[] { return this.byType("constraint"); }
+  findMigrations(): GraphNode[] { return this.byType("migration"); }
+  findScheduledJobs(): GraphNode[] { return this.byType("scheduled_job"); }
+  findWorkflows(): GraphNode[] { return this.byType("workflow"); }
+  findDeployments(): GraphNode[] { return this.byType("deployment"); }
+  findEnvironments(): GraphNode[] { return this.byType("environment"); }
   findExternalApis(): GraphNode[] { return this.byType("external_api"); }
   findMessageTopics(): GraphNode[] { return this.byType("message_topic"); }
   findQueues(): GraphNode[] { return this.byType("queue"); }
   findProcessors(): GraphNode[] { return this.byType("processor"); }
+
+  findTableProfile(tableId: string): GraphSubgraph {
+    const table = this.nodeMap.get(tableId);
+    if (!table || table.type !== "table") return { nodes: [], edges: [] };
+    const edgeTypes = new Set<GraphEdgeType>(["has_column", "indexes", "contains", "references", "reads", "writes", "creates", "alters", "drops"]);
+    const edges = this.graph.edges.filter((edge) => edgeTypes.has(edge.type) && (edge.from === tableId || edge.to === tableId));
+    const ids = new Set([tableId, ...edges.flatMap((edge) => [edge.from, edge.to])]);
+    return { nodes: [...ids].map((id) => this.nodeMap.get(id)).filter(Boolean) as GraphNode[], edges };
+  }
 
   getNeighbors(nodeId: string, depth = 1): GraphSubgraph {
     if (!this.nodeMap.has(nodeId)) return { nodes: [], edges: [] };

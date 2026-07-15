@@ -10,13 +10,18 @@ Atlas helps answer practical questions about an unfamiliar backend:
 - Which route calls which controller, service, and database table?
 - Which code publishes to a Kafka topic, which consumer receives it, and what runs next?
 - Which Bull queues and processors perform background work?
+- Which cron jobs run, when do they start, and what do they trigger?
+- What tables, columns, indexes, constraints, and migrations make up the data model?
+- How do ClickHouse tables, materialized views, engines, partitions, sort keys, and TTL rules connect?
+- What does delivery and runtime look like in development, staging, and production?
 - How are NestJS modules and providers connected?
 - Which environment variables and external APIs does the project use?
 - Which services have no detected tests?
 - Where are circular imports, direct database access, or incomplete route flows?
 
-Everything runs locally. Atlas does not upload source code, collect telemetry, or
-store environment variable values.
+Everything runs locally. Atlas does not upload source code or collect telemetry. It
+never stores values from real `.env` files or Kubernetes Secrets; safe non-secret
+sample values from `.env.example` may be included as configuration documentation.
 
 ## Requirements
 
@@ -133,12 +138,17 @@ The NestJS adapter currently detects:
 - modules, controllers, services, providers, and dependency injection;
 - routes, controller methods, service methods, and method calls;
 - Kafka publishers and consumers declared with `ClientKafka`, `@MessagePattern`, and `@EventPattern`;
-- Bull queues, producers, processors, and jobs declared with `@InjectQueue`, `@Processor`, and `@Process`;
+- RabbitMQ handlers declared with `@RabbitSubscribe` and `@RabbitRPC`;
+- Bull and BullMQ queues, producers, processors, and jobs;
 - DTO fields, types, optional flags, validation decorators, and custom NestJS decorators;
 - guards, pipes, interceptors, and middleware;
-- Prisma models and operations;
-- TypeORM entities, columns, relations, repositories, and read/write operations;
-- environment variable names, without their values;
+- Prisma, TypeORM, Sequelize, and Drizzle tables, columns, relations, indexes, constraints, and operations;
+- SQL migrations, columns, indexes, keys, constraints, and foreign-key relationships;
+- ClickHouse tables, materialized views, engines, partition/order keys, and TTL rules;
+- NestJS cron/interval/timeout jobs, repeatable queue jobs, and Kubernetes CronJobs;
+- GitHub Actions and GitLab CI workflows, jobs, dependencies, images, and deploy commands;
+- Dockerfiles, Compose services, and Kubernetes workloads, containers, probes, services, ingress, ConfigMaps, and Secret names;
+- environment variable contracts and safe examples, while redacting secret-like values;
 - external HTTP API hosts;
 - unit test relationships;
 - all seven MVP architecture risks: excessive service dependencies, missing service
@@ -166,11 +176,11 @@ source and confidence so consumers can distinguish evidence from inference.
     graph.json                   Raw typed architecture graph
 ```
 
-The viewer works without a cloud backend. Its System map shows every detected
-module together with Kafka topics, queues, processors, consumers, data stores,
-and external systems. Deterministic scenes explain module responsibilities,
-incoming and outgoing service relationships, file roles, numbered HTTP and
-asynchronous flows, source previews, risks, and where each detected flow ends.
+The viewer works without a cloud backend. Deterministic scenes cover the system map,
+request and asynchronous flows, complete data catalog and focused table ERD,
+migrations, scheduled jobs, source files, risks, and Delivery & Runtime. Delivery
+switches independently between development, staging, and production, so unrelated
+environment topology is not mixed into one unreadable map.
 
 The interactive viewer UX reference is stored in
 [`docs/design/atlas-viewer-prototype.html`](docs/design/atlas-viewer-prototype.html).
@@ -218,6 +228,12 @@ The server exposes these tools:
 - `atlas_find_async_flows`
 - `atlas_find_async_flow`
 - `atlas_find_tables`
+- `atlas_find_data_model`
+- `atlas_get_table_profile`
+- `atlas_find_migrations`
+- `atlas_find_schedules`
+- `atlas_find_delivery`
+- `atlas_find_environments`
 - `atlas_find_external_apis`
 - `atlas_search`
 - `atlas_project_summary`
@@ -247,9 +263,10 @@ npm run lint
 npm run typecheck
 ```
 
-The tests scan a representative NestJS fixture, validate route-to-database and
-publisher-to-consumer flows, exercise all twelve MCP tools, verify all seven risk rules, and confirm that environment
-values never enter generated artifacts. The performance test generates 1,000
+The tests scan a representative NestJS fixture, validate route-to-database,
+publisher-to-consumer, migration, schedule, and delivery flows, exercise all 18 MCP
+tools, verify architecture and deployment risks, and confirm that real secret values
+never enter generated artifacts. The performance test generates 1,000
 TypeScript files, 100 controllers, 300 services, and 1,000 routes.
 
 The detailed MVP requirements and their automated evidence are listed in
@@ -258,7 +275,9 @@ The detailed MVP requirements and their automated evidence are listed in
 ## Privacy and security
 
 - Analysis and visualization are local by default.
-- Environment variable names may appear in the graph; values never do.
+- Environment variable names may appear in the graph. Real values and secret-like
+  samples never do; safe values from `.env.example` can be shown as documentation.
+- Kubernetes Secret keys may appear, but Secret values never do.
 - `.env`, source files, and graph data are never uploaded by Atlas.
 - The local viewer server binds to loopback only.
 - There is no telemetry or account system.
