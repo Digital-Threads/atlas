@@ -28,6 +28,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   const requiredNodes = [
     "project:root", "package:root", "config:nest-cli.json", "module:AppModule",
     "controller:UsersController", "service:UsersService", "service:AuditService", "service:PrismaService",
+    "use_case:CreateUserUseCase", "port:CreateUserPort", "adapter:CreateUserAdapter",
     "dto:CreateUserDto", "guard:AuthGuard", "pipe:RequestValidationPipe", "pipe:ValidationPipe",
     "interceptor:AuditInterceptor", "middleware:LoggerMiddleware", "provider:MAILER",
     "decorator:CurrentUser",
@@ -80,6 +81,9 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.equal(packageNode.metadata.scripts.start, "nest start");
   assert.ok(result.graph.edges.some((edge) => edge.from === "file:src/audit.service.ts" && edge.to === "library:@nestjs/typeorm" && edge.type === "imports"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "module:AppModule" && edge.to === "middleware:LoggerMiddleware" && edge.type === "uses"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "module:AppModule" && edge.to === "use_case:CreateUserUseCase" && edge.type === "provides"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "use_case:CreateUserUseCase" && edge.to === "port:CreateUserPort" && edge.type === "injects"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "adapter:CreateUserAdapter" && edge.to === "port:CreateUserPort" && edge.type === "implements"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "project:root" && edge.to === "pipe:ValidationPipe" && edge.type === "decorates"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "table:User" && edge.to === "table:Post" && edge.metadata?.relation === "has_many"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "table:typeorm_users" && edge.to === "table:typeorm_posts" && edge.type === "references"));
@@ -120,7 +124,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "module:AppModule" && edge.to === featureASettings && edge.type === "imports"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "module:WorkerModule" && edge.to === featureBSettings && edge.type === "imports"));
 
-  for (const node of result.graph.nodes.filter((item) => ["module", "controller", "service", "provider", "repository", "method", "function", "route", "message_broker", "message_topic", "queue", "processor"].includes(item.type))) {
+  for (const node of result.graph.nodes.filter((item) => ["module", "controller", "service", "provider", "repository", "use_case", "port", "adapter", "method", "function", "route", "message_broker", "message_topic", "queue", "processor"].includes(item.type))) {
     assert.ok(node.metadata?.description, `missing architecture description for ${node.id}`);
     assert.ok(node.metadata?.plainDescription, `missing plain-language description for ${node.id}`);
     assert.equal(node.metadata?.plainDescriptionSource, "inferred_from_code_structure");
@@ -191,6 +195,9 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   const viewerData = JSON.parse(viewerDataScript.slice("window.__ATLAS_DATA__=".length, -2));
   assert.equal(viewerData.project.name, result.graph.project.name);
   assert.equal(viewerData.nodes.filter((node) => node.type === "processor").length, 1);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "use_case").length, 1);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "port").length, 1);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "adapter").length, 1);
   assert.equal(viewerData.nodes.filter((node) => node.type === "scheduled_job").length, 3);
   assert.ok(viewerData.nodes.some((node) => node.id === "environment:staging"));
   assert.ok(viewerData.nodes.some((node) => node.id === "environment:production"));
@@ -203,10 +210,13 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(viewerData.mapEdges.every((edge) => edge.relation !== "has_column"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "reads" && edge.kind === "data"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "writes" && edge.kind === "data"));
+  assert.ok(viewerData.edges.some((edge) => edge.from === "adapter:CreateUserAdapter" && edge.to === "port:CreateUserPort" && edge.relation === "implements"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "references" && edge.details?.relation));
   assert.ok(viewerData.nodes.filter((node) => node.type === "column").every((node) => !node.details?.plainDescriptionSource));
   assert.ok(viewerData.edges.some((edge) => edge.from === "controller:UsersController" && edge.to === "method:UsersController.create" && edge.verb === "declares"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "route:POST:/api/users" && edge.to === "method:UsersController.create" && edge.verb === "handled by"));
+  assert.ok(viewerData.nodes.every((node) => typeof node.confidence === "number" && node.source));
+  assert.ok(viewerData.edges.every((edge) => typeof edge.confidence === "number" && edge.source));
   assert.ok(Object.keys(viewerData.fileRoles).length > 0);
   assert.equal(viewerData.domains.filter((domain) => !domain.light).length, Math.min(7, viewerData.domains.length));
   assert.ok(viewerData.domains.every((domain) => domain.modules.length <= 3));
@@ -217,7 +227,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /WHAT STARTS IT/);
   assert.match(viewerHtml, /Technical graph/);
   assert.match(viewerHtml, /Where it ends/);
-  assert.match(viewerHtml, /Search routes, services, topics, files/);
+  assert.match(viewerHtml, /Search endpoint, function, service, table/);
   assert.match(viewerHtml, /src="\.\/atlas-data\.js"/);
   assert.match(viewerHtml, /src="\.\/react\.production\.min\.js"/);
   assert.match(viewerHtml, /@keyframes atlasFade/);
@@ -274,6 +284,18 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /sceneDataTable/);
   assert.match(viewerHtml, /sceneDataErd/);
   assert.match(viewerHtml, /sceneAsyncOverview/);
+  assert.match(viewerHtml, /sceneController/);
+  assert.match(viewerHtml, /sceneTrace/);
+  assert.match(viewerHtml, /Full trace/);
+  assert.match(viewerHtml, /Complete for the selected filters/);
+  assert.match(viewerHtml, /traceStructure/);
+  assert.match(viewerHtml, /Trace dependencies/);
+  assert.match(viewerHtml, /Inferred by/);
+  assert.match(viewerHtml, /Search endpoint, function, service, table/);
+  assert.match(viewerHtml, /IMPORTED BY/);
+  assert.match(viewerHtml, /ENTRY POINTS/);
+  assert.match(viewerHtml, /SERVICES & USE CASES/);
+  assert.match(viewerHtml, /No methods are expanded here/);
   assert.match(viewerHtml, /sceneScheduleOverview/);
   assert.match(viewerHtml, /sceneDelivery/);
   assert.match(viewerHtml, /sceneConfiguration/);

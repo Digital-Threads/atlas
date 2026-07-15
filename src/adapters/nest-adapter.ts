@@ -152,11 +152,19 @@ export class NestAdapter implements ArchitectureAdapter {
 function classifyClass(declaration: ClassDeclaration, file: string): GraphNodeType | null {
   const name = declaration.getName() ?? "";
   const decorators = new Set(declaration.getDecorators().map((item) => item.getName()));
+  const normalizedFile = file.replaceAll("\\", "/").toLowerCase();
   if (decorators.has("Module")) return "module";
   if (decorators.has("Processor")) return "processor";
   if (decorators.has("Controller")) return "controller";
   if (decorators.has("Entity")) return "entity";
   if (decorators.has("Table")) return "entity";
+  if (/use-?case$/i.test(name) || normalizedFile.includes("/use-cases/")) return "use_case";
+  const infrastructureFile = normalizedFile.includes("/infra/") || normalizedFile.includes("/infrastructure/") || normalizedFile.includes("/adapters/");
+  if (/(?:Adapter|ClientAdapter)$/i.test(name)
+    || (infrastructureFile && decorators.has("Injectable"))) return "adapter";
+  const portFile = /\/(?:ports?|application\/ports)(?:\/|\.)/.test(normalizedFile);
+  if (/(?:Port|Gateway)$/i.test(name)
+    || (portFile && (declaration.isAbstract() || /Repository$/i.test(name)))) return "port";
   if (name.endsWith("Dto") || file.includes(".dto.")) return "dto";
   if (name.endsWith("Guard") || file.includes(".guard.")) return "guard";
   if (name.endsWith("Pipe") || file.includes(".pipe.")) return "pipe";
@@ -200,6 +208,7 @@ function parseClass(
   globalPrefix: string,
 ) {
   parseModule(info, classes, addNode, addEdge);
+  parseHexagonalRelations(info, classes, addEdge);
   parseTypeOrm(info, classes, addNode, addEdge);
   parseSequelize(info, classes, addNode, addEdge);
   parseAsyncClass(info, addNode, addEdge);
@@ -231,6 +240,19 @@ function parseClass(
   }
   parseMiddlewareConfiguration(info, classes, addNode, addEdge);
   parseAppliedDecorators(info.declaration.getDecorators(), info.id, classes, info.file, addNode, addEdge);
+}
+
+function parseHexagonalRelations(info: ClassInfo, classes: ClassRegistry, addEdge: EdgeAdder) {
+  const heritage = [
+    ...(info.declaration.getExtends() ? [info.declaration.getExtends()!] : []),
+    ...info.declaration.getImplements(),
+  ];
+  for (const item of heritage) {
+    const name = item.getExpression().getText().split(".").at(-1);
+    if (!name) continue;
+    const target = resolveClass(name, classes, info.file);
+    if (target?.type === "port") addEdge(info.id, target.id, "implements", { via: item.getText() });
+  }
 }
 
 function parseModule(info: ClassInfo, classes: ClassRegistry, addNode: NodeAdder, addEdge: EdgeAdder) {
@@ -871,6 +893,9 @@ function ensureClass(name: string, classes: ClassRegistry, file: string, addNode
 }
 
 function inferType(name: string, fallback: GraphNodeType): GraphNodeType {
+  if (/UseCase$/i.test(name)) return "use_case";
+  if (/(?:Port|Gateway)$/i.test(name)) return "port";
+  if (/Adapter$/i.test(name)) return "adapter";
   if (name.endsWith("Service")) return "service";
   if (name.endsWith("Controller")) return "controller";
   if (name.endsWith("Module")) return "module";
