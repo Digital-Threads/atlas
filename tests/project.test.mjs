@@ -226,6 +226,10 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /atlas-edge atlas-edge-async/);
   assert.match(viewerHtml, /Pick connected async chains first/);
   assert.match(viewerHtml, /const runtimeCols = 5/);
+  assert.match(viewerHtml, /const rootIds = new Set\(roots\.map/);
+  assert.match(viewerHtml, /slice\(0, 10\)/);
+  assert.match(viewerHtml, /consumerIds\.length < 14/);
+  assert.doesNotMatch(viewerHtml, /node\.type === 'method' && D\.edges\.some\(\(edge\) => roots\.some/);
   assert.match(viewerHtml, /arr-data-read/);
   assert.match(viewerHtml, /arr-data-write/);
   assert.match(viewerHtml, /prefers-reduced-motion/);
