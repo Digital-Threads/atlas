@@ -30,6 +30,7 @@
     ::-webkit-scrollbar-thumb { background: #c9d1cd; border-radius: 5px; border: 2px solid #f2f4f3; }
     @keyframes atlasFade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes atlasDash { to { stroke-dashoffset: -20; } }
+    .atlas-edge-async { animation: atlasDash 1.8s linear infinite; }
     @media (prefers-reduced-motion: reduce) { .atlas-edge { animation: none !important; } }
     .atlas-scroll-screen { scrollbar-gutter: stable; }
     .atlas-table-row { transition: background 120ms ease, border-color 120ms ease; }
@@ -440,7 +441,12 @@
               <sc-for list="{{ gEdges }}" as="edge" hint-placeholder-count="0">
                 <g sc-camel-opacity="{{ edge.op }}" onClick="{{ edge.onClick }}" onMouseEnter="{{ edge.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: {{ edge.cursor }};">
                   <path sc-camel-d="{{ edge.d }}" fill="none" stroke="transparent" stroke-width="12"></path>
-                  <path class="atlas-edge" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}" sc-camel-style="{{ edge.anim }}"></path>
+                  <sc-if value="{{ edge.moving }}" hint-placeholder-val="{{ false }}">
+                    <path class="atlas-edge atlas-edge-async" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}"></path>
+                  </sc-if>
+                  <sc-if value="{{ edge.stationary }}" hint-placeholder-val="{{ true }}">
+                    <path class="atlas-edge" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}"></path>
+                  </sc-if>
                   <sc-if value="{{ edge.showLabel }}" hint-placeholder-val="{{ false }}">
                     <text sc-camel-x="{{ edge.lx }}" sc-camel-y="{{ edge.ly }}" text-anchor="middle" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 9.5px; font-weight: 600; fill: {{ edge.labelFill }}; paint-order: stroke; stroke: #f7f9f8; stroke-width: 4px; stroke-linejoin: round;">{{ edge.verb }}</text>
                   </sc-if>
@@ -707,7 +713,7 @@ class Component extends DCLogic {
     vb: null, hover: null, panning: false, domainFilter: null,
     dataVariant: 'overview', deliveryEnv: 'production',
     daQ: '', daDb: 'all', migQ: '', migOp: 'all', migDestr: false,
-    jobQ: '', jobKind: 'all',
+    jobQ: '', jobKind: 'all', dbDetail: 'overview',
   };
 
   componentDidMount() {
@@ -760,6 +766,7 @@ class Component extends DCLogic {
       consumer: 'Listens to Kafka topics and triggers logic when events arrive.',
       broker: 'The event backbone that carries messages between modules.',
       table: 'A database table — where data actually changes.',
+      column: 'One named value stored by a table, with its data type and key rules.',
       database: 'A data store used by the application.',
       external: 'A third-party API outside the system boundary — failures here are not under your control.',
       env: 'A named runtime setting. Atlas shows safe template examples only and always hides real or secret-like values.',
@@ -796,6 +803,11 @@ class Component extends DCLogic {
     ));
   }
   tLabel(type) { const m = { method: 'Operation' }; return this.state.D.typeLabels[type] || m[type] || type; }
+  tableForDataElement(id) {
+    const n = this.node(id); if (!n) return null; if (n.type === 'table') return id;
+    const edge = this.state.D.edges.find((item) => (n.type === 'index' ? item.from === id && item.verb === 'indexes' : item.to === id && ['has column', 'contains'].includes(item.verb)) && this.node(n.type === 'index' ? item.to : item.from)?.type === 'table');
+    return edge ? (n.type === 'index' ? edge.to : edge.from) : null;
+  }
 
   select(id, opts = {}) {
     this.setState((s) => {
@@ -804,6 +816,7 @@ class Component extends DCLogic {
         mode: opts.mode || s.mode, activeFlow: opts.flow !== undefined ? opts.flow : s.activeFlow,
         expandedOp: opts.expandedOp !== undefined ? opts.expandedOp : null, searchOpen: false,
         panelHidden: !!opts.flow, storyOpen: !!opts.flow,
+        dbDetail: opts.dbDetail !== undefined ? opts.dbDetail : s.dbDetail,
         domainFilter: opts.domainFilter !== undefined ? opts.domainFilter : s.domainFilter };
     });
   }
@@ -825,10 +838,11 @@ class Component extends DCLogic {
     else if (n.type === 'risk') mode = 'risks';
     else if (n.type === 'file') mode = 'files';
     else if (['controller', 'guard', 'dto'].includes(n.type)) mode = 'routes';
-    this.select(id, { mode, flow });
+    const dbDetail = n.type === 'column' ? 'columns' : ['index', 'constraint'].includes(n.type) ? 'indexes' : n.type === 'table' ? 'overview' : undefined;
+    this.select(id, { mode, flow, dbDetail });
   }
 
-  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, hist: [], vb: null, hover: null, catQ: '', domainFilter: null, mapExpanded: false }); }
+  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, hist: [], vb: null, hover: null, catQ: '', domainFilter: null, mapExpanded: false, dbDetail: 'overview' }); }
 
   // ---------- code highlighting ----------
   highlight(code) {
@@ -889,9 +903,9 @@ class Component extends DCLogic {
     const d = horizontal ? this.bez(x1, y1, x2, y2) : `M ${x1} ${y1} C ${x1} ${y1 + (y2 - y1) * 0.45}, ${x2} ${y2 - (y2 - y1) * 0.45}, ${x2} ${y2 > y1 ? y2 - 8 : y2 + 8}`;
     return {
       id: 'e:' + e.from + '>' + e.to, d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
-      w: hi ? 2.6 : (e.relation === 'writes' ? 1.8 : 1.5), op: dim ? 0.14 : (hi ? 1 : 0.82),
+      w: hi ? 2.6 : (e.kind === 'async' ? 2 : (e.relation === 'writes' ? 1.8 : 1.5)), op: dim ? 0.14 : (hi ? 1 : (e.kind === 'async' ? 0.96 : 0.74)),
       showLabel: !!(showLabels && e.verb && !dim), verb: e.verb, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 7,
-      anim: `${e.kind === 'async' && !dim ? `animation: atlasDash ${hi ? 1.1 : 2.2}s linear infinite;` : ''}${hi ? `filter: drop-shadow(0 0 2px ${st.color});` : ''}`,
+      moving: e.kind === 'async' && !dim, stationary: e.kind !== 'async' || dim,
       onEnter: (ev) => this.hoverEdge(ev, e),
       cursor: clickId ? 'pointer' : 'default',
       onClick: clickId ? (ev) => { ev.stopPropagation(); this.reveal(clickId); } : () => {},
@@ -905,7 +919,7 @@ class Component extends DCLogic {
       id: n.id, x, y, w, h, tw: w - 18, th: h - 8,
       label: n.label, sub: extra.sub !== undefined ? extra.sub : '', typeLabel: this.tLabel(n.type),
       accent, fill: sel ? '#fdf3ec' : '#fff', stroke: sel ? '#df642d' : '#ccd5d1', sw: sel ? 2 : 1,
-      fs: n.label.length > 26 ? '10.5px' : '11.5px',
+      fs: n.label.length > 44 ? '8.8px' : n.label.length > 34 ? '9.4px' : n.label.length > 26 ? '10.2px' : '11.5px',
       font: (n.type === 'route' || n.type === 'topic' || n.type === 'queue' || n.type === 'table' || n.type === 'env') ? "'IBM Plex Mono', monospace" : "'IBM Plex Sans', sans-serif",
       op: extra.dim ? 0.3 : 1, step: extra.step || false, expandLabel: extra.expandLabel || false,
       onClick: (ev) => {
@@ -958,6 +972,10 @@ class Component extends DCLogic {
       if (!sel) return this.sceneDataErd();
       const dataNode = this.node(sel);
       if (dataNode && dataNode.type === 'table') return this.sceneDataTable(sel);
+      if (dataNode && ['column', 'index', 'constraint'].includes(dataNode.type)) {
+        const tableId = this.tableForDataElement(sel);
+        if (tableId) return this.sceneDataTable(tableId, sel);
+      }
       if (dataNode && ['database', 'schema'].includes(dataNode.type)) return this.sceneDataGroup(sel);
       return this.sceneDirectional(sel);
     }
@@ -989,8 +1007,26 @@ class Component extends DCLogic {
     const keyIds = (types, limit) => D.nodes.filter((n) => types.includes(n.type))
       .sort((a, b) => relationCount(b.id) - relationCount(a.id) || a.label.localeCompare(b.label))
       .map((n) => n.id).slice(0, limit);
-    const runtimeTotal = D.nodes.filter((n) => ['broker', 'topic', 'queue', 'processor'].includes(n.type)).length;
-    const runtime = keyIds(['broker', 'topic', 'queue', 'processor'], 14);
+    const runtimeTypes = ['broker', 'topic', 'queue', 'processor'];
+    const runtimeNodeIds = new Set(D.nodes.filter((n) => runtimeTypes.includes(n.type)).map((n) => n.id));
+    const runtimeTotal = runtimeNodeIds.size;
+    const runtime = [];
+    const runtimeSeen = new Set();
+    const addRuntime = (id) => {
+      if (runtimeNodeIds.has(id) && !runtimeSeen.has(id) && runtime.length < 15) { runtimeSeen.add(id); runtime.push(id); }
+    };
+    // Pick connected async chains first, so a processor is not shown without its topic or queue.
+    D.mapEdges.filter((edge) => edge.kind === 'async' && (runtimeNodeIds.has(edge.from) || runtimeNodeIds.has(edge.to)))
+      .sort((a, b) => {
+        const aInternal = runtimeNodeIds.has(a.from) && runtimeNodeIds.has(a.to) ? 1 : 0;
+        const bInternal = runtimeNodeIds.has(b.from) && runtimeNodeIds.has(b.to) ? 1 : 0;
+        return bInternal - aInternal || (b.count || 0) - (a.count || 0);
+      })
+      .forEach((edge) => { addRuntime(edge.from); addRuntime(edge.to); });
+    D.mapEdges.filter((edge) => runtimeNodeIds.has(edge.from) || runtimeNodeIds.has(edge.to))
+      .sort((a, b) => (b.count || 0) - (a.count || 0))
+      .forEach((edge) => { addRuntime(edge.from); addRuntime(edge.to); });
+    keyIds(runtimeTypes, 15).forEach(addRuntime);
     const dataIds = D.nodes.filter((n) => n.type === 'database').map((n) => n.id);
     const dataTotal = dataIds.length || D.nodes.filter((n) => ['table', 'entity', 'model'].includes(n.type)).length;
     const visibleDataIds = (dataIds.length ? dataIds : keyIds(['table', 'entity', 'model'], 5)).slice(0, 5);
@@ -1061,15 +1097,16 @@ class Component extends DCLogic {
       }
       // runtime band
       const ry = runtimeY;
-      const runtimeRows = Math.max(1, Math.ceil(runtime.length / 7));
-      const runtimeH = 50 + runtimeRows * 54;
+      const runtimeCols = 5;
+      const runtimeRows = Math.max(1, Math.ceil(runtime.length / runtimeCols));
+      const runtimeH = 50 + runtimeRows * 62;
       G.push({ x: 40, y: ry, w: 4 * (cardW + 56) - 56, h: runtimeH, fill: '#f2f7f9', stroke: '#c3d6dd', label: 'Async runtime — topics, queues, processors', sub: runtimeTotal > runtime.length ? `${runtime.length} key components of ${runtimeTotal}` : `${runtimeTotal} components — all shown`, footY: 0 });
       runtime.forEach((rid, i) => {
         const n = this.node(rid);
-        const col = i % 7, row = Math.floor(i / 7);
-        const bx = 56 + col * 194, by = ry + 36 + row * 54;
-        pos[rid] = { x: bx, y: by, w: 180, h: 44 };
-        N.push(this.mkNode(n, bx, by, 180, 44));
+        const col = i % runtimeCols, row = Math.floor(i / runtimeCols);
+        const bx = 56 + col * 264, by = ry + 36 + row * 62;
+        pos[rid] = { x: bx, y: by, w: 250, h: 52 };
+        N.push(this.mkNode(n, bx, by, 250, 52));
       });
       // data + external column
       const dx = 40 + 4 * (cardW + 56) + 10;
@@ -1148,7 +1185,7 @@ class Component extends DCLogic {
       if (previous) previous.count = (previous.count || 1) + (edge.count || 1);
       else sceneEdges.set(key, { ...edge, from, to });
     });
-    sceneEdges.forEach((e) => {
+    [...sceneEdges.values()].sort((a, b) => (a.kind === 'async' ? 1 : 0) - (b.kind === 'async' ? 1 : 0)).forEach((e) => {
       const a = pos[e.from], b = pos[e.to];
       if (!a || !b) return;
       E.push(this.linkEdge(a, b, e, false, false, showLabels && variant !== 'clusters'));
@@ -1541,39 +1578,59 @@ class Component extends DCLogic {
     return { nodes: N, edges: E, groups: [], cols: C, status: `${root.label}: showing ${visible.length} relationship-rich tables of ${tables.length}. Search the complete catalog and select a table to inspect every column, key, index, migration, reader and writer.` };
   }
 
-  sceneDataTable(sel) {
+  sceneDataTable(sel, focusId = null) {
     const { D } = this.state;
-    const table = this.node(sel);
-    const columns = D.edges.filter((edge) => edge.from === sel && edge.verb === 'has column').map((edge) => this.node(edge.to)).filter(Boolean);
-    const structures = D.edges.filter((edge) => (edge.from === sel && edge.verb === 'contains') || (edge.to === sel && edge.verb === 'indexes')).map((edge) => this.node(edge.from === sel ? edge.to : edge.from)).filter((node) => node && ['index', 'constraint'].includes(node.type));
-    const relations = D.edges.filter((edge) => edge.verb === 'references' && (edge.from === sel || edge.to === sel)).map((edge) => ({ node: this.node(edge.from === sel ? edge.to : edge.from), edge })).filter((item) => item.node);
-    const migrations = D.edges.filter((edge) => edge.to === sel && ['creates', 'alters', 'drops'].includes(edge.verb)).map((edge) => ({ node: this.node(edge.from), verb: edge.verb, details: edge.details })).filter((item) => item.node);
-    const access = D.edges.filter((edge) => edge.to === sel && ['reads', 'writes'].includes(edge.verb)).map((edge) => ({ node: this.node(edge.from), verb: edge.verb })).filter((item) => item.node);
-    const N = [], E = [], C = [], pos = {};
-    const defs = [
-      ['MIGRATIONS', 'how the structure changed', 40], ['SELECTED TABLE', 'the structure you picked', 320],
-      ['COLUMNS', 'names, types and key properties', 600], ['INDEXES & RULES', 'access paths and constraints', 880],
-      ['RELATIONS & ACCESS', 'linked tables, readers and writers', 1160],
-    ];
-    defs.forEach(([label, sub, x]) => C.push({ x, y: 34, subY: 47, x2: Number(x) + 230, ly: 56, label, sub, fill: label === 'SELECTED TABLE' ? '#df642d' : '#8b9793' }));
-    const tableBox = { x: 320, y: 88, w: 230, h: 76 }; pos[sel] = tableBox;
-    const engine = table.details && table.details.engine ? ` · ${table.details.engine}` : '';
-    N.push(this.mkNode(table, tableBox.x, tableBox.y, tableBox.w, tableBox.h, { sub: `${columns.length} columns${engine}` }));
-    migrations.forEach((item, index) => { const b = { x: 40, y: 76 + index * 68, w: 230, h: 52 }; pos[item.node.id] = b; const change = item.details?.statement ? `${item.verb} · ${item.details.statement}` : item.verb; N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: change })); E.push(this.linkEdge(b, tableBox, { from: item.node.id, to: sel, verb: item.verb, kind: 'data', relation: item.verb, details: item.details }, false, false, true)); });
-    columns.forEach((node, index) => { const b = { x: 600, y: 76 + index * 62, w: 230, h: 48 }; pos[node.id] = b; const flags = [node.details?.primaryKey ? 'PK' : '', node.details?.unique ? 'unique' : '', node.details?.nullable === false ? 'required' : ''].filter(Boolean).join(' · '); N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: `${node.details?.type || ''}${flags ? ' · ' + flags : ''}` })); E.push(this.linkEdge(tableBox, b, { from: sel, to: node.id, verb: 'has column', kind: 'data' }, false, false, false)); });
-    structures.forEach((node, index) => { const b = { x: 880, y: 76 + index * 68, w: 230, h: 52 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: Array.isArray(node.details?.columns) ? node.details.columns.join(', ') : '' })); E.push(this.linkEdge(tableBox, b, { from: sel, to: node.id, verb: node.type === 'index' ? 'indexed by' : 'enforces', kind: 'data' }, false, false, true)); });
-    const targets = [...relations.map((item) => ({ node: item.node, verb: 'references', access: false, edge: item.edge })), ...access.map((item) => ({ ...item, access: true }))]
-      .filter((item, index, all) => all.findIndex((other) => other.node.id === item.node.id && other.verb === item.verb) === index);
-    targets.forEach((item, index) => {
-      const b = { x: 1160, y: 76 + index * 68, w: 230, h: 52 }; pos[item.node.id] = b;
-      const relationship = item.edge?.details ? Object.entries(item.edge.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : item.verb;
-      N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: item.access ? `${item.verb} this table` : relationship }));
-      const edge = item.access
-        ? { from: item.node.id, to: sel, verb: item.verb, kind: 'data' }
-        : { from: sel, to: item.node.id, verb: item.verb, kind: 'sync', relation: item.edge?.relation, details: item.edge?.details };
-      E.push(this.linkEdge(item.access ? b : tableBox, item.access ? tableBox : b, edge, false, false, true));
-    });
-    return { nodes: N, edges: E, groups: [], cols: C, status: `${table.label}: ${columns.length} columns · ${structures.length} indexes/constraints · ${relations.length} table relationships · ${access.length} detected readers/writers · ${migrations.length} migrations.` };
+    const table = this.node(sel), detail = this.state.dbDetail || 'overview';
+    const columns = D.edges.filter((edge) => edge.from === sel && edge.verb === 'has column').map((edge) => this.node(edge.to)).filter(Boolean).sort((a, b) => a.label.localeCompare(b.label));
+    const structures = D.edges.filter((edge) => (edge.from === sel && edge.verb === 'contains') || (edge.to === sel && edge.verb === 'indexes')).map((edge) => this.node(edge.from === sel ? edge.to : edge.from)).filter((node) => node && ['index', 'constraint'].includes(node.type)).sort((a, b) => a.label.localeCompare(b.label));
+    const relations = D.edges.filter((edge) => edge.verb === 'references' && (edge.from === sel || edge.to === sel)).map((edge) => ({ node: this.node(edge.from === sel ? edge.to : edge.from), edge, direction: edge.from === sel ? 'references' : 'referenced by' })).filter((item) => item.node).sort((a, b) => a.node.label.localeCompare(b.node.label));
+    const migrations = D.edges.filter((edge) => edge.to === sel && ['creates', 'alters', 'drops'].includes(edge.verb)).map((edge) => ({ node: this.node(edge.from), verb: edge.verb, details: edge.details })).filter((item) => item.node).sort((a, b) => a.node.label.localeCompare(b.node.label));
+    const access = D.edges.filter((edge) => edge.to === sel && ['reads', 'writes'].includes(edge.verb)).map((edge) => ({ node: this.node(edge.from), verb: edge.verb })).filter((item) => item.node).sort((a, b) => a.node.label.localeCompare(b.node.label));
+    const N = [], E = [], C = [];
+    const heading = (x, y, x2, label, sub, active = false) => C.push({ x, y, subY: y + 13, x2, ly: y + 22, label, sub, fill: active ? '#df642d' : '#8b9793' });
+    const tableSub = `${columns.length} columns · ${structures.length} indexes/rules · ${relations.length} relationships`;
+
+    if (detail === 'overview') {
+      const defs = [
+        { id: 'migrations', x: 40, type: 'migration', label: `${migrations.length} migrations`, sub: 'creation and structural changes' },
+        { id: 'table', x: 320, type: 'table', label: table.label, sub: tableSub },
+        { id: 'columns', x: 600, type: 'column', label: `${columns.length} columns`, sub: 'types, nullability and keys' },
+        { id: 'indexes', x: 880, type: 'index', label: `${structures.length} indexes & rules`, sub: 'indexes and constraints' },
+        { id: 'relations', x: 1160, type: 'table', label: `${relations.length + access.length} connections`, sub: `${relations.length} tables · ${access.length} readers/writers` },
+      ];
+      defs.forEach((item) => heading(item.x, 34, item.x + 230, item.id === 'table' ? 'SELECTED TABLE' : item.id.toUpperCase(), item.id === 'table' ? 'the structure you picked' : 'click to inspect', item.id === 'table'));
+      const boxes = {};
+      defs.forEach((item) => {
+        const b = { x: item.x, y: 82, w: 230, h: item.id === 'table' ? 76 : 64 }; boxes[item.id] = b;
+        const node = item.id === 'table' ? table : { id: `db-summary:${sel}:${item.id}`, type: item.type, label: item.label, desc: item.sub };
+        N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: item.sub, onClick: () => item.id === 'table' ? this.select(sel, { mode: 'database', dbDetail: 'overview' }) : this.setState({ dbDetail: item.id, vb: null }) }));
+      });
+      ['migrations', 'columns', 'indexes', 'relations'].forEach((id) => E.push(this.linkEdge(id === 'migrations' ? boxes[id] : boxes.table, id === 'migrations' ? boxes.table : boxes[id], { from: id === 'migrations' ? `db-summary:${sel}:${id}` : sel, to: id === 'migrations' ? sel : `db-summary:${sel}:${id}`, verb: id === 'migrations' ? 'changes' : 'contains', kind: 'data' }, false, false, false)));
+      return { nodes: N, edges: E, groups: [], cols: C, status: `${table.label}: choose one section to inspect it without mixing ${columns.length + structures.length + relations.length + access.length + migrations.length} elements on one canvas.` };
+    }
+
+    const tableBox = { x: 40, y: 80, w: 250, h: 72 };
+    heading(40, 34, 290, 'SELECTED TABLE', 'context stays visible', true);
+    N.push(this.mkNode(table, tableBox.x, tableBox.y, tableBox.w, tableBox.h, { sub: tableSub, onClick: () => this.select(sel, { mode: 'database', dbDetail: 'overview' }) }));
+
+    if (detail === 'columns') {
+      heading(340, 34, 1340, 'COLUMNS', 'all detected columns · click one for its type and key rules');
+      columns.forEach((node, index) => { const col = index % 4, row = Math.floor(index / 4), b = { x: 340 + col * 250, y: 80 + row * 62, w: 230, h: 50 }; const flags = [node.details?.primaryKey ? 'PK' : '', node.details?.unique ? 'unique' : '', node.details?.nullable === false ? 'required' : 'nullable'].filter(Boolean).join(' · '); N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: `${node.details?.type || 'type not inferred'} · ${flags}`, onClick: () => this.select(node.id, { mode: 'database', dbDetail: 'columns' }) })); });
+    } else if (detail === 'indexes') {
+      heading(340, 34, 1340, 'INDEXES & CONSTRAINTS', 'all access paths and database-enforced rules');
+      structures.forEach((node, index) => { const col = index % 4, row = Math.floor(index / 4), b = { x: 340 + col * 250, y: 80 + row * 68, w: 230, h: 56 }; const cols = Array.isArray(node.details?.columns) ? node.details.columns.join(', ') : node.details?.expression || this.tLabel(node.type); N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: String(cols), onClick: () => this.select(node.id, { mode: 'database', dbDetail: 'indexes' }) })); });
+    } else if (detail === 'relations') {
+      heading(340, 34, 1340, 'RELATED TABLES', 'direction, ORM relation and foreign-key fields');
+      relations.forEach((item, index) => { const col = index % 4, row = Math.floor(index / 4), b = { x: 340 + col * 250, y: 80 + row * 68, w: 230, h: 56 }; const meta = item.edge.details ? Object.entries(item.edge.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : ''; N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: `${item.direction}${meta ? ' · ' + meta : ''}` })); });
+      const accessY = 110 + Math.ceil(relations.length / 4) * 68;
+      heading(340, accessY, 1340, 'READERS & WRITERS', 'services, repositories and jobs that access this table');
+      access.forEach((item, index) => { const col = index % 4, row = Math.floor(index / 4), b = { x: 340 + col * 250, y: accessY + 46 + row * 62, w: 230, h: 50 }; N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: `${item.verb} ${table.label}` })); });
+    } else if (detail === 'migrations') {
+      heading(340, 34, 1480, 'MIGRATION HISTORY', 'every detected change to this table');
+      migrations.forEach((item, index) => { const col = index % 3, row = Math.floor(index / 3), b = { x: 340 + col * 380, y: 80 + row * 94, w: 356, h: 80 }; const statement = item.details?.statement || `${item.verb} ${table.label}`; N.push(this.mkNode(item.node, b.x, b.y, b.w, b.h, { sub: `${item.verb} · ${statement}` })); });
+    }
+    const count = detail === 'columns' ? columns.length : detail === 'indexes' ? structures.length : detail === 'migrations' ? migrations.length : relations.length + access.length;
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${table.label} · ${detail}: ${count} elements. The canvas shows one concern at a time; the selected table remains visible as context.`, emptyOk: count === 0 };
   }
 
   sceneClickHouse() {
@@ -1939,13 +1996,11 @@ class Component extends DCLogic {
       Object.entries(D.flows).forEach(([fid, f]) => { if (f.steps.some((s) => s.id === sel)) flowsOf.push({ label: f.title.split(' — ')[0], desc: f.summary, go: () => this.select(f.root, { mode: 'routes', flow: fid }) }); });
       Object.entries(D.asyncFlows).forEach(([fid, f]) => { if (f.steps.some((s) => s.id === sel)) flowsOf.push({ label: f.title.split(' — ')[0], desc: f.summary, go: () => this.select(fid, { mode: 'async', flow: fid }) }); });
 
-      const tabs = [
-        { id: 'overview', label: 'Overview' },
-        { id: 'incoming', label: `Incoming ${inc.length ? '· ' + inc.length : ''}` },
-        { id: 'outgoing', label: `Outgoing ${out.length ? '· ' + out.length : ''}` },
-        { id: 'source', label: 'Source' },
-        { id: 'flow', label: `Flow ${flowsOf.length ? '· ' + flowsOf.length : ''}` },
-      ];
+      const tabs = [{ id: 'overview', label: 'Overview' }];
+      if (inc.length) tabs.push({ id: 'incoming', label: `Used by · ${inc.length}` });
+      if (out.length) tabs.push({ id: 'outgoing', label: `Uses · ${out.length}` });
+      if (src) tabs.push({ id: 'source', label: 'Source' });
+      if (flowsOf.length) tabs.push({ id: 'flow', label: `Flows · ${flowsOf.length}` });
       const relList = (edgesArr, dir) => {
         const items = [];
         let lastKind = null;
@@ -2163,8 +2218,11 @@ class Component extends DCLogic {
     }
 
     const mapVariant = this.state.mapVariant ?? this.props.mapVariant ?? 'clusters';
+    const databaseRoot = mode === 'database' && sel ? this.tableForDataElement(sel) : null;
     const variantConfig = mode === 'map'
       ? { value: mapVariant, buttons: [['clusters', 'Clusters'], ['layers', 'Layers'], ['columns', 'Columns']], key: 'mapVariant' }
+      : mode === 'database' && databaseRoot
+        ? { value: this.state.dbDetail || 'overview', buttons: [['overview', 'Overview'], ['columns', 'Columns'], ['indexes', 'Indexes & Rules'], ['relations', 'Relations & Access'], ['migrations', 'Migrations']], key: 'dbDetail', preserveSelection: true }
       : mode === 'delivery'
           ? { value: this.state.deliveryEnv || 'production', buttons: [['development', 'Development'], ['staging', 'Staging'], ['production', 'Production'], ['compare', 'Compare']], key: 'deliveryEnv' }
           : null;
@@ -2189,7 +2247,7 @@ class Component extends DCLogic {
       showGraphControls: mode !== 'overview' && !listScreen,
       showVariantSwitch: !!variantConfig,
       variantBtns: (variantConfig ? variantConfig.buttons : []).map(([id, label]) => ({
-        label, go: () => this.setState({ [variantConfig.key]: id, sel: null, activeFlow: null, mapExpanded: false, vb: null }),
+        label, go: () => this.setState(variantConfig.preserveSelection ? { [variantConfig.key]: id, sel: databaseRoot || sel, tab: 'overview', vb: null, hover: null } : { [variantConfig.key]: id, sel: null, activeFlow: null, mapExpanded: false, vb: null }),
         bg: variantConfig.value === id ? '#16211d' : '#fff', fg: variantConfig.value === id ? '#fff' : '#4e5a56',
         fw: variantConfig.value === id ? 700 : 500, hoverBg: variantConfig.value === id ? '#16211d' : '#f2f5f4',
       })),
@@ -2214,7 +2272,7 @@ class Component extends DCLogic {
       emptyTitle: catQ ? 'Nothing matches the current filter' : (mode === 'data' ? 'No data structures detected' : 'Nothing was detected in this section'),
       emptyHint: catQ ? 'Clear the filter in the list on the left to see all elements.' : (mode === 'data' ? 'Atlas did not recognize database schemas, tables, entities, or models in this scan.' : 'This scan did not produce any elements for this view.'),
       showClearFocus: !!sel || !!activeFlow,
-      clearFocus: () => this.setState({ sel: null, activeFlow: null, expandedOp: null, tech: false, vb: null, hist: [] }),
+      clearFocus: () => this.setState({ sel: null, activeFlow: null, expandedOp: null, tech: false, vb: null, hist: [], dbDetail: 'overview' }),
       onHoverOut: () => this.setState({ hover: null }),
       onCanvasClick: (e) => {
         if (e.target !== e.currentTarget || this._suppressClick || !this.state.expandedOp) return;

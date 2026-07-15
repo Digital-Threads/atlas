@@ -212,7 +212,11 @@ function edgeVerb(type: GraphEdge["type"]): string {
 }
 
 function safeDetails(metadata: Record<string, unknown>): Record<string, string | number | boolean | string[]> | null {
-  const excluded = new Set(["sourcePreview", "description", "plainDescription", "flowDescription", "plainFlowDescription", "asyncFlowDescription", "plainAsyncFlowDescription", "methods", "fields"]);
+  const excluded = new Set([
+    "sourcePreview", "description", "plainDescription", "descriptionSource", "plainDescriptionSource",
+    "flowDescription", "plainFlowDescription", "flowDescriptionSource",
+    "asyncFlowDescription", "plainAsyncFlowDescription", "asyncFlowDescriptionSource", "methods", "fields",
+  ]);
   const result: Record<string, string | number | boolean | string[]> = {};
   for (const [key, value] of Object.entries(metadata)) {
     if (excluded.has(key) || value === undefined || value === null) continue;
@@ -301,7 +305,8 @@ function buildMapEdges(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): Vie
   const ranked = [...grouped.values()].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
   const behaviorEdges = ranked.filter((edge) => edge.kind !== "sync").slice(0, 40);
   const structureEdges = ranked.filter((edge) => edge.kind === "sync").slice(0, 40);
-  return [...behaviorEdges, ...structureEdges];
+  // Render behavioral edges last so animated async/data links stay visible above structural lines.
+  return [...structureEdges, ...behaviorEdges];
 }
 
 function mapEndpoint(node: ViewerNode): string {
