@@ -200,6 +200,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "async"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "reads" && edge.kind === "data"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "writes" && edge.kind === "data"));
+  assert.ok(viewerData.edges.some((edge) => edge.relation === "references" && edge.details?.relation));
   assert.ok(viewerData.edges.some((edge) => edge.from === "controller:UsersController" && edge.to === "method:UsersController.create" && edge.verb === "declares"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "route:POST:/api/users" && edge.to === "method:UsersController.create" && edge.verb === "handled by"));
   assert.ok(Object.keys(viewerData.fileRoles).length > 0);
@@ -246,6 +247,11 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /Scheduled jobs/);
   assert.match(viewerHtml, /Delivery & Runtime/);
   assert.match(viewerHtml, /Configuration Contract/);
+  assert.match(viewerHtml, /Database Schema/);
+  assert.match(viewerHtml, /COMPLETE CROSS-SCHEMA ERD/);
+  assert.match(viewerHtml, /ClickHouse Architecture/);
+  assert.match(viewerHtml, /Staging vs production/);
+  assert.match(viewerHtml, /every detected table/);
   assert.match(viewerHtml, /Development/);
   assert.match(viewerHtml, /Staging/);
   assert.match(viewerHtml, /Production/);
