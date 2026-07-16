@@ -96,8 +96,12 @@ export class NestAdapter implements ArchitectureAdapter {
     const project = new Project(tsConfig ? {
       tsConfigFilePath: tsConfig.absolutePath,
       skipAddingFilesFromTsConfig: true,
+      skipFileDependencyResolution: true,
+      skipLoadingLibFiles: true,
     } : {
       skipAddingFilesFromTsConfig: true,
+      skipFileDependencyResolution: true,
+      skipLoadingLibFiles: true,
       compilerOptions: { allowJs: true, experimentalDecorators: true, skipLibCheck: true },
     });
     project.addSourceFilesAtPaths(tsFiles.map((file) => file.absolutePath));
