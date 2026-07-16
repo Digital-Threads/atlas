@@ -762,6 +762,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     window.removeEventListener('keydown', this._onKeyDown);
     if (this._panFrame) cancelAnimationFrame(this._panFrame);
+    if (this._zoomTimer) clearTimeout(this._zoomTimer);
   }
   closeGuide() {
     try { localStorage.setItem('atlas_guide_seen', '1'); } catch (e) {}
@@ -769,16 +770,46 @@ class Component extends DCLogic {
   }
 
   // ---------- helpers ----------
+  ensureIndexes() {
+    const { D } = this.state;
+    if (!D) return;
+    if (this._indexData === D && this._indexNodeCount === D.nodes.length && this._indexEdgeCount === D.edges.length) return;
+    this._indexData = D;
+    this._indexNodeCount = D.nodes.length;
+    this._indexEdgeCount = D.edges.length;
+    this._nodeIndex = new Map();
+    this._nodesByType = new Map();
+    this._incomingIndex = new Map();
+    this._outgoingIndex = new Map();
+    this._edgesByRelation = new Map();
+    D.nodes.forEach((node) => {
+      this._nodeIndex.set(node.id, node);
+      const typed = this._nodesByType.get(node.type) || [];
+      typed.push(node); this._nodesByType.set(node.type, typed);
+    });
+    D.edges.forEach((edge) => {
+      const incoming = this._incomingIndex.get(edge.to) || [];
+      incoming.push(edge); this._incomingIndex.set(edge.to, incoming);
+      const outgoing = this._outgoingIndex.get(edge.from) || [];
+      outgoing.push(edge); this._outgoingIndex.set(edge.from, outgoing);
+      const relation = edge.relation || String(edge.verb || '').toLowerCase().replaceAll(' ', '_');
+      const related = this._edgesByRelation.get(relation) || [];
+      related.push(edge); this._edgesByRelation.set(relation, related);
+    });
+    this._sceneCache = new Map();
+  }
   node(id) {
     const { D } = this.state; if (!D) return null;
     if (id && id.startsWith('op.')) return this._opNode(id);
     if (this._syn && this._syn[id]) return this._syn[id];
-    if (this._nodeIndexData !== D) {
-      this._nodeIndexData = D;
-      this._nodeIndex = new Map(D.nodes.map((node) => [node.id, node]));
-    }
+    this.ensureIndexes();
     return this._nodeIndex.get(id) || null;
   }
+  incomingEdges(id) { this.ensureIndexes(); return this._incomingIndex?.get(id) || []; }
+  outgoingEdges(id) { this.ensureIndexes(); return this._outgoingIndex?.get(id) || []; }
+  typeNodes(type) { this.ensureIndexes(); return this._nodesByType?.get(type) || []; }
+  relationEdges(relation) { this.ensureIndexes(); return this._edgesByRelation?.get(relation) || []; }
+  nodeDegree(id) { return this.incomingEdges(id).length + this.outgoingEdges(id).length; }
   _opNode(id) {
     const profiles = Object.entries(this.state.D.moduleProfiles || {});
     for (const [moduleId, prof] of profiles) {
@@ -999,8 +1030,24 @@ class Component extends DCLogic {
 
   // ---------- scenes ----------
   scene() {
-    const { D, mode, sel, tech, trace, traceRoot, activeFlow, expandedOp, domainFilter } = this.state;
+    const { D } = this.state;
     if (!D) return { nodes: [], edges: [], groups: [], cols: [], status: 'Loading…' };
+    this.ensureIndexes();
+    const keys = ['mode', 'sel', 'tech', 'trace', 'traceRoot', 'activeFlow', 'expandedOp', 'domainFilter', 'mapVariant',
+      'moduleView', 'dataVariant', 'deliveryEnv', 'dbDetail', 'traceDirection', 'traceDepth', 'traceSync', 'traceAsync',
+      'traceData', 'traceExternal', 'traceStructure', 'mapExpanded'];
+    const cacheKey = keys.map((key) => `${key}:${String(this.state[key] ?? '')}`).join('|')
+      + `|labels:${String(this.props.showEdgeLabels ?? true)}|variant:${String(this.props.mapVariant ?? '')}`;
+    const cached = this._sceneCache.get(cacheKey);
+    if (cached) return cached;
+    const result = this.buildScene();
+    if (this._sceneCache.size >= 48) this._sceneCache.clear();
+    this._sceneCache.set(cacheKey, result);
+    return result;
+  }
+
+  buildScene() {
+    const { D, mode, sel, tech, trace, traceRoot, activeFlow, expandedOp, domainFilter } = this.state;
     if (tech && sel) return this.sceneTech(sel);
     if (trace && (traceRoot || sel)) return this.sceneTrace(traceRoot || sel);
     if (mode === 'map') return this.sceneMap();
@@ -1715,8 +1762,8 @@ class Component extends DCLogic {
     const ownershipRelations = new Set(['contains', 'declares', 'has_method', 'has_column', 'provides', 'exports']);
     const moduleParts = new Set(['controller', 'processor', 'consumer', 'service', 'use_case', 'provider', 'port', 'adapter', 'repository', 'guard', 'middleware', 'interceptor', 'entity', 'model']);
     const ignoredModuleParts = new Set(['method', 'function', 'file', 'column', 'index', 'constraint']);
-    const rawIncoming = D.edges.filter((edge) => edge.to === sel && this.node(edge.from));
-    const rawOutgoing = D.edges.filter((edge) => edge.from === sel && this.node(edge.to));
+    const rawIncoming = this.incomingEdges(sel).filter((edge) => this.node(edge.from));
+    const rawOutgoing = this.outgoingEdges(sel).filter((edge) => this.node(edge.to));
     const isOwned = (edge) => ownershipRelations.has(relation(edge)) || (moduleMode && relation(edge) === 'uses' && moduleParts.has(this.node(edge.to)?.type));
     const ownedTargets = new Set(rawOutgoing.filter(isOwned).map((edge) => edge.to));
     const incomingEdges = moduleMode
@@ -2259,11 +2306,29 @@ class Component extends DCLogic {
     return `${x1 - pad} ${y1 - pad - 20} ${x2 - x1 + pad * 2} ${y2 - y1 + pad * 2 + 20}`;
   }
   parseVb(str) { const [x, y, w, h] = str.split(' ').map(Number); return { x, y, w, h }; }
-  zoom(factor) {
+  applyVb(vb) {
+    if (this._svgEl && vb) this._svgEl.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  }
+  zoom(factor, clientX, clientY) {
     const scn = this.scene();
-    const cur = this.state.vb || this.parseVb(this.fitVb(scn));
+    const cur = this._liveVb || this.state.vb || this.parseVb(this.fitVb(scn));
     const nw = cur.w * factor, nh = cur.h * factor;
-    this.setState({ vb: { x: cur.x + (cur.w - nw) / 2, y: cur.y + (cur.h - nh) / 2, w: nw, h: nh } });
+    let rx = 0.5, ry = 0.5;
+    if (this._svgEl && Number.isFinite(clientX) && Number.isFinite(clientY)) {
+      const rect = this._svgEl.getBoundingClientRect();
+      rx = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(rect.width, 1)));
+      ry = Math.max(0, Math.min(1, (clientY - rect.top) / Math.max(rect.height, 1)));
+    }
+    const next = { x: cur.x + (cur.w - nw) * rx, y: cur.y + (cur.h - nh) * ry, w: nw, h: nh };
+    this._liveVb = next;
+    this.applyVb(next);
+    if (this._zoomTimer) clearTimeout(this._zoomTimer);
+    this._zoomTimer = setTimeout(() => {
+      this._zoomTimer = null;
+      const committed = this._liveVb;
+      this._liveVb = null;
+      if (committed) this.setState({ vb: committed });
+    }, 90);
   }
 
   // ---------- render ----------
@@ -2271,7 +2336,8 @@ class Component extends DCLogic {
     const { D, mode, sel, tab, hist, q, catQ, searchOpen, hover, tech, trace, activeFlow, domainFilter, panning } = this.state;
     const loading = !D;
     const scn = loading ? { nodes: [], edges: [], groups: [], cols: [], status: 'Loading project graph…' } : this.scene();
-    const vbStr = this.state.vb ? `${this.state.vb.x} ${this.state.vb.y} ${this.state.vb.w} ${this.state.vb.h}` : this.fitVb(scn);
+    const activeVb = this._liveVb || this.state.vb;
+    const vbStr = activeVb ? `${activeVb.x} ${activeVb.y} ${activeVb.w} ${activeVb.h}` : this.fitVb(scn);
 
     const modeDefs = [
       { h: 'Project' },
@@ -2724,10 +2790,11 @@ class Component extends DCLogic {
       },
       tipVisible: !!hover && !panning, tipX: hover ? hover.x + 'px' : '0px', tipY: hover ? hover.y + 'px' : '0px',
       tipTitle: hover ? hover.title : '', tipBody: hover ? hover.body : '',
-      onWheel: (e) => { const f = e.deltaY > 0 ? 1.12 : 0.9; this.zoom(f); },
+      onWheel: (e) => { const f = e.deltaY > 0 ? 1.18 : 0.82; this.zoom(f, e.clientX, e.clientY); },
       onPanStart: (e) => {
         if (e.button !== 0 || (e.target.closest && e.target.closest('button, input'))) return;
-        const vb = this.state.vb || this.parseVb(vbStr);
+        if (this._zoomTimer) { clearTimeout(this._zoomTimer); this._zoomTimer = null; }
+        const vb = this._liveVb || this.state.vb || this.parseVb(vbStr);
         const rect = e.currentTarget.getBoundingClientRect();
         this._pan = {
           id: e.pointerId, sx: e.clientX, sy: e.clientY, vb, moved: false,
@@ -2751,9 +2818,10 @@ class Component extends DCLogic {
           w: this._pan.vb.w,
           h: this._pan.vb.h,
         };
+        this._liveVb = this._nextPanVb;
         if (!this._panFrame) this._panFrame = requestAnimationFrame(() => {
           this._panFrame = null;
-          if (this._nextPanVb) this.setState({ vb: this._nextPanVb });
+          if (this._nextPanVb) this.applyVb(this._nextPanVb);
         });
       },
       onPanEnd: (e) => {
@@ -2762,7 +2830,11 @@ class Component extends DCLogic {
         if (e.currentTarget.hasPointerCapture?.(this._pan.id)) e.currentTarget.releasePointerCapture(this._pan.id);
         if (this._panFrame) cancelAnimationFrame(this._panFrame);
         this._panFrame = null;
-        if (this._nextPanVb) this.setState({ vb: this._nextPanVb, panning: false });
+        if (this._nextPanVb) {
+          const committed = this._nextPanVb;
+          this._liveVb = null;
+          this.setState({ vb: committed, panning: false });
+        }
         else if (this.state.panning) this.setState({ panning: false });
         this._nextPanVb = null;
         this._pan = null;
