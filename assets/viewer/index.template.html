@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 101138)
+Total output lines: 2939
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -360,47 +363,7 @@
         <sc-if value="{{ isExplorer }}" hint-placeholder-val="{{ true }}">
 
           <!-- Catalog -->
-          <sc-if value="{{ catalogVisible }}" hint-placeholder-val="{{ true }}">
-            <aside class="atlas-catalog" aria-label="Catalog" style="width: 236px; flex: 0 0 auto; border-right: 1px solid #dde3e0; background: #fafbfa; display: flex; flex-direction: column; min-height: 0;">
-              <div style="flex: 0 0 auto; padding: 10px 10px 8px; display: grid; gap: 7px;">
-                <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                  <strong style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #4e5a56;">{{ catalogTitle }}</strong>
-                  <span style="font-size: 10.5px; color: #8b9793;">{{ catalogCount }}</span>
-                </div>
-                <input value="{{ catQ }}" onChange="{{ onCatQ }}" placeholder="Filter…" aria-label="Filter list" style="height: 28px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 0 8px; font-size: 12px; outline: none;" style-focus="border-color: #77978c;">
-              </div>
-              <div style="flex: 1; min-height: 0; overflow: auto; border-top: 1px solid #e6eae8;">
-                <sc-for list="{{ catalogItems }}" as="item" hint-placeholder-count="8">
-                  <sc-if value="{{ item.isGroup }}" hint-placeholder-val="{{ false }}">
-                    <div style="padding: 9px 12px 3px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8b9793;">{{ item.label }}</div>
-                  </sc-if>
-                  <sc-if value="{{ item.isNode }}" hint-placeholder-val="{{ true }}">
-                    <button onClick="{{ item.go }}" title="{{ item.tip }}" style="display: grid; grid-template-columns: auto minmax(0,1fr); gap: 8px; align-items: start; width: 100%; border: 0; border-bottom: 1px solid #eef1ef; background: {{ item.bg }}; padding: 8px 12px; text-align: left;" style-hover="background: #edf4f1;">
-                      <i style="width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; background: {{ item.color }};"></i>
-                      <span style="min-width: 0;">
-                        <strong style="display: block; font-size: 12px; font-weight: {{ item.fw }}; overflow-wrap: anywhere;">{{ item.label }}</strong>
-                        <small style="display: block; font-size: 10px; color: #77837e; margin-top: 1px; overflow-wrap: anywhere;">{{ item.sub }}</small>
-                      </span>
-                    </button>
-                  </sc-if>
-                </sc-for>
-                <sc-if value="{{ catalogEmpty }}" hint-placeholder-val="{{ false }}">
-                  <div style="padding: 16px 12px; font-size: 12px; color: #6b7873;">
-                    No matches for “{{ catQ }}”.
-                    <button onClick="{{ clearCatQ }}" style="display: block; margin-top: 8px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 5px 9px; font-size: 11.5px;" style-hover="background: #f2f5f4;">Clear filter</button>
-                  </div>
-                </sc-if>
-              </div>
-            </aside>
-          </sc-if>
-
-          <!-- Graph pane -->
-          <section aria-label="Map" style="flex: 1; min-width: 0; min-height: 0; position: relative; background: #f7f9f8; overflow: hidden;">
-            <div style="position: absolute; inset: 0; background-image: radial-gradient(#d3dad6 1px, transparent 1px); background-size: 22px 22px; opacity: 0.5; pointer-events: none;"></div>
-
-            <svg ref="{{ svgRef }}" sc-camel-view-box="{{ vbStr }}" preserveAspectRatio="xMidYMid meet" onClick="{{ onCanvasClick }}" onWheel="{{ onWheel }}" onPointerDown="{{ onPanStart }}" onPointerMove="{{ onPanMove }}" onPointerUp="{{ onPanEnd }}" onPointerCancel="{{ onPanEnd }}" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: {{ svgCursor }}; touch-action: none; user-select: none; -webkit-user-select: none;">
-              <defs>
-                <marker id="arr-sync" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7d8a84"></path></marker>
+          <sc-if value="{{ catalogVisib…1138 tokens truncated…t="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7d8a84"></path></marker>
                 <marker id="arr-async" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#0f7895"></path></marker>
                 <marker id="arr-data-read" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#3c987c"></path></marker>
                 <marker id="arr-data-write" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#176f59"></path></marker>
@@ -461,18 +424,23 @@
                 <g sc-camel-transform="translate({{ node.x }} {{ node.y }})" sc-camel-opacity="{{ node.op }}" onClick="{{ node.onClick }}" onMouseEnter="{{ node.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: pointer; animation: atlasFade 0.18s ease;">
                   <rect sc-camel-width="{{ node.w }}" sc-camel-height="{{ node.h }}" rx="7" sc-camel-fill="{{ node.fill }}" sc-camel-stroke="{{ node.stroke }}" sc-camel-stroke-width="{{ node.sw }}"></rect>
                   <rect x="0" y="0" width="4" sc-camel-height="{{ node.h }}" rx="2" sc-camel-fill="{{ node.accent }}"></rect>
-                  <foreignObject x="10" y="5" sc-camel-width="{{ node.tw }}" sc-camel-height="{{ node.th }}">
-                    <div style="font-family: 'IBM Plex Sans', sans-serif; overflow: hidden; height: 100%;">
-                      <div style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: {{ node.accent }}; white-space: nowrap;">
-                        <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis;">{{ node.typeLabel }}</span>
-                        <sc-if value="{{ node.inferred }}" hint-placeholder-val="{{ false }}"><span title="{{ node.evidenceTip }}" style="flex: 0 0 auto; border-radius: 3px; padding: 1px 4px; background: #fff3d6; color: #8a6207; font-size: 7.5px; letter-spacing: 0.04em;">inferred</span></sc-if>
+                  <sc-if value="{{ node.full }}" hint-placeholder-val="{{ true }}">
+                    <foreignObject x="10" y="5" sc-camel-width="{{ node.tw }}" sc-camel-height="{{ node.th }}">
+                      <div style="font-family: 'IBM Plex Sans', sans-serif; overflow: hidden; height: 100%;">
+                        <div style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: {{ node.accent }}; white-space: nowrap;">
+                          <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis;">{{ node.typeLabel }}</span>
+                          <sc-if value="{{ node.inferred }}" hint-placeholder-val="{{ false }}"><span title="{{ node.evidenceTip }}" style="flex: 0 0 auto; border-radius: 3px; padding: 1px 4px; background: #fff3d6; color: #8a6207; font-size: 7.5px; letter-spacing: 0.04em;">inferred</span></sc-if>
+                        </div>
+                        <div style="font-size: {{ node.fs }}; font-weight: 600; color: #1a2321; line-height: 1.25; margin-top: 1px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: {{ node.font }};">{{ node.label }}</div>
+                        <sc-if value="{{ node.sub }}" hint-placeholder-val="{{ false }}">
+                          <div style="font-size: 9px; color: #77837e; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ node.sub }}</div>
+                        </sc-if>
                       </div>
-                      <div style="font-size: {{ node.fs }}; font-weight: 600; color: #1a2321; line-height: 1.25; margin-top: 1px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: {{ node.font }};">{{ node.label }}</div>
-                      <sc-if value="{{ node.sub }}" hint-placeholder-val="{{ false }}">
-                        <div style="font-size: 9px; color: #77837e; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ node.sub }}</div>
-                      </sc-if>
-                    </div>
-                  </foreignObject>
+                    </foreignObject>
+                  </sc-if>
+                  <sc-if value="{{ node.showCompactLabel }}" hint-placeholder-val="{{ false }}">
+                    <text x="10" sc-camel-y="{{ node.compactY }}" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 10px; font-weight: 650; fill: #1a2321; pointer-events: none;">{{ node.shortLabel }}</text>
+                  </sc-if>
                   <sc-if value="{{ node.step }}" hint-placeholder-val="{{ false }}">
                     <g>
                       <circle cx="0" cy="0" r="9" fill="#df642d"></circle>
@@ -736,7 +704,7 @@ class Component extends DCLogic {
     D: null, mode: 'map', sel: null, activeFlow: null, expandedOp: null,
     tech: false, trace: false, traceRoot: null, traceDirection: 'outgoing', traceDepth: '3',
     traceSync: true, traceAsync: true, traceData: true, traceExternal: true, traceStructure: false,
-    tab: 'overview', hist: [], q: '', catQ: '', searchOpen: false,
+    tab: 'overview', hist: [], q: '', catQ: '', catLimit: 240, searchOpen: false,
     vb: null, hover: null, panning: false, domainFilter: null,
     dataVariant: 'overview', deliveryEnv: 'production',
     moduleView: 'dependencies',
@@ -914,7 +882,7 @@ class Component extends DCLogic {
     this.select(id, { mode, flow, dbDetail });
   }
 
-  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, hist: [], vb: null, hover: null, catQ: '', domainFilter: null, mapExpanded: false, dbDetail: 'overview', moduleView: 'dependencies' }); }
+  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, hist: [], vb: null, hover: null, catQ: '', catLimit: 240, domainFilter: null, mapExpanded: false, dbDetail: 'overview', moduleView: 'dependencies' }); }
 
   // ---------- code highlighting ----------
   highlight(code) {
@@ -2306,6 +2274,65 @@ class Component extends DCLogic {
     return `${x1 - pad} ${y1 - pad - 20} ${x2 - x1 + pad * 2} ${y2 - y1 + pad * 2 + 20}`;
   }
   parseVb(str) { const [x, y, w, h] = str.split(' ').map(Number); return { x, y, w, h }; }
+  optimizeScene(scn, activeVb) {
+    const hardNodeLimit = 280, hardEdgeLimit = 720, animatedEdgeLimit = 120;
+    const view = activeVb || this.parseVb(this.fitVb(scn));
+    const viewportWidth = this._svgEl?.getBoundingClientRect().width || 1200;
+    const scale = viewportWidth / Math.max(view.w, 1);
+    let nodes = scn.nodes.slice();
+    let culled = 0;
+    if (activeVb && nodes.length > 80) {
+      const padX = activeVb.w * 0.22, padY = activeVb.h * 0.22;
+      const x1 = activeVb.x - padX, x2 = activeVb.x + activeVb.w + padX;
+      const y1 = activeVb.y - padY, y2 = activeVb.y + activeVb.h + padY;
+      const visible = nodes.filter((node) => node.x + node.w >= x1 && node.x <= x2 && node.y + node.h >= y1 && node.y <= y2);
+      if (visible.length) { culled = nodes.length - visible.length; nodes = visible; }
+    }
+    const degrees = new Map();
+    scn.edges.forEach((edge) => {
+      degrees.set(edge.from, (degrees.get(edge.from) || 0) + 1);
+      degrees.set(edge.to, (degrees.get(edge.to) || 0) + 1);
+    });
+    let limited = 0;
+    if (nodes.length > hardNodeLimit) {
+      const selected = this.state.sel;
+      nodes = nodes.slice().sort((a, b) => {
+        const score = (node) => (node.id === selected ? 1000000 : 0) + (node.step ? 100000 : 0) + (degrees.get(node.id) || 0) * 10 + Number(node.op || 0);
+        return score(b) - score(a) || a.y - b.y || a.x - b.x;
+      }).slice(0, hardNodeLimit);
+      limited = scn.nodes.length - hardNodeLimit;
+    }
+    const ids = new Set(nodes.map((node) => node.id));
+    let edges = scn.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
+    if (edges.length > hardEdgeLimit) {
+      const selected = this.state.sel;
+      edges = edges.slice().sort((a, b) => {
+        const score = (edge) => ((edge.from === selected || edge.to === selected) ? 100000 : 0) + (edge.moving ? 1000 : 0) + Number(edge.op || 0) * 100;
+        return score(b) - score(a);
+      }).slice(0, hardEdgeLimit);
+    }
+    const animated = new Set(edges.filter((edge) => edge.moving).slice().sort((a, b) => {
+      const selected = this.state.sel;
+      const score = (edge) => ((edge.from === selected || edge.to === selected) ? 10000 : 0) + Number(edge.op || 0) * 100;
+      return score(b) - score(a);
+    }).slice(0, animatedEdgeLimit));
+    const showEdgeLabels = scale >= 0.48 && edges.length <= 180;
+    edges = edges.map((edge) => {
+      const moving = Boolean(edge.moving && animated.has(edge));
+      return { ...edge, moving, stationary: !moving, showLabel: Boolean(edge.showLabel && showEdgeLabels) };
+    });
+    const selected = this.state.sel;
+    nodes = nodes.map((node) => {
+      const projectedWidth = node.w * scale;
+      const full = node.id === selected || scn.nodes.length <= 80 || projectedWidth >= 82;
+      const showCompactLabel = !full && projectedWidth >= 42;
+      const shortLabel = node.label.length > 20 ? `${node.label.slice(0, 18)}…` : node.label;
+      return { ...node, full, showCompactLabel, shortLabel, compactY: Math.max(16, Math.min(node.h - 8, node.h / 2 + 3)) };
+    });
+    const hidden = Math.max(culled, limited);
+    const status = hidden > 0 ? `${scn.status} · ${hidden} off-screen or lower-priority elements are kept in the catalog.` : scn.status;
+    return { ...scn, nodes, edges, status };
+  }
   applyVb(vb) {
     if (this._svgEl && vb) this._svgEl.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   }
@@ -2338,6 +2365,7 @@ class Component extends DCLogic {
     const scn = loading ? { nodes: [], edges: [], groups: [], cols: [], status: 'Loading project graph…' } : this.scene();
     const activeVb = this._liveVb || this.state.vb;
     const vbStr = activeVb ? `${activeVb.x} ${activeVb.y} ${activeVb.w} ${activeVb.h}` : this.fitVb(scn);
+    const displayScene = loading ? scn : this.optimizeScene(scn, activeVb);
 
     const modeDefs = [
       { h: 'Project' },
@@ -2424,7 +2452,7 @@ class Component extends DCLogic {
       files: { title: 'Files', types: ['file'], groupBy: null },
     };
     const cd = catDefs[mode];
-    let catalogItems = [], catalogCount = '';
+    let catalogItems = [], catalogCount = '', catalogFilteredTotal = 0;
     if (cd && D) {
       let list = D.nodes.filter((n) => cd.types.includes(n.type));
       if (mode === 'clickhouse') {
@@ -2440,7 +2468,11 @@ class Component extends DCLogic {
       }
       const total = list.length;
       if (catQ) list = list.filter((n) => (n.label + ' ' + (n.file || '')).toLowerCase().includes(catQ.toLowerCase()));
-      catalogCount = catQ ? `${list.length} of ${total}` : String(total);
+      catalogFilteredTotal = list.length;
+      const visibleList = list.slice(0, this.state.catLimit || 240);
+      const selectedOutsideWindow = sel && !visibleList.some((node) => node.id === sel) ? list.find((node) => node.id === sel) : null;
+      list = selectedOutsideWindow ? [...visibleList, selectedOutsideWindow] : visibleList;
+      catalogCount = catalogFilteredTotal > list.length ? `${list.length} of ${catalogFilteredTotal}` : catQ ? `${catalogFilteredTotal} of ${total}` : String(total);
       let lastGroup = null;
       list.forEach((n) => {
         const g = cd.groupBy === 'domain' ? (D.domains.find((d) => d.id === n.domain) || { name: 'Other' }).name : cd.groupBy === 'type' ? this.tLabel(n.type) + 's' : null;
@@ -2772,13 +2804,16 @@ class Component extends DCLogic {
 
       catalogVisible: !!cd && !panelOpen, catalogTitle: cd ? cd.title : '', catalogCount, catalogItems,
       catalogEmpty: !!cd && !!catQ && catalogItems.length === 0, catQ,
-      onCatQ: (e) => this.setState({ catQ: e.target.value }),
-      clearCatQ: () => this.setState({ catQ: '' }),
+      onCatQ: (e) => this.setState({ catQ: e.target.value, catLimit: 240 }),
+      clearCatQ: () => this.setState({ catQ: '', catLimit: 240 }),
+      showCatalogMore: catalogFilteredTotal > (this.state.catLimit || 240),
+      catalogMoreCount: String(Math.min(240, Math.max(0, catalogFilteredTotal - (this.state.catLimit || 240)))),
+      loadMoreCatalog: () => this.setState((state) => ({ catLimit: (state.catLimit || 240) + 240 })),
 
       svgRef: (el) => { this._svgEl = el; },
       vbStr, svgCursor: panning ? 'grabbing' : 'grab',
-      gNodes: scn.nodes, gEdges: scn.edges, gGroups: scn.groups, gCols: scn.cols,
-      statusText: scn.status || '', graphEmpty: !!scn.emptyOk,
+      gNodes: displayScene.nodes, gEdges: displayScene.edges, gGroups: displayScene.groups, gCols: displayScene.cols,
+      statusText: displayScene.status || '', graphEmpty: !!scn.emptyOk,
       emptyTitle: catQ ? 'Nothing matches the current filter' : (mode === 'data' ? 'No data structures detected' : 'Nothing was detected in this section'),
       emptyHint: catQ ? 'Clear the filter in the list on the left to see all elements.' : (mode === 'data' ? 'Atlas did not recognize database schemas, tables, entities, or models in this scan.' : 'This scan did not produce any elements for this view.'),
       showClearFocus: !!sel || !!activeFlow || trace,
