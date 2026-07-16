@@ -46,6 +46,7 @@ interface ClassInfo {
   file: string;
   declaration: ClassDeclaration;
   constructorTypes: Map<string, string>;
+  injectionTokens: Map<string, string>;
   repositoryEntities: Map<string, string>;
   sequelizeModels: Map<string, string>;
   queueTokens: Map<string, string>;
@@ -56,7 +57,17 @@ interface ClassRegistry {
   byName: Map<string, ClassInfo[]>;
   sourceFiles: Map<string, SourceFile>;
   drizzleTables: Map<string, DrizzleTableInfo>;
+  providerBindings: Map<string, ProviderBinding[]>;
   size: number;
+}
+
+interface ProviderBinding {
+  token: string;
+  implementation?: string;
+  strategy: "useClass" | "useExisting" | "useFactory" | "useValue";
+  dependencies: string[];
+  moduleId: string;
+  file: string;
 }
 
 export class NestAdapter implements ArchitectureAdapter {
@@ -111,13 +122,14 @@ export class NestAdapter implements ArchitectureAdapter {
       byName: new Map(),
       sourceFiles: new Map(sourceFiles.map((sourceFile) => [relativePath(context.projectRoot, sourceFile.getFilePath()), sourceFile])),
       drizzleTables: new Map(),
+      providerBindings: new Map(),
       size: candidates.length,
     };
     for (const candidate of candidates) {
         const { name, type, file, declaration } = candidate;
         const id = nameCounts.get(name) === 1 ? `${type}:${name}` : `${type}:${name}@${file}`;
-        const { constructorTypes, repositoryEntities, sequelizeModels, queueTokens } = getConstructorInfo(declaration);
-        const info: ClassInfo = { name, id, type, file, declaration, constructorTypes, repositoryEntities, sequelizeModels, queueTokens };
+        const { constructorTypes, injectionTokens, repositoryEntities, sequelizeModels, queueTokens } = getConstructorInfo(declaration);
+        const info: ClassInfo = { name, id, type, file, declaration, constructorTypes, injectionTokens, repositoryEntities, sequelizeModels, queueTokens };
         classes.byDeclaration.set(declaration, info);
         const named = classes.byName.get(name) ?? [];
         named.push(info);
@@ -128,6 +140,7 @@ export class NestAdapter implements ArchitectureAdapter {
 
     await parsePrisma(context, addNode, addEdge);
     classes.drizzleTables = parseDrizzleSchemas(sourceFiles, context.projectRoot, addNode, addEdge);
+    classes.providerBindings = collectProviderBindings(classes);
 
     const globalPrefix = findGlobalPrefix(sourceFiles);
     for (const sourceFile of sourceFiles) {
@@ -159,6 +172,7 @@ function classifyClass(declaration: ClassDeclaration, file: string): GraphNodeTy
   const normalizedFile = file.replaceAll("\\", "/").toLowerCase();
   if (decorators.has("Module")) return "module";
   if (decorators.has("Processor")) return "processor";
+  if (["CommandHandler", "QueryHandler", "EventsHandler"].some((name) => decorators.has(name))) return "provider";
   if (decorators.has("Controller")) return "controller";
   if (decorators.has("Entity")) return "entity";
   if (decorators.has("Table")) return "entity";
@@ -216,6 +230,7 @@ function parseClass(
   parseTypeOrm(info, classes, addNode, addEdge);
   parseSequelize(info, classes, addNode, addEdge);
   parseAsyncClass(info, addNode, addEdge);
+  parseCqrsHandler(info, addNode, addEdge);
 
   for (const [parameter, typeName] of info.constructorTypes) {
     const queueName = info.queueTokens.get(parameter);
@@ -224,13 +239,33 @@ function parseClass(
       addEdge(info.id, queueId, "uses", { via: "InjectQueue", parameter });
       continue;
     }
-    if (isMessageClient(parameter, typeName)) {
-      const transport = messageTransport(parameter, typeName) ?? "nest-microservice";
+    const injectionToken = info.injectionTokens.get(parameter);
+    if (injectionToken) {
+      const providerId = addProviderToken(injectionToken, info.file, addNode);
+      addEdge(info.id, providerId, "injects", {
+        via: "Inject", parameter, token: injectionToken,
+        evidence: nodeEvidence(info.declaration, info.file, "nestjs.inject-token", `@Inject(${injectionToken})`),
+      });
+      for (const binding of classes.providerBindings.get(injectionToken) ?? []) {
+        if (!binding.implementation) continue;
+        const implementation = ensureClass(binding.implementation, classes, binding.file, addNode);
+        addEdge(providerId, implementation.id, "references", {
+          providerStrategy: binding.strategy, module: binding.moduleId,
+          evidence: { rule: "nestjs.provider-binding", file: binding.file },
+        });
+        addEdge(info.id, implementation.id, "injects", {
+          via: "provider_token", parameter, token: injectionToken, providerStrategy: binding.strategy,
+          evidence: nodeEvidence(info.declaration, info.file, "nestjs.resolved-provider-token"),
+        }, "ast", 1);
+      }
+    }
+    if (isMessageClient(parameter, typeName, info)) {
+      const transport = messageTransport(parameter, typeName, info) ?? "nest-microservice";
       const brokerId = addMessageBroker(transport, addNode);
-      addEdge(info.id, brokerId, "uses", { via: "constructor", parameter, clientType: typeName, transport });
+      addEdge(info.id, brokerId, "uses", { via: "constructor", parameter, clientType: typeName, transport, evidence: nodeEvidence(info.declaration, info.file, "messaging.client-injection") });
     }
     const target = ensureClass(typeName, classes, info.file, addNode);
-    addEdge(info.id, target.id, "injects", { via: "constructor", parameter, repositoryEntity: info.repositoryEntities.get(parameter) });
+    addEdge(info.id, target.id, "injects", { via: "constructor", parameter, token: injectionToken, repositoryEntity: info.repositoryEntities.get(parameter), evidence: nodeEvidence(info.declaration, info.file, "nestjs.constructor-injection") });
   }
 
   for (const method of info.declaration.getMethods()) {
@@ -239,6 +274,7 @@ function parseClass(
     addEdge(info.id, methodId, "has_method");
     parseRoute(info, method, methodId, globalPrefix, addNode, addEdge);
     parseAsyncConsumer(info, method, methodId, addNode, addEdge);
+    parseCqrsCalls(info, method, methodId, addNode, addEdge);
     parseMethodRelations(info, method, methodId, classes, addNode, addEdge);
     parseAppliedDecorators(method.getDecorators(), methodId, classes, info.file, addNode, addEdge);
   }
@@ -287,17 +323,38 @@ function parseModule(info: ClassInfo, classes: ClassRegistry, addNode: NodeAdder
       if (Node.isObjectLiteralExpression(element)) {
         const provide = element.getProperty("provide");
         if (!provide || !Node.isPropertyAssignment(provide)) continue;
-        const token = cleanToken(provide.getInitializer()?.getText() ?? "provider");
+        const token = expressionValue(provide.getInitializer()) || "provider";
         const providerId = `provider:${token}`;
-        addNode({ id: providerId, type: "provider", label: token, name: token, file: info.file, framework: "nestjs", source: "config", confidence: 1, metadata: { moduleProvider: element.getText() } });
-        addEdge(info.id, providerId, edgeType, { moduleProperty: propertyName, customProvider: true });
+        const strategy = (["useClass", "useExisting", "useFactory", "useValue"] as const)
+          .find((key) => Boolean(element.getProperty(key))) ?? "useValue";
+        addNode({ id: providerId, type: "provider", label: token, name: token, file: info.file, framework: "nestjs", source: "config", confidence: 1, metadata: {
+          customProvider: true, providerStrategy: strategy,
+          factory: strategy === "useFactory",
+          configuredValue: strategy === "useValue",
+        } });
+        addEdge(info.id, providerId, edgeType, { moduleProperty: propertyName, customProvider: true, providerStrategy: strategy, evidence: nodeEvidence(element, info.file, "nestjs.module-provider") });
         for (const key of ["useClass", "useExisting"]) {
           const implementation = element.getProperty(key);
           if (!implementation || !Node.isPropertyAssignment(implementation)) continue;
           const targetName = implementation.getInitializer()?.getText().match(/[A-Z][A-Za-z0-9_$]*/)?.[0];
           if (!targetName) continue;
           const target = ensureClass(targetName, classes, info.file, addNode);
-          addEdge(providerId, target.id, "references", { providerStrategy: key });
+          addEdge(providerId, target.id, "references", { providerStrategy: key, evidence: nodeEvidence(implementation, info.file, "nestjs.provider-implementation") });
+        }
+        const inject = element.getProperty("inject");
+        if (inject && Node.isPropertyAssignment(inject)) {
+          const initializer = inject.getInitializer();
+          if (initializer && Node.isArrayLiteralExpression(initializer)) {
+            for (const dependency of initializer.getElements()) {
+              const dependencyToken = expressionValue(dependency);
+              if (!dependencyToken) continue;
+              const dependencyId = addProviderToken(dependencyToken, info.file, addNode);
+              addEdge(providerId, dependencyId, "injects", {
+                via: "factory_inject", token: dependencyToken,
+                evidence: nodeEvidence(dependency, info.file, "nestjs.factory-dependency"),
+              });
+            }
+          }
         }
         continue;
       }
@@ -305,9 +362,51 @@ function parseModule(info: ClassInfo, classes: ClassRegistry, addNode: NodeAdder
       const targetName = propertyName === "imports" ? (names.find((name) => name.endsWith("Module")) ?? names.at(-1)) : names.at(-1);
       if (!targetName) continue;
       const target = ensureClass(targetName, classes, info.file, addNode, propertyName === "imports" ? "module" : "provider");
-      addEdge(info.id, target.id, edgeType, { moduleProperty: propertyName });
+      const expression = element.getText();
+      const dynamicMethod = expression.match(/\.(forRootAsync|forRoot|registerAsync|register)\s*\(/)?.[1];
+      addEdge(info.id, target.id, edgeType, {
+        moduleProperty: propertyName,
+        ...(dynamicMethod ? { dynamicModule: true, dynamicMethod } : {}),
+        ...(expression.includes("forwardRef(") ? { forwardRef: true } : {}),
+        evidence: nodeEvidence(element, info.file, dynamicMethod ? "nestjs.dynamic-module" : expression.includes("forwardRef(") ? "nestjs.forward-ref" : "nestjs.module-metadata"),
+      });
     }
   }
+}
+
+function collectProviderBindings(classes: ClassRegistry): Map<string, ProviderBinding[]> {
+  const bindings = new Map<string, ProviderBinding[]>();
+  for (const info of classes.byDeclaration.values()) {
+    const decorator = info.declaration.getDecorator("Module");
+    const argument = decorator?.getArguments()[0];
+    if (!argument || !Node.isObjectLiteralExpression(argument)) continue;
+    const providers = argument.getProperty("providers");
+    if (!providers || !Node.isPropertyAssignment(providers)) continue;
+    const initializer = providers.getInitializer();
+    if (!initializer || !Node.isArrayLiteralExpression(initializer)) continue;
+    for (const element of initializer.getElements()) {
+      if (!Node.isObjectLiteralExpression(element)) continue;
+      const provide = element.getProperty("provide");
+      if (!provide || !Node.isPropertyAssignment(provide)) continue;
+      const token = expressionValue(provide.getInitializer());
+      if (!token) continue;
+      const strategy = (["useClass", "useExisting", "useFactory", "useValue"] as const)
+        .find((key) => Boolean(element.getProperty(key))) ?? "useValue";
+      const implementationProperty = strategy === "useClass" || strategy === "useExisting" ? element.getProperty(strategy) : undefined;
+      const implementation = implementationProperty && Node.isPropertyAssignment(implementationProperty)
+        ? referencedTypeNames(implementationProperty.getInitializer()?.getText() ?? "")[0]
+        : undefined;
+      const inject = element.getProperty("inject");
+      const injectInitializer = inject && Node.isPropertyAssignment(inject) ? inject.getInitializer() : undefined;
+      const dependencies = injectInitializer && Node.isArrayLiteralExpression(injectInitializer)
+        ? injectInitializer.getElements().map((item) => expressionValue(item)).filter(Boolean)
+        : [];
+      const current = bindings.get(token) ?? [];
+      current.push({ token, implementation, strategy, dependencies, moduleId: info.id, file: info.file });
+      bindings.set(token, current);
+    }
+  }
+  return bindings;
 }
 
 function parseRoute(info: ClassInfo, method: MethodDeclaration, methodId: string, globalPrefix: string, addNode: NodeAdder, addEdge: EdgeAdder) {
@@ -887,8 +986,9 @@ function classMethodId(info: ClassInfo, methodName: string): string {
   return info.id === canonicalClassId ? `method:${info.name}.${methodName}` : `method:${info.name}.${methodName}@${info.file}`;
 }
 
-function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "constructorTypes" | "repositoryEntities" | "sequelizeModels" | "queueTokens"> {
+function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "constructorTypes" | "injectionTokens" | "repositoryEntities" | "sequelizeModels" | "queueTokens"> {
   const constructorTypes = new Map<string, string>();
+  const injectionTokens = new Map<string, string>();
   const repositoryEntities = new Map<string, string>();
   const sequelizeModels = new Map<string, string>();
   const queueTokens = new Map<string, string>();
@@ -914,10 +1014,12 @@ function getConstructorInfo(declaration: ClassDeclaration): Pick<ClassInfo, "con
       }
       const injectDecorator = parameter.getDecorator("Inject");
       const token = expressionValue(injectDecorator?.getArguments()[0]);
-      constructorTypes.set(parameter.getName(), token || simpleType(parameter.getTypeNode()?.getText() ?? parameter.getType().getText()));
+      const declaredType = simpleType(parameter.getTypeNode()?.getText() ?? parameter.getType().getText());
+      if (token) injectionTokens.set(parameter.getName(), token);
+      constructorTypes.set(parameter.getName(), declaredType && !["any", "unknown", "object", "Object"].includes(declaredType) ? declaredType : token);
     }
   }
-  return { constructorTypes, repositoryEntities, sequelizeModels, queueTokens };
+  return { constructorTypes, injectionTokens, repositoryEntities, sequelizeModels, queueTokens };
 }
 
 function resolveClass(name: string, classes: ClassRegistry, file?: string): ClassInfo | undefined {
@@ -955,7 +1057,7 @@ function ensureClass(name: string, classes: ClassRegistry, file: string, addNode
   if (existing) return existing;
   const type = inferType(name, fallbackType);
   const ambiguous = (classes.byName.get(name)?.length ?? 0) > 1;
-  const inferred = { name, id: ambiguous ? `${type}:${name}@unresolved:${file}` : `${type}:${name}`, type, file, declaration: undefined as unknown as ClassDeclaration, constructorTypes: new Map<string, string>(), repositoryEntities: new Map<string, string>(), sequelizeModels: new Map<string, string>(), queueTokens: new Map<string, string>() };
+  const inferred = { name, id: ambiguous ? `${type}:${name}@unresolved:${file}` : `${type}:${name}`, type, file, declaration: undefined as unknown as ClassDeclaration, constructorTypes: new Map<string, string>(), injectionTokens: new Map<string, string>(), repositoryEntities: new Map<string, string>(), sequelizeModels: new Map<string, string>(), queueTokens: new Map<string, string>() };
   addNode({ id: inferred.id, type, label: name, name, file, framework: "nestjs", language: "typescript", confidence: 0.7, source: "heuristic" });
   return inferred;
 }
@@ -984,6 +1086,55 @@ function parseAsyncClass(info: ClassInfo, addNode: NodeAdder, addEdge: EdgeAdder
   addEdge(queueId, info.id, "processes", { decorator: "Processor", queue: queueName });
 }
 
+function parseCqrsHandler(info: ClassInfo, addNode: NodeAdder, addEdge: EdgeAdder) {
+  const definitions = [
+    ["CommandHandler", "command"], ["QueryHandler", "query"], ["EventsHandler", "event"],
+  ] as const;
+  for (const [decoratorName, kind] of definitions) {
+    const decorator = info.declaration.getDecorator(decoratorName);
+    if (!decorator) continue;
+    const messageName = referencedTypeNames(decorator.getArguments()[0]?.getText() ?? "")[0];
+    if (!messageName) continue;
+    const messageId = addCqrsMessage(messageName, kind, info.file, addNode);
+    addEdge(messageId, info.id, "delivers_to", {
+      transport: "nestjs-cqrs", decorator: decoratorName, handler: info.name,
+      evidence: nodeEvidence(decorator, info.file, "nestjs.cqrs-handler"),
+    });
+  }
+}
+
+function parseCqrsCalls(info: ClassInfo, method: MethodDeclaration, methodId: string, addNode: NodeAdder, addEdge: EdgeAdder) {
+  for (const call of method.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const match = call.getExpression().getText().match(/^this\.([A-Za-z_$][\w$]*)\.(execute|publish|publishAll)$/);
+    if (!match) continue;
+    const [, property, operation] = match;
+    const typeName = info.constructorTypes.get(property) ?? "";
+    const kind = /CommandBus/i.test(typeName) ? "command" : /QueryBus/i.test(typeName) ? "query" : /EventBus/i.test(typeName) ? "event" : null;
+    if (!kind) continue;
+    const argumentsToInspect = operation === "publishAll" && Node.isArrayLiteralExpression(call.getArguments()[0])
+      ? call.getArguments()[0].getElements()
+      : call.getArguments();
+    for (const argument of argumentsToInspect) {
+      const messageName = argument.getText().match(/new\s+([A-Z][A-Za-z0-9_$]*)|^([A-Z][A-Za-z0-9_$]*)$/)?.slice(1).find(Boolean);
+      if (!messageName) continue;
+      const messageId = addCqrsMessage(messageName, kind, info.file, addNode);
+      addEdge(methodId, messageId, "triggers", {
+        transport: "nestjs-cqrs", bus: typeName, operation,
+        evidence: nodeEvidence(call, info.file, "nestjs.cqrs-bus-call"),
+      });
+    }
+  }
+}
+
+function addCqrsMessage(name: string, kind: "command" | "query" | "event", file: string, addNode: NodeAdder): string {
+  const id = `provider:cqrs:${kind}:${name}`;
+  addNode({
+    id, type: "provider", label: name, name, file, framework: "nestjs-cqrs", source: "ast", confidence: 1,
+    metadata: { role: `cqrs_${kind}`, cqrsType: kind },
+  });
+  return id;
+}
+
 function parseAsyncConsumer(
   info: ClassInfo,
   method: MethodDeclaration,
@@ -998,6 +1149,16 @@ function parseAsyncConsumer(
     addEdge(queueId, methodId, "delivers_to", { transport: "bullmq", processor: info.name, handler: method.getName(), job: "any" });
   }
   for (const decorator of method.getDecorators()) {
+    if (decorator.getName() === "OnEvent") {
+      const topic = expressionValue(decorator.getArguments()[0]);
+      if (!topic) continue;
+      const topicId = addMessageTopic(topic, info.file, addNode, addEdge, "event-emitter");
+      addEdge(topicId, methodId, "delivers_to", {
+        transport: "event-emitter", decorator: "OnEvent", consumer: info.name, handler: method.getName(),
+        evidence: nodeEvidence(decorator, info.file, "event-emitter.consumer"),
+      });
+      continue;
+    }
     if (["MessagePattern", "EventPattern"].includes(decorator.getName())) {
       const pattern = decorator.getArguments()[0];
       const topic = expressionValue(pattern);
@@ -1009,6 +1170,7 @@ function parseAsyncConsumer(
         decorator: decorator.getName(),
         consumer: info.name,
         handler: method.getName(),
+        evidence: nodeEvidence(decorator, info.file, "nestjs.message-consumer"),
       });
       continue;
     }
@@ -1050,16 +1212,39 @@ function parseAsyncProducerCall(
   addEdge: EdgeAdder,
 ): boolean {
   const expression = call.getExpression().getText();
-  const messageCall = expression.match(/^this\.([A-Za-z_$][\w$]*)\.(emit|send)$/);
+  const messageCall = expression.match(/^this\.([A-Za-z_$][\w$]*)\.(emit|emitAsync|send|publish|sendBatch)$/);
   if (messageCall) {
     const [, property, operation] = messageCall;
     const typeName = info.constructorTypes.get(property) ?? "";
-    if (isMessageClient(property, typeName)) {
-      const topic = expressionValue(call.getArguments()[0]);
+    const eventEmitter = /EventEmitter/i.test(typeName) || /eventEmitter/i.test(property);
+    if (isMessageClient(property, typeName, info) || eventEmitter) {
+      const topic = callDestination(call, ["topic", "pattern", "routingKey"]);
       if (!topic) return false;
-      const transport = messageTransport(property, typeName) ?? "nest-microservice";
+      const transport = eventEmitter ? "event-emitter" : messageTransport(property, typeName, info) ?? "nest-microservice";
       const topicId = addMessageTopic(topic, info.file, addNode, addEdge, transport);
-      addEdge(methodId, topicId, "publishes_to", { transport, operation, client: property });
+      addEdge(methodId, topicId, "publishes_to", {
+        transport, operation, client: property,
+        evidence: nodeEvidence(call, info.file, "messaging.producer-call"),
+      });
+      return true;
+    }
+  }
+
+  const rabbitCall = expression.match(/^this\.([A-Za-z_$][\w$]*)\.(publish|sendToQueue)$/);
+  if (rabbitCall) {
+    const [, property, operation] = rabbitCall;
+    const typeName = info.constructorTypes.get(property) ?? "";
+    if (/Channel|Rabbit|Amqp/i.test(`${property} ${typeName}`)) {
+      const args = call.getArguments();
+      const destination = operation === "publish"
+        ? `${expressionValue(args[0])}:${expressionValue(args[1])}`
+        : expressionValue(args[0]);
+      if (!destination) return false;
+      const topicId = addMessageTopic(destination, info.file, addNode, addEdge, "rabbitmq");
+      addEdge(methodId, topicId, "publishes_to", {
+        transport: "rabbitmq", operation, client: property,
+        evidence: nodeEvidence(call, info.file, "rabbitmq.producer-call"),
+      });
       return true;
     }
   }
@@ -1071,13 +1256,28 @@ function parseAsyncProducerCall(
   if (!queueName) return false;
   const queueId = addQueueNode(queueName, info.file, addNode);
   const job = expressionValue(call.getArguments()[0]);
-  addEdge(methodId, queueId, "enqueues", { transport: "bull", operation, ...(job ? { job } : {}) });
+  addEdge(methodId, queueId, "enqueues", { transport: "bull", operation, ...(job ? { job } : {}), evidence: nodeEvidence(call, info.file, "bull.queue-producer") });
   return true;
+}
+
+function callDestination(call: CallExpression, keys: string[]): string {
+  const argument = call.getArguments()[0];
+  if (!argument) return "";
+  if (Node.isObjectLiteralExpression(argument)) {
+    for (const key of keys) {
+      const property = argument.getProperty(key);
+      if (property && Node.isPropertyAssignment(property)) {
+        const value = expressionValue(property.getInitializer());
+        if (value) return value;
+      }
+    }
+  }
+  return expressionValue(argument);
 }
 
 function addMessageBroker(transport: string, addNode: NodeAdder): string {
   const id = `message_broker:${transport}`;
-  const label = transport === "kafka" ? "Kafka" : transport === "rabbitmq" ? "RabbitMQ" : "NestJS messaging";
+  const label = transport === "kafka" ? "Kafka" : transport === "rabbitmq" ? "RabbitMQ" : transport === "event-emitter" ? "In-process events" : "NestJS messaging";
   addNode({ id, type: "message_broker", label, name: label, framework: "nestjs", source: "ast", confidence: 1, metadata: { transport } });
   return id;
 }
@@ -1107,14 +1307,39 @@ function addOrmIndex(tableId: string, tableName: string, decorator: Decorator, f
   addEdge(id, tableId, "indexes");
 }
 
-function isMessageClient(parameter: string, typeName: string): boolean {
-  return messageTransport(parameter, typeName) !== null;
+function isMessageClient(parameter: string, typeName: string, info?: ClassInfo): boolean {
+  return messageTransport(parameter, typeName, info) !== null;
 }
 
-function messageTransport(parameter: string, typeName: string): string | null {
+function messageTransport(parameter: string, typeName: string, info?: ClassInfo): string | null {
   if (/kafka/i.test(parameter) || /ClientKafka|KafkaClient|KAFKA/i.test(typeName)) return "kafka";
+  if (info && /^(Producer|Consumer)$/i.test(typeName) && importsPackage(info, typeName, "kafkajs")) return "kafka";
   if (/ClientProxy|MessageClient|MicroserviceClient/i.test(typeName)) return "nest-microservice";
   return null;
+}
+
+function importsPackage(info: ClassInfo, importedName: string, packageName: string): boolean {
+  return info.declaration.getSourceFile().getImportDeclarations().some((declaration) => {
+    if (declaration.getModuleSpecifierValue() !== packageName) return false;
+    return declaration.getNamedImports().some((item) => [item.getName(), item.getAliasNode()?.getText()].includes(importedName));
+  });
+}
+
+function addProviderToken(token: string, file: string, addNode: NodeAdder): string {
+  const clean = cleanToken(token);
+  const id = `provider:${clean}`;
+  addNode({ id, type: "provider", label: token, name: token, file, framework: "nestjs", source: "config", confidence: 1, metadata: { injectionToken: true, token } });
+  return id;
+}
+
+function nodeEvidence(node: Node, file: string, rule: string, expression?: string): Record<string, unknown> {
+  return {
+    rule,
+    file,
+    startLine: node.getStartLineNumber(),
+    endLine: node.getEndLineNumber(),
+    ...(expression ? { expression: expression.slice(0, 300) } : {}),
+  };
 }
 
 function processJobName(decorator: Decorator): string {

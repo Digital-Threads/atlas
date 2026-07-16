@@ -48,6 +48,9 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     "library:@nestjs/core", "library:typeorm",
     "message_broker:kafka", "message_topic:orders.created", "queue:email-jobs", "processor:EmailProcessor",
     "method:OrderPublisher.publishOrder", "method:OrderEventsConsumer.handleOrder", "method:EmailProcessor.handleEmail",
+    "module:HiddenLinksModule", "service:CheckoutService", "port:PaymentPort", "adapter:PaymentAdapter",
+    "provider:PAYMENT_PORT", "provider:PAYMENT_FACADE", "provider:cqrs:command:CreateOrderCommand",
+    "message_topic:order.completed", "message_topic:orders.audit",
     "database:sql", "schema:public", "table:profiles", "column:public.profiles.display_name",
     "index:public.profiles.profiles_user_id_unique", "constraint:public.profiles.profiles_display_name_check",
     "migration:migrations/001_create_profiles.sql", "database:clickhouse", "schema:clickhouse.analytics",
@@ -108,6 +111,17 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:OrderPublisher.scheduleEmail" && edge.to === "queue:email-jobs" && edge.type === "enqueues"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "queue:email-jobs" && edge.to === "processor:EmailProcessor" && edge.type === "processes"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "queue:email-jobs" && edge.to === "method:EmailProcessor.handleEmail" && edge.type === "delivers_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "service:CheckoutService" && edge.to === "provider:PAYMENT_PORT" && edge.type === "injects" && edge.metadata?.evidence?.rule === "nestjs.inject-token"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "provider:PAYMENT_PORT" && edge.to === "adapter:PaymentAdapter" && edge.type === "references"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "service:CheckoutService" && edge.to === "adapter:PaymentAdapter" && edge.type === "injects"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "provider:PAYMENT_FACADE" && edge.to === "provider:PAYMENT_PORT" && edge.type === "injects"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "adapter:PaymentAdapter" && edge.to === "port:PaymentPort" && edge.type === "implements"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "module:HiddenLinksModule" && edge.to === "module:WorkerModule" && edge.type === "imports" && edge.metadata?.forwardRef === true));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:CheckoutService.checkout" && edge.to === "provider:cqrs:command:CreateOrderCommand" && edge.type === "triggers"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "provider:cqrs:command:CreateOrderCommand" && edge.to === "provider:CreateOrderHandler" && edge.type === "delivers_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:CheckoutService.checkout" && edge.to === "message_topic:order.completed" && edge.type === "publishes_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "message_topic:order.completed" && edge.to === "method:OrderCompletedListener.handle" && edge.type === "delivers_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:CheckoutService.checkout" && edge.to === "message_topic:orders.audit" && edge.type === "publishes_to" && edge.metadata?.transport === "kafka"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "migration:migrations/001_create_profiles.sql" && edge.to === "table:profiles" && edge.type === "creates"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "index:public.profiles.profiles_user_id_unique" && edge.to === "table:profiles" && edge.type === "indexes"));
   const profileReferences = result.graph.edges.filter((edge) => edge.from === "table:profiles" && edge.to === "table:users" && edge.type === "references");
