@@ -1,10 +1,11 @@
-import { BelongsTo, Column, DataType, ForeignKey, Model, Table } from "sequelize-typescript";
+import { BelongsTo, Column, DataType, ForeignKey, Index, Model, Table } from "sequelize-typescript";
 
 @Table({ tableName: "sequelize_accounts", timestamps: true })
 export class SequelizeAccount extends Model<SequelizeAccount> {
   @Column({ type: DataType.UUID, primaryKey: true, allowNull: false })
   declare id: string;
 
+  @Index({ name: "idx_sequelize_accounts_email" })
   @Column({ field: "email_address", type: DataType.STRING, allowNull: false })
   declare email: string;
 }

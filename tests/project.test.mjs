@@ -39,6 +39,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     "table:typeorm_users", "method:UserEntityRepository.find", "method:UserEntityRepository.save",
     "database:sequelize", "entity:SequelizeAccount", "entity:SequelizeSession",
     "table:sequelize_accounts", "table:sequelize_sessions", "column:sequelize_accounts.email_address",
+    "index:sequelize_accounts.idx_sequelize_accounts_email",
     "method:SequelizeAccountsService.listAccounts", "method:SequelizeAccountsService.createAccount",
     "database:drizzle", "table:drizzle_accounts", "table:drizzle_events",
     "column:drizzle_accounts.email_address", "column:drizzle_events.account_id",
@@ -97,6 +98,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.deepEqual(sequelizeReference?.metadata?.targetColumns, ["id"]);
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:SequelizeAccount.findAll" && edge.to === "table:sequelize_accounts" && edge.type === "reads"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:SequelizeAccount.create" && edge.to === "table:sequelize_accounts" && edge.type === "writes"));
+  const sequelizeIndex = result.graph.nodes.find((node) => node.id === "index:sequelize_accounts.idx_sequelize_accounts_email");
+  assert.equal(JSON.stringify(sequelizeIndex?.metadata?.columns), '["email_address"]');
   const drizzleReference = result.graph.edges.find((edge) => edge.from === "table:drizzle_events" && edge.to === "table:drizzle_accounts" && edge.type === "references");
   assert.deepEqual(drizzleReference?.metadata?.sourceColumns, ["account_id"]);
   assert.deepEqual(drizzleReference?.metadata?.targetColumns, ["id"]);
@@ -233,6 +236,14 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(viewerData.edges.some((edge) => edge.relation === "writes" && edge.kind === "data"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "adapter:CreateUserAdapter" && edge.to === "port:CreateUserPort" && edge.relation === "implements"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "references" && edge.details?.relation));
+  assert.ok(viewerData.nodes.some((node) => node.id === "table:dynamic_orders"));
+  assert.ok(viewerData.nodes.some((node) => node.id === "column:dynamic_orders.customerId"));
+  assert.ok(viewerData.nodes.some((node) => node.id === "index:dynamic_orders.idx_dynamic_orders_customer_id"));
+  assert.equal(
+    JSON.stringify(viewerData.nodes.find((node) => node.id === "index:dynamic_orders.idx_dynamic_orders_customer_id")?.details?.columns),
+    '["customerId"]',
+  );
+  assert.ok(!viewerData.nodes.some((node) => node.id.includes("${tableName}") || node.id.includes("${columnName}")));
   assert.ok(viewerData.nodes.filter((node) => node.type === "column").every((node) => !node.details?.plainDescriptionSource));
   assert.ok(viewerData.edges.some((edge) => edge.from === "controller:UsersController" && edge.to === "method:UsersController.create" && edge.verb === "declares"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "route:POST:/api/users" && edge.to === "method:UsersController.create" && edge.verb === "handled by"));

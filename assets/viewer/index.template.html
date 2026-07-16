@@ -986,7 +986,8 @@ class Component extends DCLogic {
     const horizontal = Math.abs(x2 - x1) > Math.abs(y2 - y1);
     const d = horizontal ? this.bez(x1, y1, x2, y2) : `M ${x1} ${y1} C ${x1} ${y1 + (y2 - y1) * 0.45}, ${x2} ${y2 - (y2 - y1) * 0.45}, ${x2} ${y2 > y1 ? y2 - 8 : y2 + 8}`;
     return {
-      id: 'e:' + e.from + '>' + e.to, d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
+      id: 'e:' + e.from + '>' + e.to, from: e.from, to: e.to,
+      d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
       w: hi ? 2.6 : (e.kind === 'async' ? 2 : (e.relation === 'writes' ? 1.8 : 1.5)), op: dim ? 0.14 : (hi ? 1 : (inferred ? 0.58 : (e.kind === 'async' ? 0.96 : 0.74))),
       showLabel: !!(showLabels && e.verb && !dim), verb: e.verb, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 7,
       moving: e.kind === 'async' && !dim, stationary: e.kind !== 'async' || dim,

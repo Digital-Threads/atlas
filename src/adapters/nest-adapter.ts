@@ -1299,12 +1299,20 @@ function addQueueNode(queue: string, file: string, addNode: NodeAdder, transport
 
 function addOrmIndex(tableId: string, tableName: string, decorator: Decorator, file: string, forceUnique: boolean, addNode: NodeAdder, addEdge: EdgeAdder, fallbackColumns: string[] = []) {
   const args = decorator.getArguments().map((argument) => argument.getText());
-  const configuredName = args.find((value) => /^['"`]/.test(value));
-  const columns = args.flatMap((value) => [...value.matchAll(/['"`]([A-Za-z_$][\w$]*)['"`]/g)].map((match) => match[1])).filter((value) => value !== configuredName?.replace(/^['"`]|['"`]$/g, ""));
+  const configuredName = args
+    .map((value) => value.match(/\bname\s*:\s*['"`]([^'"`]+)['"`]/)?.[1])
+    .find(Boolean)
+    ?? args.find((value) => /^['"`]/.test(value))?.replace(/^['"`]|['"`]$/g, "");
+  const configuredColumns = args.flatMap((value) => {
+    const explicit = value.match(/\b(?:fields|columns)\s*:\s*\[([\s\S]*?)\]/)?.[1]
+      ?? (/^\s*\[/.test(value) ? value : "");
+    return [...explicit.matchAll(/['"`]([A-Za-z_$][\w$]*)['"`]/g)].map((match) => match[1]);
+  });
+  const columns = fallbackColumns.length ? fallbackColumns : configuredColumns;
   const unique = forceUnique || args.some((value) => /unique\s*:\s*true/.test(value));
-  const name = configuredName?.replace(/^['"`]|['"`]$/g, "") || `${unique ? "uniq" : "idx"}_${tableName}_${(columns.length ? columns : fallbackColumns).join("_") || "custom"}`;
+  const name = configuredName || `${unique ? "uniq" : "idx"}_${tableName}_${columns.join("_") || "custom"}`;
   const id = `index:${tableName}.${name}`;
-  addNode({ id, type: "index", label: name, name, file, framework: "typeorm", source: "ast", confidence: 1, metadata: { columns: columns.length ? columns : fallbackColumns, unique, decorator: decorator.getName() } });
+  addNode({ id, type: "index", label: name, name, file, framework: "typeorm", source: "ast", confidence: 1, metadata: { columns, unique, decorator: decorator.getName() } });
   addEdge(id, tableId, "indexes");
 }
 

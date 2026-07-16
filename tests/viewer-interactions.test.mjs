@@ -54,6 +54,9 @@ test("trace explorer follows ports to their implementing adapters", async () => 
   assert.match(scene.status, /Complete for the selected filters/);
   assert.ok(scene.nodes.every((node) => [node.x, node.y, node.w, node.h].every(Number.isFinite)));
   assert.ok(scene.edges.every((edge) => edge.d.startsWith("M ") && !edge.d.includes("NaN")));
+  const optimized = viewer.optimizeScene(scene, null);
+  assert.equal(optimized.edges.length, scene.edges.length, "level-of-detail must preserve visible trace links");
+  assert.ok(optimized.edges.every((edge) => edge.from && edge.to), "optimized links must retain their graph endpoints");
 
   const adapter = scene.nodes.find((node) => node.id === "adapter:CreateUserAdapter");
   adapter.onClick({ preventDefault() {}, stopPropagation() {} });

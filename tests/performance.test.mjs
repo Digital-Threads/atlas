@@ -62,6 +62,11 @@ test("reuses unchanged analysis and invalidates it when source files change", as
   const first = await scanProject({ projectPath: project });
   assert.equal(first.metadata.cacheHit, false);
   assert.ok(first.metadata.filesHashed >= 2);
+  await writeFile(resolve(project, ".atlas/viewer/index.html"), "stale viewer");
+  const metadataPath = resolve(project, ".atlas/metadata.json");
+  const staleMetadata = JSON.parse(await readFile(metadataPath, "utf8"));
+  staleMetadata.viewerFingerprint = "previous-atlas-build";
+  await writeFile(metadataPath, JSON.stringify(staleMetadata));
 
   const warmStarted = performance.now();
   const warm = await scanProject({ projectPath: project });
@@ -70,6 +75,11 @@ test("reuses unchanged analysis and invalidates it when source files change", as
   assert.ok(warm.metadata.filesReused >= 2);
   assert.ok(performance.now() - warmStarted < 3000, "warm scan should finish in under 3 seconds");
   assert.equal(JSON.stringify(warm.graph), JSON.stringify(first.graph));
+  assert.match(
+    await readFile(resolve(project, ".atlas/viewer/index.html"), "utf8"),
+    /data-screen-label="Atlas app"/,
+    "a cache hit must still refresh viewer assets after an Atlas upgrade",
+  );
 
   await writeFile(source, "export const first = true;\nexport const second = true;\n");
   const changed = await scanProject({ projectPath: project });

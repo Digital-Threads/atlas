@@ -1,4 +1,5 @@
-import { access, copyFile, mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ArchitectureGraph, ArchitectureRisk, ScanMetadata } from "../core/types.js";
@@ -27,6 +28,35 @@ export async function writeOutputs(
     copyFile(resolve(viewerAssets, "react.production.min.js"), resolve(viewerPath, "react.production.min.js")),
     copyFile(resolve(viewerAssets, "react-dom.production.min.js"), resolve(viewerPath, "react-dom.production.min.js")),
   ]);
+}
+
+export async function refreshCachedViewer(
+  outputPath: string,
+  graph: ArchitectureGraph,
+  metadata: ScanMetadata,
+  risks: ArchitectureRisk[],
+): Promise<void> {
+  const viewerPath = resolve(outputPath, "viewer");
+  const viewerAssets = await findViewerAssets();
+  await mkdir(viewerPath, { recursive: true });
+  await Promise.all([
+    writeFile(resolve(outputPath, "metadata.json"), `${JSON.stringify(metadata, null, 2)}\n`),
+    writeFile(resolve(viewerPath, "atlas-data.js"), generateViewerData(graph, metadata, risks)),
+    copyFile(resolve(viewerAssets, "index.template.html"), resolve(viewerPath, "index.html")),
+    copyFile(resolve(viewerAssets, "support.js"), resolve(viewerPath, "support.js")),
+    copyFile(resolve(viewerAssets, "react.production.min.js"), resolve(viewerPath, "react.production.min.js")),
+    copyFile(resolve(viewerAssets, "react-dom.production.min.js"), resolve(viewerPath, "react-dom.production.min.js")),
+  ]);
+}
+
+export async function getViewerFingerprint(): Promise<string> {
+  const viewerAssets = await findViewerAssets();
+  const hash = createHash("sha256");
+  for (const file of ["index.template.html", "support.js", "react.production.min.js", "react-dom.production.min.js"]) {
+    hash.update(file);
+    hash.update(await readFile(resolve(viewerAssets, file)));
+  }
+  return hash.digest("hex");
 }
 
 async function findViewerAssets(): Promise<string> {

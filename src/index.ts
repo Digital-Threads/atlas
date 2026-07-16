@@ -8,7 +8,7 @@ import { GraphBuilder } from "./core/graph.js";
 import type { ArchitectureGraph, ArchitectureRisk, ScanMetadata, ScanOptions, ScanResult, ScannedFile } from "./core/types.js";
 import { detectStacks } from "./detector/stack-detector.js";
 import { generateReport } from "./output/report.js";
-import { writeOutputs } from "./output/writer.js";
+import { getViewerFingerprint, refreshCachedViewer, writeOutputs } from "./output/writer.js";
 import { detectRisks } from "./risks/risk-detector.js";
 import { scanFiles } from "./scanner/file-scanner.js";
 import { mergeRuntimeEvidence, readRuntimeEvents } from "./runtime/merge.js";
@@ -26,7 +26,7 @@ export { createNestRuntimeInterceptor, RuntimeTracer } from "./runtime/tracer.js
 export type { RuntimeTracerOptions } from "./runtime/tracer.js";
 export type { FileScanOptions, FileScanResult } from "./scanner/file-scanner.js";
 
-const ANALYSIS_CACHE_VERSION = 1;
+const ANALYSIS_CACHE_VERSION = 2;
 
 export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const started = Date.now();
@@ -44,6 +44,7 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
     useCache: options.incremental !== false,
   });
   const inputFingerprint = fingerprintFiles(fileScan.files);
+  const viewerFingerprint = await getViewerFingerprint();
   options.onProgress?.({
     stage: "scan_files",
     message: `${fileScan.files.length} files found (${fileScan.hashed} hashed, ${fileScan.reused} unchanged)`,
@@ -64,9 +65,15 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
         cacheHit: true,
         inputFingerprint,
         analysisCacheVersion: ANALYSIS_CACHE_VERSION,
+        viewerFingerprint,
       };
       options.onProgress?.({ stage: "parse_architecture", message: "No source changes. Reusing the cached architecture graph." });
-      await writeFile(resolve(outputPath, "metadata.json"), `${JSON.stringify(metadata, null, 2)}\n`);
+      if (cached.metadata.viewerFingerprint !== viewerFingerprint) {
+        options.onProgress?.({ stage: "write_outputs", message: "Refreshing viewer assets..." });
+        await refreshCachedViewer(outputPath, cached.graph, metadata, cached.risks);
+      } else {
+        await writeFile(resolve(outputPath, "metadata.json"), `${JSON.stringify(metadata, null, 2)}\n`);
+      }
       return { graph: cached.graph, metadata, risks: cached.risks, outputPath };
     }
   }
@@ -154,6 +161,7 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
     cacheHit: false,
     inputFingerprint,
     analysisCacheVersion: ANALYSIS_CACHE_VERSION,
+    viewerFingerprint,
     detectedStacks,
   };
   options.onProgress?.({ stage: "write_outputs", message: "Writing graph, report, and viewer..." });

@@ -110,6 +110,7 @@ export interface ScanMetadata {
   cacheHit?: boolean;
   inputFingerprint?: string;
   analysisCacheVersion?: number;
+  viewerFingerprint?: string;
   runtimeEvents?: number;
   runtimeMergedAt?: string;
   runtimeFingerprint?: string;
