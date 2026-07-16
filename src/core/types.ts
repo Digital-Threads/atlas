@@ -27,6 +27,7 @@ export type GraphSourceType =
   | "config"
   | "package_json"
   | "heuristic"
+  | "runtime"
   | "manual";
 
 export interface SourceLocation {
@@ -109,6 +110,9 @@ export interface ScanMetadata {
   cacheHit?: boolean;
   inputFingerprint?: string;
   analysisCacheVersion?: number;
+  runtimeEvents?: number;
+  runtimeMergedAt?: string;
+  runtimeFingerprint?: string;
   detectedStacks: DetectedStack[];
 }
 
@@ -163,4 +167,23 @@ export interface ScanResult {
   metadata: ScanMetadata;
   risks: ArchitectureRisk[];
   outputPath: string;
+}
+
+export interface RuntimeTraceNode {
+  id: string;
+  type: GraphNodeType;
+  label?: string;
+  file?: string;
+}
+
+export interface RuntimeTraceEvent {
+  from: string;
+  to: string;
+  type: GraphEdgeType;
+  timestamp?: string;
+  count?: number;
+  durationMs?: number;
+  fromNode?: RuntimeTraceNode;
+  toNode?: RuntimeTraceNode;
+  metadata?: Record<string, unknown>;
 }

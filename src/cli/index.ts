@@ -68,6 +68,18 @@ program.command("report")
     console.log(`Report created: ${await regenerateReport(resolve(path), output)}`);
   });
 
+program.command("merge-runtime")
+  .description("Merge locally observed runtime links into the generated architecture graph")
+  .option("-p, --path <path>", "project root", ".")
+  .option("-o, --output <path>", "Atlas output directory relative to the project", ".atlas")
+  .option("-i, --input <path>", "runtime JSONL file relative to the project")
+  .action(async ({ path, output, input }) => {
+    const { mergeRuntimeTrace } = await import("../index.js");
+    const result = await mergeRuntimeTrace(path, output, input);
+    console.log(`Runtime evidence merged: ${result.metadata.runtimeEvents ?? 0} observations`);
+    console.log(`Graph updated: ${result.graph.stats.totalNodes} nodes, ${result.graph.stats.totalEdges} edges`);
+  });
+
 program.command("mcp")
   .description("Start the Atlas MCP server over stdio")
   .option("-p, --path <path>", "project root", ".")

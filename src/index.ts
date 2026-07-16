@@ -11,6 +11,7 @@ import { generateReport } from "./output/report.js";
 import { writeOutputs } from "./output/writer.js";
 import { detectRisks } from "./risks/risk-detector.js";
 import { scanFiles } from "./scanner/file-scanner.js";
+import { mergeRuntimeEvidence, readRuntimeEvents } from "./runtime/merge.js";
 
 export * from "./core/types.js";
 export { enrichGraphDescriptions } from "./core/descriptions.js";
@@ -20,6 +21,9 @@ export { generateReport } from "./output/report.js";
 export { getBrowserLaunch, openBrowser } from "./server/open-browser.js";
 export { serveViewer } from "./server/viewer-server.js";
 export { scanFiles } from "./scanner/file-scanner.js";
+export { mergeRuntimeEvidence, readRuntimeEvents } from "./runtime/merge.js";
+export { createNestRuntimeInterceptor, RuntimeTracer } from "./runtime/tracer.js";
+export type { RuntimeTracerOptions } from "./runtime/tracer.js";
 export type { FileScanOptions, FileScanResult } from "./scanner/file-scanner.js";
 
 const ANALYSIS_CACHE_VERSION = 1;
@@ -172,6 +176,34 @@ export async function regenerateReport(projectPath: string, outputPath = ".atlas
   return resolve(output, "report.md");
 }
 
+export async function mergeRuntimeTrace(
+  projectPath: string,
+  outputPath = ".atlas",
+  inputPath?: string,
+): Promise<ScanResult> {
+  const projectRoot = resolve(projectPath);
+  const output = resolve(projectRoot, outputPath);
+  const trace = resolve(projectRoot, inputPath ?? `${outputPath}/runtime.jsonl`);
+  const [graph, metadata, risks, events] = await Promise.all([
+    readFile(resolve(output, "graph.json"), "utf8").then((value) => JSON.parse(value) as ArchitectureGraph),
+    readFile(resolve(output, "metadata.json"), "utf8").then((value) => JSON.parse(value) as ScanMetadata),
+    readFile(resolve(output, "risks.json"), "utf8").then((value) => JSON.parse(value) as ArchitectureRisk[]),
+    readRuntimeEvents(trace),
+  ]);
+  const runtimeFingerprint = fingerprintRuntimeEvents(events);
+  if (!events.length) throw new Error(`No runtime observations found in ${trace}`);
+  if (metadata.runtimeFingerprint === runtimeFingerprint) return { graph, metadata, risks, outputPath: output };
+  const mergedGraph = mergeRuntimeEvidence(graph, events);
+  const mergedMetadata: ScanMetadata = {
+    ...metadata,
+    runtimeEvents: events.reduce((total, event) => total + Math.max(1, event.count ?? 1), 0),
+    runtimeMergedAt: new Date().toISOString(),
+    runtimeFingerprint,
+  };
+  await writeOutputs(output, mergedGraph, mergedMetadata, risks);
+  return { graph: mergedGraph, metadata: mergedMetadata, risks, outputPath: output };
+}
+
 function addFileHierarchy(builder: GraphBuilder, projectRoot: string, files: string[]) {
   const folders = new Set<string>();
   for (const file of files) {
@@ -211,6 +243,10 @@ function fingerprintFiles(files: ScannedFile[]): string {
     hash.update("\0");
   }
   return hash.digest("hex");
+}
+
+function fingerprintRuntimeEvents(events: import("./core/types.js").RuntimeTraceEvent[]): string {
+  return createHash("sha256").update(JSON.stringify(events)).digest("hex");
 }
 
 async function loadCachedAnalysis(
