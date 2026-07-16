@@ -69,7 +69,7 @@ test("reuses unchanged analysis and invalidates it when source files change", as
   assert.equal(warm.metadata.filesHashed, 0);
   assert.ok(warm.metadata.filesReused >= 2);
   assert.ok(performance.now() - warmStarted < 3000, "warm scan should finish in under 3 seconds");
-  assert.deepEqual(warm.graph, first.graph);
+  assert.equal(JSON.stringify(warm.graph), JSON.stringify(first.graph));
 
   await writeFile(source, "export const first = true;\nexport const second = true;\n");
   const changed = await scanProject({ projectPath: project });

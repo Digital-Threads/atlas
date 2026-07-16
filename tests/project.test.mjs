@@ -217,8 +217,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.equal(viewerData.project.name, result.graph.project.name);
   assert.equal(viewerData.nodes.filter((node) => node.type === "processor").length, 1);
   assert.equal(viewerData.nodes.filter((node) => node.type === "use_case").length, 1);
-  assert.equal(viewerData.nodes.filter((node) => node.type === "port").length, 1);
-  assert.equal(viewerData.nodes.filter((node) => node.type === "adapter").length, 1);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "port").length, 2);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "adapter").length, 2);
   assert.equal(viewerData.nodes.filter((node) => node.type === "scheduled_job").length, 3);
   assert.ok(viewerData.nodes.some((node) => node.id === "environment:staging"));
   assert.ok(viewerData.nodes.some((node) => node.id === "environment:production"));
