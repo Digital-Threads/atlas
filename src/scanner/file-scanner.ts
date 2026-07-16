@@ -111,7 +111,7 @@ export async function scanFiles(projectRoot: string, options: FileScanOptions = 
   }
 
   await walk(root, true);
-  const results = await mapConcurrent(candidates, options.concurrency ?? 32, async (candidate) => {
+  const results = await mapConcurrent<FileCandidate, ScannedFile | null>(candidates, options.concurrency ?? 32, async (candidate) => {
     try {
       const fileStat = await stat(candidate.absolutePath);
       const lastModified = fileStat.mtime.toISOString();

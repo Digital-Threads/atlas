@@ -1111,8 +1111,9 @@ function parseCqrsCalls(info: ClassInfo, method: MethodDeclaration, methodId: st
     const typeName = info.constructorTypes.get(property) ?? "";
     const kind = /CommandBus/i.test(typeName) ? "command" : /QueryBus/i.test(typeName) ? "query" : /EventBus/i.test(typeName) ? "event" : null;
     if (!kind) continue;
-    const argumentsToInspect = operation === "publishAll" && Node.isArrayLiteralExpression(call.getArguments()[0])
-      ? call.getArguments()[0].getElements()
+    const firstArgument = call.getArguments()[0];
+    const argumentsToInspect = operation === "publishAll" && firstArgument && Node.isArrayLiteralExpression(firstArgument)
+      ? firstArgument.getElements()
       : call.getArguments();
     for (const argument of argumentsToInspect) {
       const messageName = argument.getText().match(/new\s+([A-Z][A-Za-z0-9_$]*)|^([A-Z][A-Za-z0-9_$]*)$/)?.slice(1).find(Boolean);
