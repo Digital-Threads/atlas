@@ -11,6 +11,7 @@ program.command("scan")
   .option("-p, --path <path>", "project root", ".")
   .option("-o, --output <path>", "output directory relative to the project", ".atlas")
   .option("--format <format>", "output format", "json")
+  .option("--no-cache", "ignore the previous Atlas analysis and scan everything again")
   .option("--debug", "show diagnostic details", false)
   .action(async (options) => {
     if (options.format !== "json") throw new Error(`Unsupported format: ${options.format}. Use json.`);
@@ -19,6 +20,7 @@ program.command("scan")
     const result = await scanProject({
       projectPath: options.path,
       outputPath: options.output,
+      incremental: options.cache,
       debug: options.debug,
       onProgress: ({ message }) => console.log(message),
     });

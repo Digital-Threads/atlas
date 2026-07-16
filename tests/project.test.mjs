@@ -471,6 +471,9 @@ test("uses a custom output directory across CLI, report, server, and MCP", async
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /--output <path>/);
   }
+  const scanHelp = spawnSync(process.execPath, [cli, "scan", "--help"], { encoding: "utf8" });
+  assert.equal(scanHelp.status, 0, scanHelp.stderr);
+  assert.match(scanHelp.stdout, /--no-cache/);
 });
 
 test("rejects unsupported output formats with a clear CLI error", () => {

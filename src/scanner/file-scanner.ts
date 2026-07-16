@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { extname, relative, resolve } from "node:path";
 import createIgnore from "ignore";
 import type { ScannedFile } from "../core/types.js";
@@ -19,17 +20,44 @@ const supportedNames = new Set(["dockerfile", "jenkinsfile"]);
 export interface FileScanResult {
   files: ScannedFile[];
   ignored: number;
+  hashed: number;
+  reused: number;
 }
 
 export interface FileScanOptions {
   ignoredPaths?: string[];
+  cachePath?: string;
+  useCache?: boolean;
+  concurrency?: number;
+}
+
+interface FileManifestEntry {
+  size: number;
+  lastModified: string;
+  hash?: string;
+}
+
+interface FileManifest {
+  version: 1;
+  files: Record<string, FileManifestEntry>;
+}
+
+interface FileCandidate {
+  absolutePath: string;
+  path: string;
+  extension: string;
+  isEnv: boolean;
 }
 
 export async function scanFiles(projectRoot: string, options: FileScanOptions = {}): Promise<FileScanResult> {
   const root = resolve(projectRoot);
   const files: ScannedFile[] = [];
+  const candidates: FileCandidate[] = [];
   const ignoreRules = createIgnore();
   let ignored = 0;
+  let hashed = 0;
+  let reused = 0;
+  const manifest = options.useCache === false ? null : await readManifest(options.cachePath);
   const gitignore = await readFile(resolve(root, ".gitignore"), "utf8").catch(() => "");
   if (gitignore) ignoreRules.add(gitignore);
   for (const path of options.ignoredPaths ?? []) {
@@ -73,24 +101,80 @@ export async function scanFiles(projectRoot: string, options: FileScanOptions = 
         ignored += 1;
         continue;
       }
-      try {
-        const fileStat = await stat(absolutePath);
-        const hash = isEnv ? undefined : createHash("sha256").update(await readFile(absolutePath)).digest("hex");
-        files.push({
-          absolutePath,
-          path: projectPath,
-          extension: isEnv ? ".env" : (isNamedConfig ? normalizedName : extension),
-          size: fileStat.size,
-          hash,
-          lastModified: fileStat.mtime.toISOString(),
-        });
-      } catch {
-        ignored += 1;
-      }
+      candidates.push({
+        absolutePath,
+        path: projectPath,
+        extension: isEnv ? ".env" : (isNamedConfig ? normalizedName : extension),
+        isEnv,
+      });
     }
   }
 
   await walk(root, true);
+  const results = await mapConcurrent(candidates, options.concurrency ?? 32, async (candidate) => {
+    try {
+      const fileStat = await stat(candidate.absolutePath);
+      const lastModified = fileStat.mtime.toISOString();
+      const previous = manifest?.files[candidate.path];
+      let hash: string | undefined;
+      if (!candidate.isEnv && previous?.hash && previous.size === fileStat.size && previous.lastModified === lastModified) {
+        hash = previous.hash;
+        reused += 1;
+      } else if (!candidate.isEnv) {
+        hash = createHash("sha256").update(await readFile(candidate.absolutePath)).digest("hex");
+        hashed += 1;
+      }
+      return {
+        absolutePath: candidate.absolutePath,
+        path: candidate.path,
+        extension: candidate.extension,
+        size: fileStat.size,
+        hash,
+        lastModified,
+      } satisfies ScannedFile;
+    } catch {
+      ignored += 1;
+      return null;
+    }
+  });
+  files.push(...results.filter((file): file is ScannedFile => Boolean(file)));
   files.sort((a, b) => a.path.localeCompare(b.path));
-  return { files, ignored };
+  await writeManifest(options.cachePath, files);
+  return { files, ignored, hashed, reused };
+}
+
+async function readManifest(path?: string): Promise<FileManifest | null> {
+  if (!path) return null;
+  try {
+    const parsed = JSON.parse(await readFile(path, "utf8")) as FileManifest;
+    return parsed.version === 1 && parsed.files && typeof parsed.files === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeManifest(path: string | undefined, files: ScannedFile[]): Promise<void> {
+  if (!path) return;
+  const entries = Object.fromEntries(files.map((file) => [file.path, {
+    size: file.size,
+    lastModified: file.lastModified,
+    ...(file.hash ? { hash: file.hash } : {}),
+  }]));
+  const manifest: FileManifest = { version: 1, files: entries };
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(manifest)}\n`);
+}
+
+async function mapConcurrent<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(Math.floor(concurrency), items.length || 1));
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(items[index]);
+    }
+  }));
+  return results;
 }

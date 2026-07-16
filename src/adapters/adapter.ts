@@ -4,6 +4,7 @@ export interface AdapterContext {
   projectRoot: string;
   files: ScannedFile[];
   detectedStacks: DetectedStack[];
+  readFile: (file: ScannedFile) => Promise<string>;
   debug?: boolean;
 }
 

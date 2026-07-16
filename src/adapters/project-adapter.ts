@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { loadAll } from "js-yaml";
 import type { GraphEdge, GraphNode, ScannedFile } from "../core/types.js";
@@ -29,7 +28,6 @@ export class ProjectAdapter implements ArchitectureAdapter {
     const nodes = new Map<string, GraphNode>();
     const edges: AdapterResult["edges"] = [];
     const warnings: string[] = [];
-    const contents = new Map<string, string>();
     const addNode: AddNode = (node) => nodes.set(node.id, {
       ...nodes.get(node.id), ...node, metadata: { ...nodes.get(node.id)?.metadata, ...node.metadata },
     });
@@ -37,54 +35,58 @@ export class ProjectAdapter implements ArchitectureAdapter {
       const relationshipKey = typeof metadata?.relationshipKey === "string" ? metadata.relationshipKey : "";
       edges.push({ from, to, type, label: relationshipKey ? `${type}#${relationshipKey}` : type, source: "config", confidence: 1, metadata });
     };
-    const contentOf = async (file: ScannedFile) => {
-      if (contents.has(file.path)) return contents.get(file.path)!;
-      const content = await readFile(file.absolutePath, "utf8").catch(() => "");
-      contents.set(file.path, content);
-      return content;
-    };
+    const contentOf = (file: ScannedFile) => context.readFile(file);
 
     const packageFile = context.files.find((file) => file.path === "package.json");
     const packageText = packageFile ? await contentOf(packageFile) : "";
     const clickHouseProject = /@clickhouse\/client|clickhouse-js|clickhouse/i.test(packageText);
 
-    for (const file of context.files.filter((item) => item.extension === ".env")) {
-      parseEnvironmentContract(file, await contentOf(file), addNode, addEdge);
-    }
-
-    for (const file of context.files.filter((item) => item.extension === ".sql" || isMigrationFile(item))) {
-      const content = await contentOf(file);
-      const fragments = file.extension === ".sql" ? [content] : extractSqlFragments(content);
-      parseSqlFile(file, fragments, clickHouseProject, addNode, addEdge);
-    }
-
-    for (const file of context.files.filter((item) => [".ts", ".js"].includes(item.extension))) {
-      const content = await contentOf(file);
-      parseSchedules(file, content, addNode, addEdge);
-      parseRepeatableJobs(file, content, addNode, addEdge);
-      if (/CREATE\s+(?:MATERIALIZED\s+VIEW|TABLE)|ALTER\s+TABLE/i.test(content) && /clickhouse|MergeTree|PARTITION\s+BY/i.test(content)) {
-        parseSqlFile(file, extractSqlFragments(content), true, addNode, addEdge);
-      }
-    }
-
-    for (const file of context.files.filter((item) => isWorkflowFile(item.path))) {
-      parseWorkflow(file, await contentOf(file), addNode, addEdge, warnings);
-    }
-
-    for (const file of context.files.filter((item) => item.extension.startsWith("dockerfile"))) {
-      parseDockerfile(file, await contentOf(file), context.projectRoot, addNode, addEdge);
-    }
-
-    for (const file of context.files.filter((item) => [".yml", ".yaml", ".tpl"].includes(item.extension))) {
-      const content = await contentOf(file);
-      if (isWorkflowFile(file.path)) continue;
-      if (isComposeFile(file.path, content)) parseCompose(file, content, addNode, addEdge, warnings);
-      if (isKubernetesFile(file.path, content)) parseKubernetes(file, content, addNode, addEdge, warnings);
-    }
+    await Promise.all([
+      forEachConcurrent(context.files.filter((item) => item.extension === ".env"), 16, async (file) => {
+        parseEnvironmentContract(file, await contentOf(file), addNode, addEdge);
+      }),
+      forEachConcurrent(context.files.filter((item) => item.extension === ".sql" || isMigrationFile(item)), 16, async (file) => {
+        const content = await contentOf(file);
+        const fragments = file.extension === ".sql" ? [content] : extractSqlFragments(content);
+        parseSqlFile(file, fragments, clickHouseProject, addNode, addEdge);
+      }),
+      forEachConcurrent(context.files.filter((item) => [".ts", ".js"].includes(item.extension)), 16, async (file) => {
+        const content = await contentOf(file);
+        parseSchedules(file, content, addNode, addEdge);
+        parseRepeatableJobs(file, content, addNode, addEdge);
+        if (/CREATE\s+(?:MATERIALIZED\s+VIEW|TABLE)|ALTER\s+TABLE/i.test(content) && /clickhouse|MergeTree|PARTITION\s+BY/i.test(content)) {
+          parseSqlFile(file, extractSqlFragments(content), true, addNode, addEdge);
+        }
+      }),
+      forEachConcurrent(context.files.filter((item) => isWorkflowFile(item.path)), 8, async (file) => {
+        parseWorkflow(file, await contentOf(file), addNode, addEdge, warnings);
+      }),
+      forEachConcurrent(context.files.filter((item) => item.extension.startsWith("dockerfile")), 8, async (file) => {
+        parseDockerfile(file, await contentOf(file), context.projectRoot, addNode, addEdge);
+      }),
+      forEachConcurrent(context.files.filter((item) => [".yml", ".yaml", ".tpl"].includes(item.extension)), 8, async (file) => {
+        const content = await contentOf(file);
+        if (isWorkflowFile(file.path)) return;
+        if (isComposeFile(file.path, content)) parseCompose(file, content, addNode, addEdge, warnings);
+        if (isKubernetesFile(file.path, content)) parseKubernetes(file, content, addNode, addEdge, warnings);
+      }),
+    ]);
 
     resolveInfrastructureEdges(nodes, edges);
     return { nodes: [...nodes.values()], edges, warnings };
   }
+}
+
+async function forEachConcurrent<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length || 1));
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      await worker(items[index]);
+    }
+  }));
 }
 
 function isProjectConfig(file: ScannedFile): boolean {

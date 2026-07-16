@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { basename, relative, resolve } from "node:path";
 import {
   Node,
@@ -144,8 +143,10 @@ export class NestAdapter implements ArchitectureAdapter {
       if (isTestFile(file)) parseTest(sourceFile, file, classes, addNode, addEdge);
     }
 
-    await parseEnvironmentFiles(context, addNode, addEdge);
-    await parsePackageJson(context, addNode, addEdge);
+    await Promise.all([
+      parseEnvironmentFiles(context, addNode, addEdge),
+      parsePackageJson(context, addNode, addEdge),
+    ]);
 
     if (!classes.size) warnings.push("NestJS was detected, but no supported decorated classes were found.");
     return { nodes: [...nodes.values()], edges, warnings };
@@ -604,7 +605,7 @@ function parseSequelize(info: ClassInfo, classes: ClassRegistry, addNode: NodeAd
 async function parsePrisma(context: AdapterContext, addNode: NodeAdder, addEdge: EdgeAdder) {
   const schema = context.files.find((file) => file.path.endsWith("schema.prisma"));
   if (!schema) return;
-  const content = await readFile(schema.absolutePath, "utf8").catch(() => "");
+  const content = await context.readFile(schema);
   if (!content) return;
   addNode({ id: "database:prisma", type: "database", label: "Prisma", name: "Prisma", file: schema.path, framework: "prisma", source: "config", confidence: 1 });
   const models = [...content.matchAll(/model\s+(\w+)\s*\{([\s\S]*?)\}/g)].map((match) => ({ name: match[1], body: match[2] }));
@@ -812,7 +813,7 @@ function parseTest(sourceFile: SourceFile, file: string, classes: ClassRegistry,
 
 async function parseEnvironmentFiles(context: AdapterContext, addNode: NodeAdder, addEdge: EdgeAdder) {
   for (const file of context.files.filter((item) => item.extension === ".env")) {
-    const content = await readFile(file.absolutePath, "utf8").catch(() => "");
+    const content = await context.readFile(file);
     for (const line of content.split(/\r?\n/)) {
       const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
       if (!match) continue;
@@ -827,7 +828,7 @@ async function parsePackageJson(context: AdapterContext, addNode: NodeAdder, add
   const packageFile = context.files.find((file) => file.path === "package.json");
   if (!packageFile) return;
   try {
-    const packageJson = JSON.parse(await readFile(packageFile.absolutePath, "utf8"));
+    const packageJson = JSON.parse(await context.readFile(packageFile));
     const packageNodeId = "package:root";
     addNode({
       id: packageNodeId,

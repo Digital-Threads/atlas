@@ -104,6 +104,11 @@ export interface ScanMetadata {
   durationMs: number;
   filesScanned: number;
   filesIgnored: number;
+  filesHashed?: number;
+  filesReused?: number;
+  cacheHit?: boolean;
+  inputFingerprint?: string;
+  analysisCacheVersion?: number;
   detectedStacks: DetectedStack[];
 }
 
@@ -148,6 +153,7 @@ export interface ScanProgress {
 export interface ScanOptions {
   projectPath: string;
   outputPath?: string;
+  incremental?: boolean;
   debug?: boolean;
   onProgress?: (progress: ScanProgress) => void;
 }

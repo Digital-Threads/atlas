@@ -50,3 +50,33 @@ test("scans the documented upper-bound NestJS fixture in under 30 seconds", asyn
   assert.ok(performance.now() - viewerStarted < 3000, "Cytoscape should initialize a 5,000-node graph in under 3 seconds");
   cy.destroy();
 });
+
+test("reuses unchanged analysis and invalidates it when source files change", async () => {
+  const project = await mkdtemp(resolve(tmpdir(), "atlas-incremental-"));
+  const src = resolve(project, "src");
+  await mkdir(src, { recursive: true });
+  await writeFile(resolve(project, "package.json"), JSON.stringify({ name: "atlas-incremental" }));
+  const source = resolve(src, "index.ts");
+  await writeFile(source, "export const first = true;\n");
+
+  const first = await scanProject({ projectPath: project });
+  assert.equal(first.metadata.cacheHit, false);
+  assert.ok(first.metadata.filesHashed >= 2);
+
+  const warmStarted = performance.now();
+  const warm = await scanProject({ projectPath: project });
+  assert.equal(warm.metadata.cacheHit, true);
+  assert.equal(warm.metadata.filesHashed, 0);
+  assert.ok(warm.metadata.filesReused >= 2);
+  assert.ok(performance.now() - warmStarted < 3000, "warm scan should finish in under 3 seconds");
+  assert.deepEqual(warm.graph, first.graph);
+
+  await writeFile(source, "export const first = true;\nexport const second = true;\n");
+  const changed = await scanProject({ projectPath: project });
+  assert.equal(changed.metadata.cacheHit, false);
+  assert.ok(changed.metadata.filesHashed >= 1);
+
+  const forced = await scanProject({ projectPath: project, incremental: false });
+  assert.equal(forced.metadata.cacheHit, false);
+  assert.ok(forced.metadata.filesHashed >= 2);
+});
