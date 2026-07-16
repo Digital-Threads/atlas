@@ -5,6 +5,8 @@ Atlas is a local architecture intelligence engine for NestJS projects, developed
 typed graph of the application, highlights architectural risks, and provides a
 browser viewer and MCP tools for exploring the result.
 
+![Atlas architecture explorer demo](https://raw.githubusercontent.com/Digital-Threads/atlas/main/docs/atlas-demo.gif)
+
 Atlas helps answer practical questions about an unfamiliar backend:
 
 - Which route calls which controller, service, and database table?
