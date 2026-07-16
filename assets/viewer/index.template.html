@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 101138)
-Total output lines: 2939
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -363,7 +360,52 @@ Total output lines: 2939
         <sc-if value="{{ isExplorer }}" hint-placeholder-val="{{ true }}">
 
           <!-- Catalog -->
-          <sc-if value="{{ catalogVisib…1138 tokens truncated…t="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7d8a84"></path></marker>
+          <sc-if value="{{ catalogVisible }}" hint-placeholder-val="{{ true }}">
+            <aside class="atlas-catalog" aria-label="Catalog" style="width: 236px; flex: 0 0 auto; border-right: 1px solid #dde3e0; background: #fafbfa; display: flex; flex-direction: column; min-height: 0;">
+              <div style="flex: 0 0 auto; padding: 10px 10px 8px; display: grid; gap: 7px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                  <strong style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #4e5a56;">{{ catalogTitle }}</strong>
+                  <span style="font-size: 10.5px; color: #8b9793;">{{ catalogCount }}</span>
+                </div>
+                <input value="{{ catQ }}" onChange="{{ onCatQ }}" placeholder="Filter…" aria-label="Filter list" style="height: 28px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 0 8px; font-size: 12px; outline: none;" style-focus="border-color: #77978c;">
+              </div>
+              <div style="flex: 1; min-height: 0; overflow: auto; border-top: 1px solid #e6eae8;">
+                <sc-for list="{{ catalogItems }}" as="item" hint-placeholder-count="8">
+                  <sc-if value="{{ item.isGroup }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding: 9px 12px 3px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8b9793;">{{ item.label }}</div>
+                  </sc-if>
+                  <sc-if value="{{ item.isNode }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ item.go }}" title="{{ item.tip }}" style="display: grid; grid-template-columns: auto minmax(0,1fr); gap: 8px; align-items: start; width: 100%; border: 0; border-bottom: 1px solid #eef1ef; background: {{ item.bg }}; padding: 8px 12px; text-align: left;" style-hover="background: #edf4f1;">
+                      <i style="width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; background: {{ item.color }};"></i>
+                      <span style="min-width: 0;">
+                        <strong style="display: block; font-size: 12px; font-weight: {{ item.fw }}; overflow-wrap: anywhere;">{{ item.label }}</strong>
+                        <small style="display: block; font-size: 10px; color: #77837e; margin-top: 1px; overflow-wrap: anywhere;">{{ item.sub }}</small>
+                      </span>
+                    </button>
+                  </sc-if>
+                </sc-for>
+                <sc-if value="{{ showCatalogMore }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 10px 12px 14px;">
+                    <button onClick="{{ loadMoreCatalog }}" style="width: 100%; height: 30px; border: 1px solid #cfd8d4; border-radius: 6px; background: #fff; color: #31564b; font-size: 11.5px; font-weight: 650;" style-hover="background: #edf4f1; border-color: #8eaaa0;">Show next {{ catalogMoreCount }}</button>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ catalogEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 16px 12px; font-size: 12px; color: #6b7873;">
+                    No matches for “{{ catQ }}”.
+                    <button onClick="{{ clearCatQ }}" style="display: block; margin-top: 8px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; padding: 5px 9px; font-size: 11.5px;" style-hover="background: #f2f5f4;">Clear filter</button>
+                  </div>
+                </sc-if>
+              </div>
+            </aside>
+          </sc-if>
+
+          <!-- Graph pane -->
+          <section aria-label="Map" style="flex: 1; min-width: 0; min-height: 0; position: relative; background: #f7f9f8; overflow: hidden;">
+            <div style="position: absolute; inset: 0; background-image: radial-gradient(#d3dad6 1px, transparent 1px); background-size: 22px 22px; opacity: 0.5; pointer-events: none;"></div>
+
+            <svg ref="{{ svgRef }}" sc-camel-view-box="{{ vbStr }}" preserveAspectRatio="xMidYMid meet" onClick="{{ onCanvasClick }}" onWheel="{{ onWheel }}" onPointerDown="{{ onPanStart }}" onPointerMove="{{ onPanMove }}" onPointerUp="{{ onPanEnd }}" onPointerCancel="{{ onPanEnd }}" style="position: absolute; inset: 0; width: 100%; height: 100%; cursor: {{ svgCursor }}; touch-action: none; user-select: none; -webkit-user-select: none;">
+              <defs>
+                <marker id="arr-sync" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7d8a84"></path></marker>
                 <marker id="arr-async" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#0f7895"></path></marker>
                 <marker id="arr-data-read" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#3c987c"></path></marker>
                 <marker id="arr-data-write" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#176f59"></path></marker>
