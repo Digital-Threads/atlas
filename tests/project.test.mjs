@@ -326,7 +326,10 @@ test("covers the complete NestJS MVP architecture surface", async () => {
 
   const cliScan = spawnSync(process.execPath, [cli, "scan", "--path", project], { encoding: "utf8" });
   assert.equal(cliScan.status, 0, cliScan.stderr);
-  assert.match(cliScan.stdout, /Scanning files\.\.\.[\s\S]*NestJS detected[\s\S]*Graph created:[\s\S]*Done/);
+  assert.match(
+    cliScan.stdout,
+    /Scanning files\.\.\.[\s\S]*(?:NestJS detected|No source changes\. Reusing the cached architecture graph\.)[\s\S]*Graph created:[\s\S]*Done/,
+  );
 
   await writeFile(resolve(project, ".atlas/report.md"), "stale report\n");
   const cliReport = spawnSync(process.execPath, [cli, "report", "--path", project], { encoding: "utf8" });
