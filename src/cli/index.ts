@@ -2,9 +2,10 @@
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Command } from "commander";
+import { ATLAS_VERSION } from "../version.js";
 
 const program = new Command();
-program.name("atlas").description("Local architecture intelligence for NestJS projects").version("0.1.0");
+program.name("atlas").description("Local architecture intelligence for NestJS projects").version(ATLAS_VERSION);
 
 program.command("scan")
   .description("Scan a local NestJS project and generate its architecture graph")

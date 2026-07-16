@@ -8,6 +8,7 @@ import type {
   GraphSubgraph,
 } from "./types.js";
 import { graphEdgeTypes, graphNodeTypes } from "./types.js";
+import { ATLAS_VERSION } from "../version.js";
 
 const validNodeTypes = new Set<string>(graphNodeTypes);
 const validEdgeTypes = new Set<string>(graphEdgeTypes);
@@ -60,7 +61,7 @@ export class GraphBuilder {
   toGraph(project: ArchitectureGraph["project"]): ArchitectureGraph {
     const nodes = [...this.nodes.values()].sort((a, b) => a.id.localeCompare(b.id));
     const edges = [...this.edges.values()].sort((a, b) => a.id.localeCompare(b.id));
-    return { version: "0.1.0", project, nodes, edges, stats: buildStats(nodes, edges) };
+    return { version: ATLAS_VERSION, project, nodes, edges, stats: buildStats(nodes, edges) };
   }
 }
 

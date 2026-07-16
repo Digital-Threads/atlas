@@ -503,4 +503,6 @@ test("identifies Atlas as a publishable Digital Threads package", async () => {
   assert.equal(packageJson.author, "Digital Threads");
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.private, false);
+  const cliSource = await readFile(resolve(here, "../src/version.ts"), "utf8");
+  assert.match(cliSource, new RegExp(`ATLAS_VERSION\\s*=\\s*["']${packageJson.version.replaceAll(".", "\\.")}["']`));
 });

@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import test from "node:test";
 import cytoscape from "cytoscape";
-import { scanProject } from "../dist/index.js";
+import { GraphQuery, scanProject } from "../dist/index.js";
 
 test("scans the documented upper-bound NestJS fixture in under 30 seconds", async () => {
   const project = await mkdtemp(resolve(tmpdir(), "atlas-scale-"));
@@ -79,4 +79,40 @@ test("reuses unchanged analysis and invalidates it when source files change", as
   const forced = await scanProject({ projectPath: project, incremental: false });
   assert.equal(forced.metadata.cacheHit, false);
   assert.ok(forced.metadata.filesHashed >= 2);
+});
+
+test("serves repeated graph queries from indexes on a large graph", () => {
+  const nodes = Array.from({ length: 20_000 }, (_, index) => ({
+    id: `service:Service${index}`,
+    type: "service",
+    label: `Service ${index}`,
+    source: "ast",
+    confidence: 1,
+  }));
+  const edges = Array.from({ length: 50_000 }, (_, index) => ({
+    id: `edge:${index}`,
+    from: `service:Service${index % nodes.length}`,
+    to: `service:Service${(index * 17 + 1) % nodes.length}`,
+    type: "calls",
+    source: "ast",
+    confidence: 1,
+  }));
+  const graph = {
+    version: "0.3.0",
+    project: { name: "query-scale", root: ".", detectedStacks: ["nestjs"], createdAt: new Date().toISOString() },
+    nodes,
+    edges,
+    stats: { totalNodes: nodes.length, totalEdges: edges.length, byNodeType: { service: nodes.length }, byEdgeType: { calls: edges.length } },
+  };
+
+  const started = performance.now();
+  const query = new GraphQuery(graph);
+  let relationships = 0;
+  for (let index = 0; index < 20_000; index += 1) {
+    relationships += query.getIncoming(`service:Service${index}`).length;
+    relationships += query.getOutgoing(`service:Service${index}`).length;
+  }
+  const duration = performance.now() - started;
+  assert.equal(relationships, edges.length * 2);
+  assert.ok(duration < 2000, `indexed graph queries took ${Math.round(duration)}ms`);
 });

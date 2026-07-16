@@ -87,7 +87,7 @@ Then open [http://localhost:4317](http://localhost:4317).
 Scans a project and writes the graph, metadata, risks, report, and viewer.
 
 ```bash
-atlas scan [--path <project>] [--output <directory>] [--debug]
+atlas scan [--path <project>] [--output <directory>] [--no-cache] [--debug]
 ```
 
 `--path` defaults to the current directory. `--output` defaults to `.atlas`
@@ -95,10 +95,32 @@ relative to the project root. Use `--debug` to print non-fatal analyzer warnings
 When you choose a custom output directory, pass the same `--output` value to
 `open`, `serve`, `report`, and `mcp`.
 
+Atlas keeps a local file manifest and reuses the generated architecture graph when
+the supported source and configuration files have not changed. A warm scan avoids
+parsing the project again. Use `--no-cache` after changing analyzer configuration or
+whenever you explicitly want a complete scan:
+
+```bash
+atlas scan --path ../my-nest-app --no-cache
+```
+
 The scanner respects rules from the project's root `.gitignore`. It also skips
 dependencies, generated output, caches, temporary directories, Git worktrees,
 symbolic links, and its own output directory. Nested `.gitignore` files are not
 currently evaluated separately.
+
+### `atlas merge-runtime`
+
+Merges locally observed runtime links with the static graph and regenerates the
+viewer. Existing static links are marked as runtime-confirmed; newly observed links
+remain clearly identified as runtime evidence.
+
+```bash
+atlas merge-runtime [--path <project>] [--output <directory>] [--input <runtime.jsonl>]
+```
+
+The default input is `<project>/.atlas/runtime.jsonl`. Payloads, request bodies,
+headers, message contents, and environment values are not recorded.
 
 ### `atlas open`
 
@@ -138,8 +160,12 @@ The NestJS adapter currently detects:
 
 - projects, folders, files, packages, and imports;
 - modules, controllers, services, providers, and dependency injection;
+- DI token bindings through `@Inject`, `useClass`, `useExisting`, and `useFactory`, including factory dependencies;
+- `forwardRef`, `forRoot`, `forRootAsync`, `register`, and `registerAsync` module wiring;
 - routes, controller methods, service methods, and method calls;
-- Kafka publishers and consumers declared with `ClientKafka`, `@MessagePattern`, and `@EventPattern`;
+- Kafka publishers and consumers declared with `ClientKafka`, KafkaJS, `@MessagePattern`, and `@EventPattern`;
+- NestJS CQRS command, query, and event bus calls linked to their handlers;
+- in-process events declared with `EventEmitter2` and `@OnEvent`;
 - RabbitMQ handlers declared with `@RabbitSubscribe` and `@RabbitRPC`;
 - Bull and BullMQ queues, producers, processors, and jobs;
 - DTO fields, types, optional flags, validation decorators, and custom NestJS decorators;
@@ -157,18 +183,63 @@ The NestJS adapter currently detects:
   tests, too many external APIs, circular imports, large controllers, direct
   controller database access, and routes with no detected service flow.
 
-Static analysis has limits. Dynamic modules, runtime-generated providers, reflection,
-and indirect calls may not always be resolved. Every inferred graph item includes its
-source and confidence so consumers can distinguish evidence from inference.
+Static analysis has limits. Runtime-generated providers, reflection, and indirect
+calls may not always be resolved from source alone. Every inferred graph item
+includes its source and confidence. Optional runtime evidence can confirm important
+paths without replacing or hiding the static evidence.
+
+## Optional runtime evidence
+
+Static analysis should remain the default. For local development or integration
+tests, Atlas also exports a small NestJS interceptor that records route/RPC handler
+transitions. It only records graph identifiers, timestamps, and counters.
+
+```ts
+import {
+  createNestRuntimeInterceptor,
+  RuntimeTracer,
+} from "@dthreads/atlas";
+
+const tracer = new RuntimeTracer({
+  outputPath: ".atlas/runtime.jsonl",
+});
+
+app.useGlobalInterceptors(createNestRuntimeInterceptor(tracer));
+```
+
+Call `await tracer.flush()` from the application's normal shutdown hook. Internal
+transitions that cannot be observed by a NestJS interceptor can be recorded
+explicitly:
+
+```ts
+tracer.edge(
+  "method:CheckoutService.checkout",
+  "message_topic:orders.created",
+  "publishes_to",
+);
+```
+
+Run the application or its integration tests, then merge the observations:
+
+```bash
+atlas merge-runtime
+atlas serve
+```
+
+Runtime tracing is opt-in and local. Do not commit `runtime.jsonl` when architecture
+names are confidential.
 
 ## Generated files
 
 ```text
 .atlas/
+  cache/
+    files.json      Local incremental-scan manifest
   graph.json       Typed nodes and relationships
   metadata.json    Scan time, file counts, stack evidence
   risks.json       Detected risks and recommendations
   report.md        Human-readable architecture summary
+  runtime.jsonl    Optional local runtime observations
   viewer/
     index.html                    Offline architecture application
     atlas-data.js                Real scan data adapted to semantic scenes
@@ -183,6 +254,11 @@ request and asynchronous flows, complete data catalog and focused table ERD,
 migrations, scheduled jobs, source files, risks, and Delivery & Runtime. Delivery
 switches independently between development, staging, and production, so unrelated
 environment topology is not mixed into one unreadable map.
+
+Large scenes use adaptive detail: off-screen elements are not rendered, distant
+cards switch to a lightweight form, edge labels appear when useful, and animation
+is bounded. Catalogs load in pages and remain fully searchable, so a large project
+does not need thousands of DOM elements just to open one focused flow.
 
 The interactive viewer UX reference is stored in
 [`docs/design/atlas-viewer-prototype.html`](docs/design/atlas-viewer-prototype.html).
@@ -266,10 +342,11 @@ npm run typecheck
 ```
 
 The tests scan a representative NestJS fixture, validate route-to-database,
-publisher-to-consumer, migration, schedule, and delivery flows, exercise all 18 MCP
+publisher-to-consumer, DI-token, CQRS, runtime, migration, schedule, and delivery flows, exercise all 18 MCP
 tools, verify architecture and deployment risks, and confirm that real secret values
-never enter generated artifacts. The performance test generates 1,000
-TypeScript files, 100 controllers, 300 services, and 1,000 routes.
+never enter generated artifacts. The performance suite generates 1,000 TypeScript
+files, 100 controllers, 300 services, and 1,000 routes; it also checks warm-scan
+reuse, indexed graph queries, viewport culling, and bounded animation.
 
 The detailed MVP requirements and their automated evidence are listed in
 [`docs/PRD-COMPLIANCE.md`](docs/PRD-COMPLIANCE.md).
