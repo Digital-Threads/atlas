@@ -2,15 +2,17 @@
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Command } from "commander";
+import { ATLAS_VERSION } from "../version.js";
 
 const program = new Command();
-program.name("atlas").description("Local architecture intelligence for NestJS projects").version("0.1.0");
+program.name("atlas").description("Local architecture intelligence for NestJS projects").version(ATLAS_VERSION);
 
 program.command("scan")
   .description("Scan a local NestJS project and generate its architecture graph")
   .option("-p, --path <path>", "project root", ".")
   .option("-o, --output <path>", "output directory relative to the project", ".atlas")
   .option("--format <format>", "output format", "json")
+  .option("--no-cache", "ignore the previous Atlas analysis and scan everything again")
   .option("--debug", "show diagnostic details", false)
   .action(async (options) => {
     if (options.format !== "json") throw new Error(`Unsupported format: ${options.format}. Use json.`);
@@ -19,6 +21,7 @@ program.command("scan")
     const result = await scanProject({
       projectPath: options.path,
       outputPath: options.output,
+      incremental: options.cache,
       debug: options.debug,
       onProgress: ({ message }) => console.log(message),
     });
@@ -64,6 +67,18 @@ program.command("report")
   .action(async ({ path, output }) => {
     const { regenerateReport } = await import("../index.js");
     console.log(`Report created: ${await regenerateReport(resolve(path), output)}`);
+  });
+
+program.command("merge-runtime")
+  .description("Merge locally observed runtime links into the generated architecture graph")
+  .option("-p, --path <path>", "project root", ".")
+  .option("-o, --output <path>", "Atlas output directory relative to the project", ".atlas")
+  .option("-i, --input <path>", "runtime JSONL file relative to the project")
+  .action(async ({ path, output, input }) => {
+    const { mergeRuntimeTrace } = await import("../index.js");
+    const result = await mergeRuntimeTrace(path, output, input);
+    console.log(`Runtime evidence merged: ${result.metadata.runtimeEvents ?? 0} observations`);
+    console.log(`Graph updated: ${result.graph.stats.totalNodes} nodes, ${result.graph.stats.totalEdges} edges`);
   });
 
 program.command("mcp")

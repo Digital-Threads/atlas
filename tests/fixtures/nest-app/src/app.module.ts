@@ -15,9 +15,10 @@ import { DrizzleEventsRepository } from "./drizzle-events.repository";
 import { CreateUserUseCase } from "./application/create-user.use-case";
 import { CreateUserPort } from "./application/create-user.port";
 import { CreateUserAdapter } from "./infrastructure/create-user.adapter";
+import { HiddenLinksModule } from "./hidden-links";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserEntity]), SequelizeModule.forFeature([SequelizeAccount, SequelizeSession]), SettingsModule, WorkerModule],
+  imports: [TypeOrmModule.forFeature([UserEntity]), SequelizeModule.forFeature([SequelizeAccount, SequelizeSession]), SettingsModule, WorkerModule, HiddenLinksModule],
   controllers: [UsersController],
   providers: [UsersService, PrismaService, AuditService, SequelizeAccountsService, DrizzleEventsRepository, CreateUserUseCase, CreateUserPort, CreateUserAdapter, { provide: "MAILER", useClass: PrismaService }],
   exports: [UsersService],

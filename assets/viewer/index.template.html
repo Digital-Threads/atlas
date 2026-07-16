@@ -384,6 +384,11 @@
                     </button>
                   </sc-if>
                 </sc-for>
+                <sc-if value="{{ showCatalogMore }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding: 10px 12px 14px;">
+                    <button onClick="{{ loadMoreCatalog }}" style="width: 100%; height: 30px; border: 1px solid #cfd8d4; border-radius: 6px; background: #fff; color: #31564b; font-size: 11.5px; font-weight: 650;" style-hover="background: #edf4f1; border-color: #8eaaa0;">Show next {{ catalogMoreCount }}</button>
+                  </div>
+                </sc-if>
                 <sc-if value="{{ catalogEmpty }}" hint-placeholder-val="{{ false }}">
                   <div style="padding: 16px 12px; font-size: 12px; color: #6b7873;">
                     No matches for “{{ catQ }}”.
@@ -461,18 +466,23 @@
                 <g sc-camel-transform="translate({{ node.x }} {{ node.y }})" sc-camel-opacity="{{ node.op }}" onClick="{{ node.onClick }}" onMouseEnter="{{ node.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: pointer; animation: atlasFade 0.18s ease;">
                   <rect sc-camel-width="{{ node.w }}" sc-camel-height="{{ node.h }}" rx="7" sc-camel-fill="{{ node.fill }}" sc-camel-stroke="{{ node.stroke }}" sc-camel-stroke-width="{{ node.sw }}"></rect>
                   <rect x="0" y="0" width="4" sc-camel-height="{{ node.h }}" rx="2" sc-camel-fill="{{ node.accent }}"></rect>
-                  <foreignObject x="10" y="5" sc-camel-width="{{ node.tw }}" sc-camel-height="{{ node.th }}">
-                    <div style="font-family: 'IBM Plex Sans', sans-serif; overflow: hidden; height: 100%;">
-                      <div style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: {{ node.accent }}; white-space: nowrap;">
-                        <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis;">{{ node.typeLabel }}</span>
-                        <sc-if value="{{ node.inferred }}" hint-placeholder-val="{{ false }}"><span title="{{ node.evidenceTip }}" style="flex: 0 0 auto; border-radius: 3px; padding: 1px 4px; background: #fff3d6; color: #8a6207; font-size: 7.5px; letter-spacing: 0.04em;">inferred</span></sc-if>
+                  <sc-if value="{{ node.full }}" hint-placeholder-val="{{ true }}">
+                    <foreignObject x="10" y="5" sc-camel-width="{{ node.tw }}" sc-camel-height="{{ node.th }}">
+                      <div style="font-family: 'IBM Plex Sans', sans-serif; overflow: hidden; height: 100%;">
+                        <div style="display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 8.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: {{ node.accent }}; white-space: nowrap;">
+                          <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis;">{{ node.typeLabel }}</span>
+                          <sc-if value="{{ node.inferred }}" hint-placeholder-val="{{ false }}"><span title="{{ node.evidenceTip }}" style="flex: 0 0 auto; border-radius: 3px; padding: 1px 4px; background: #fff3d6; color: #8a6207; font-size: 7.5px; letter-spacing: 0.04em;">inferred</span></sc-if>
+                        </div>
+                        <div style="font-size: {{ node.fs }}; font-weight: 600; color: #1a2321; line-height: 1.25; margin-top: 1px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: {{ node.font }};">{{ node.label }}</div>
+                        <sc-if value="{{ node.sub }}" hint-placeholder-val="{{ false }}">
+                          <div style="font-size: 9px; color: #77837e; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ node.sub }}</div>
+                        </sc-if>
                       </div>
-                      <div style="font-size: {{ node.fs }}; font-weight: 600; color: #1a2321; line-height: 1.25; margin-top: 1px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: {{ node.font }};">{{ node.label }}</div>
-                      <sc-if value="{{ node.sub }}" hint-placeholder-val="{{ false }}">
-                        <div style="font-size: 9px; color: #77837e; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ node.sub }}</div>
-                      </sc-if>
-                    </div>
-                  </foreignObject>
+                    </foreignObject>
+                  </sc-if>
+                  <sc-if value="{{ node.showCompactLabel }}" hint-placeholder-val="{{ false }}">
+                    <text x="10" sc-camel-y="{{ node.compactY }}" style="font-family: 'IBM Plex Sans', sans-serif; font-size: 10px; font-weight: 650; fill: #1a2321; pointer-events: none;">{{ node.shortLabel }}</text>
+                  </sc-if>
                   <sc-if value="{{ node.step }}" hint-placeholder-val="{{ false }}">
                     <g>
                       <circle cx="0" cy="0" r="9" fill="#df642d"></circle>
@@ -736,7 +746,7 @@ class Component extends DCLogic {
     D: null, mode: 'map', sel: null, activeFlow: null, expandedOp: null,
     tech: false, trace: false, traceRoot: null, traceDirection: 'outgoing', traceDepth: '3',
     traceSync: true, traceAsync: true, traceData: true, traceExternal: true, traceStructure: false,
-    tab: 'overview', hist: [], q: '', catQ: '', searchOpen: false,
+    tab: 'overview', hist: [], q: '', catQ: '', catLimit: 240, searchOpen: false,
     vb: null, hover: null, panning: false, domainFilter: null,
     dataVariant: 'overview', deliveryEnv: 'production',
     moduleView: 'dependencies',
@@ -762,6 +772,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     window.removeEventListener('keydown', this._onKeyDown);
     if (this._panFrame) cancelAnimationFrame(this._panFrame);
+    if (this._zoomTimer) clearTimeout(this._zoomTimer);
   }
   closeGuide() {
     try { localStorage.setItem('atlas_guide_seen', '1'); } catch (e) {}
@@ -769,16 +780,46 @@ class Component extends DCLogic {
   }
 
   // ---------- helpers ----------
+  ensureIndexes() {
+    const { D } = this.state;
+    if (!D) return;
+    if (this._indexData === D && this._indexNodeCount === D.nodes.length && this._indexEdgeCount === D.edges.length) return;
+    this._indexData = D;
+    this._indexNodeCount = D.nodes.length;
+    this._indexEdgeCount = D.edges.length;
+    this._nodeIndex = new Map();
+    this._nodesByType = new Map();
+    this._incomingIndex = new Map();
+    this._outgoingIndex = new Map();
+    this._edgesByRelation = new Map();
+    D.nodes.forEach((node) => {
+      this._nodeIndex.set(node.id, node);
+      const typed = this._nodesByType.get(node.type) || [];
+      typed.push(node); this._nodesByType.set(node.type, typed);
+    });
+    D.edges.forEach((edge) => {
+      const incoming = this._incomingIndex.get(edge.to) || [];
+      incoming.push(edge); this._incomingIndex.set(edge.to, incoming);
+      const outgoing = this._outgoingIndex.get(edge.from) || [];
+      outgoing.push(edge); this._outgoingIndex.set(edge.from, outgoing);
+      const relation = edge.relation || String(edge.verb || '').toLowerCase().replaceAll(' ', '_');
+      const related = this._edgesByRelation.get(relation) || [];
+      related.push(edge); this._edgesByRelation.set(relation, related);
+    });
+    this._sceneCache = new Map();
+  }
   node(id) {
     const { D } = this.state; if (!D) return null;
     if (id && id.startsWith('op.')) return this._opNode(id);
     if (this._syn && this._syn[id]) return this._syn[id];
-    if (this._nodeIndexData !== D) {
-      this._nodeIndexData = D;
-      this._nodeIndex = new Map(D.nodes.map((node) => [node.id, node]));
-    }
+    this.ensureIndexes();
     return this._nodeIndex.get(id) || null;
   }
+  incomingEdges(id) { this.ensureIndexes(); return this._incomingIndex?.get(id) || []; }
+  outgoingEdges(id) { this.ensureIndexes(); return this._outgoingIndex?.get(id) || []; }
+  typeNodes(type) { this.ensureIndexes(); return this._nodesByType?.get(type) || []; }
+  relationEdges(relation) { this.ensureIndexes(); return this._edgesByRelation?.get(relation) || []; }
+  nodeDegree(id) { return this.incomingEdges(id).length + this.outgoingEdges(id).length; }
   _opNode(id) {
     const profiles = Object.entries(this.state.D.moduleProfiles || {});
     for (const [moduleId, prof] of profiles) {
@@ -883,7 +924,7 @@ class Component extends DCLogic {
     this.select(id, { mode, flow, dbDetail });
   }
 
-  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, hist: [], vb: null, hover: null, catQ: '', domainFilter: null, mapExpanded: false, dbDetail: 'overview', moduleView: 'dependencies' }); }
+  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, hist: [], vb: null, hover: null, catQ: '', catLimit: 240, domainFilter: null, mapExpanded: false, dbDetail: 'overview', moduleView: 'dependencies' }); }
 
   // ---------- code highlighting ----------
   highlight(code) {
@@ -945,7 +986,8 @@ class Component extends DCLogic {
     const horizontal = Math.abs(x2 - x1) > Math.abs(y2 - y1);
     const d = horizontal ? this.bez(x1, y1, x2, y2) : `M ${x1} ${y1} C ${x1} ${y1 + (y2 - y1) * 0.45}, ${x2} ${y2 - (y2 - y1) * 0.45}, ${x2} ${y2 > y1 ? y2 - 8 : y2 + 8}`;
     return {
-      id: 'e:' + e.from + '>' + e.to, d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
+      id: 'e:' + e.from + '>' + e.to, from: e.from, to: e.to,
+      d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
       w: hi ? 2.6 : (e.kind === 'async' ? 2 : (e.relation === 'writes' ? 1.8 : 1.5)), op: dim ? 0.14 : (hi ? 1 : (inferred ? 0.58 : (e.kind === 'async' ? 0.96 : 0.74))),
       showLabel: !!(showLabels && e.verb && !dim), verb: e.verb, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 7,
       moving: e.kind === 'async' && !dim, stationary: e.kind !== 'async' || dim,
@@ -999,8 +1041,24 @@ class Component extends DCLogic {
 
   // ---------- scenes ----------
   scene() {
-    const { D, mode, sel, tech, trace, traceRoot, activeFlow, expandedOp, domainFilter } = this.state;
+    const { D } = this.state;
     if (!D) return { nodes: [], edges: [], groups: [], cols: [], status: 'Loading…' };
+    this.ensureIndexes();
+    const keys = ['mode', 'sel', 'tech', 'trace', 'traceRoot', 'activeFlow', 'expandedOp', 'domainFilter', 'mapVariant',
+      'moduleView', 'dataVariant', 'deliveryEnv', 'dbDetail', 'traceDirection', 'traceDepth', 'traceSync', 'traceAsync',
+      'traceData', 'traceExternal', 'traceStructure', 'mapExpanded'];
+    const cacheKey = keys.map((key) => `${key}:${String(this.state[key] ?? '')}`).join('|')
+      + `|labels:${String(this.props.showEdgeLabels ?? true)}|variant:${String(this.props.mapVariant ?? '')}`;
+    const cached = this._sceneCache.get(cacheKey);
+    if (cached) return cached;
+    const result = this.buildScene();
+    if (this._sceneCache.size >= 48) this._sceneCache.clear();
+    this._sceneCache.set(cacheKey, result);
+    return result;
+  }
+
+  buildScene() {
+    const { D, mode, sel, tech, trace, traceRoot, activeFlow, expandedOp, domainFilter } = this.state;
     if (tech && sel) return this.sceneTech(sel);
     if (trace && (traceRoot || sel)) return this.sceneTrace(traceRoot || sel);
     if (mode === 'map') return this.sceneMap();
@@ -1715,8 +1773,8 @@ class Component extends DCLogic {
     const ownershipRelations = new Set(['contains', 'declares', 'has_method', 'has_column', 'provides', 'exports']);
     const moduleParts = new Set(['controller', 'processor', 'consumer', 'service', 'use_case', 'provider', 'port', 'adapter', 'repository', 'guard', 'middleware', 'interceptor', 'entity', 'model']);
     const ignoredModuleParts = new Set(['method', 'function', 'file', 'column', 'index', 'constraint']);
-    const rawIncoming = D.edges.filter((edge) => edge.to === sel && this.node(edge.from));
-    const rawOutgoing = D.edges.filter((edge) => edge.from === sel && this.node(edge.to));
+    const rawIncoming = this.incomingEdges(sel).filter((edge) => this.node(edge.from));
+    const rawOutgoing = this.outgoingEdges(sel).filter((edge) => this.node(edge.to));
     const isOwned = (edge) => ownershipRelations.has(relation(edge)) || (moduleMode && relation(edge) === 'uses' && moduleParts.has(this.node(edge.to)?.type));
     const ownedTargets = new Set(rawOutgoing.filter(isOwned).map((edge) => edge.to));
     const incomingEdges = moduleMode
@@ -2259,11 +2317,88 @@ class Component extends DCLogic {
     return `${x1 - pad} ${y1 - pad - 20} ${x2 - x1 + pad * 2} ${y2 - y1 + pad * 2 + 20}`;
   }
   parseVb(str) { const [x, y, w, h] = str.split(' ').map(Number); return { x, y, w, h }; }
-  zoom(factor) {
+  optimizeScene(scn, activeVb) {
+    const hardNodeLimit = 280, hardEdgeLimit = 720, animatedEdgeLimit = 120;
+    const view = activeVb || this.parseVb(this.fitVb(scn));
+    const viewportWidth = this._svgEl?.getBoundingClientRect().width || 1200;
+    const scale = viewportWidth / Math.max(view.w, 1);
+    let nodes = scn.nodes.slice();
+    let culled = 0;
+    if (activeVb && nodes.length > 80) {
+      const padX = activeVb.w * 0.22, padY = activeVb.h * 0.22;
+      const x1 = activeVb.x - padX, x2 = activeVb.x + activeVb.w + padX;
+      const y1 = activeVb.y - padY, y2 = activeVb.y + activeVb.h + padY;
+      const visible = nodes.filter((node) => node.x + node.w >= x1 && node.x <= x2 && node.y + node.h >= y1 && node.y <= y2);
+      if (visible.length) { culled = nodes.length - visible.length; nodes = visible; }
+    }
+    const degrees = new Map();
+    scn.edges.forEach((edge) => {
+      degrees.set(edge.from, (degrees.get(edge.from) || 0) + 1);
+      degrees.set(edge.to, (degrees.get(edge.to) || 0) + 1);
+    });
+    let limited = 0;
+    if (nodes.length > hardNodeLimit) {
+      const selected = this.state.sel;
+      nodes = nodes.slice().sort((a, b) => {
+        const score = (node) => (node.id === selected ? 1000000 : 0) + (node.step ? 100000 : 0) + (degrees.get(node.id) || 0) * 10 + Number(node.op || 0);
+        return score(b) - score(a) || a.y - b.y || a.x - b.x;
+      }).slice(0, hardNodeLimit);
+      limited = scn.nodes.length - hardNodeLimit;
+    }
+    const ids = new Set(nodes.map((node) => node.id));
+    let edges = scn.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
+    if (edges.length > hardEdgeLimit) {
+      const selected = this.state.sel;
+      edges = edges.slice().sort((a, b) => {
+        const score = (edge) => ((edge.from === selected || edge.to === selected) ? 100000 : 0) + (edge.moving ? 1000 : 0) + Number(edge.op || 0) * 100;
+        return score(b) - score(a);
+      }).slice(0, hardEdgeLimit);
+    }
+    const animated = new Set(edges.filter((edge) => edge.moving).slice().sort((a, b) => {
+      const selected = this.state.sel;
+      const score = (edge) => ((edge.from === selected || edge.to === selected) ? 10000 : 0) + Number(edge.op || 0) * 100;
+      return score(b) - score(a);
+    }).slice(0, animatedEdgeLimit));
+    const showEdgeLabels = scale >= 0.48 && edges.length <= 180;
+    edges = edges.map((edge) => {
+      const moving = Boolean(edge.moving && animated.has(edge));
+      return { ...edge, moving, stationary: !moving, showLabel: Boolean(edge.showLabel && showEdgeLabels) };
+    });
+    const selected = this.state.sel;
+    nodes = nodes.map((node) => {
+      const projectedWidth = node.w * scale;
+      const full = node.id === selected || scn.nodes.length <= 80 || projectedWidth >= 82;
+      const showCompactLabel = !full && projectedWidth >= 42;
+      const shortLabel = node.label.length > 20 ? `${node.label.slice(0, 18)}…` : node.label;
+      return { ...node, full, showCompactLabel, shortLabel, compactY: Math.max(16, Math.min(node.h - 8, node.h / 2 + 3)) };
+    });
+    const hidden = Math.max(culled, limited);
+    const status = hidden > 0 ? `${scn.status} · ${hidden} off-screen or lower-priority elements are kept in the catalog.` : scn.status;
+    return { ...scn, nodes, edges, status };
+  }
+  applyVb(vb) {
+    if (this._svgEl && vb) this._svgEl.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  }
+  zoom(factor, clientX, clientY) {
     const scn = this.scene();
-    const cur = this.state.vb || this.parseVb(this.fitVb(scn));
+    const cur = this._liveVb || this.state.vb || this.parseVb(this.fitVb(scn));
     const nw = cur.w * factor, nh = cur.h * factor;
-    this.setState({ vb: { x: cur.x + (cur.w - nw) / 2, y: cur.y + (cur.h - nh) / 2, w: nw, h: nh } });
+    let rx = 0.5, ry = 0.5;
+    if (this._svgEl && Number.isFinite(clientX) && Number.isFinite(clientY)) {
+      const rect = this._svgEl.getBoundingClientRect();
+      rx = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(rect.width, 1)));
+      ry = Math.max(0, Math.min(1, (clientY - rect.top) / Math.max(rect.height, 1)));
+    }
+    const next = { x: cur.x + (cur.w - nw) * rx, y: cur.y + (cur.h - nh) * ry, w: nw, h: nh };
+    this._liveVb = next;
+    this.applyVb(next);
+    if (this._zoomTimer) clearTimeout(this._zoomTimer);
+    this._zoomTimer = setTimeout(() => {
+      this._zoomTimer = null;
+      const committed = this._liveVb;
+      this._liveVb = null;
+      if (committed) this.setState({ vb: committed });
+    }, 90);
   }
 
   // ---------- render ----------
@@ -2271,7 +2406,9 @@ class Component extends DCLogic {
     const { D, mode, sel, tab, hist, q, catQ, searchOpen, hover, tech, trace, activeFlow, domainFilter, panning } = this.state;
     const loading = !D;
     const scn = loading ? { nodes: [], edges: [], groups: [], cols: [], status: 'Loading project graph…' } : this.scene();
-    const vbStr = this.state.vb ? `${this.state.vb.x} ${this.state.vb.y} ${this.state.vb.w} ${this.state.vb.h}` : this.fitVb(scn);
+    const activeVb = this._liveVb || this.state.vb;
+    const vbStr = activeVb ? `${activeVb.x} ${activeVb.y} ${activeVb.w} ${activeVb.h}` : this.fitVb(scn);
+    const displayScene = loading ? scn : this.optimizeScene(scn, activeVb);
 
     const modeDefs = [
       { h: 'Project' },
@@ -2358,7 +2495,7 @@ class Component extends DCLogic {
       files: { title: 'Files', types: ['file'], groupBy: null },
     };
     const cd = catDefs[mode];
-    let catalogItems = [], catalogCount = '';
+    let catalogItems = [], catalogCount = '', catalogFilteredTotal = 0;
     if (cd && D) {
       let list = D.nodes.filter((n) => cd.types.includes(n.type));
       if (mode === 'clickhouse') {
@@ -2374,7 +2511,11 @@ class Component extends DCLogic {
       }
       const total = list.length;
       if (catQ) list = list.filter((n) => (n.label + ' ' + (n.file || '')).toLowerCase().includes(catQ.toLowerCase()));
-      catalogCount = catQ ? `${list.length} of ${total}` : String(total);
+      catalogFilteredTotal = list.length;
+      const visibleList = list.slice(0, this.state.catLimit || 240);
+      const selectedOutsideWindow = sel && !visibleList.some((node) => node.id === sel) ? list.find((node) => node.id === sel) : null;
+      list = selectedOutsideWindow ? [...visibleList, selectedOutsideWindow] : visibleList;
+      catalogCount = catalogFilteredTotal > list.length ? `${list.length} of ${catalogFilteredTotal}` : catQ ? `${catalogFilteredTotal} of ${total}` : String(total);
       let lastGroup = null;
       list.forEach((n) => {
         const g = cd.groupBy === 'domain' ? (D.domains.find((d) => d.id === n.domain) || { name: 'Other' }).name : cd.groupBy === 'type' ? this.tLabel(n.type) + 's' : null;
@@ -2706,13 +2847,16 @@ class Component extends DCLogic {
 
       catalogVisible: !!cd && !panelOpen, catalogTitle: cd ? cd.title : '', catalogCount, catalogItems,
       catalogEmpty: !!cd && !!catQ && catalogItems.length === 0, catQ,
-      onCatQ: (e) => this.setState({ catQ: e.target.value }),
-      clearCatQ: () => this.setState({ catQ: '' }),
+      onCatQ: (e) => this.setState({ catQ: e.target.value, catLimit: 240 }),
+      clearCatQ: () => this.setState({ catQ: '', catLimit: 240 }),
+      showCatalogMore: catalogFilteredTotal > (this.state.catLimit || 240),
+      catalogMoreCount: String(Math.min(240, Math.max(0, catalogFilteredTotal - (this.state.catLimit || 240)))),
+      loadMoreCatalog: () => this.setState((state) => ({ catLimit: (state.catLimit || 240) + 240 })),
 
       svgRef: (el) => { this._svgEl = el; },
       vbStr, svgCursor: panning ? 'grabbing' : 'grab',
-      gNodes: scn.nodes, gEdges: scn.edges, gGroups: scn.groups, gCols: scn.cols,
-      statusText: scn.status || '', graphEmpty: !!scn.emptyOk,
+      gNodes: displayScene.nodes, gEdges: displayScene.edges, gGroups: displayScene.groups, gCols: displayScene.cols,
+      statusText: displayScene.status || '', graphEmpty: !!scn.emptyOk,
       emptyTitle: catQ ? 'Nothing matches the current filter' : (mode === 'data' ? 'No data structures detected' : 'Nothing was detected in this section'),
       emptyHint: catQ ? 'Clear the filter in the list on the left to see all elements.' : (mode === 'data' ? 'Atlas did not recognize database schemas, tables, entities, or models in this scan.' : 'This scan did not produce any elements for this view.'),
       showClearFocus: !!sel || !!activeFlow || trace,
@@ -2724,10 +2868,11 @@ class Component extends DCLogic {
       },
       tipVisible: !!hover && !panning, tipX: hover ? hover.x + 'px' : '0px', tipY: hover ? hover.y + 'px' : '0px',
       tipTitle: hover ? hover.title : '', tipBody: hover ? hover.body : '',
-      onWheel: (e) => { const f = e.deltaY > 0 ? 1.12 : 0.9; this.zoom(f); },
+      onWheel: (e) => { const f = e.deltaY > 0 ? 1.18 : 0.82; this.zoom(f, e.clientX, e.clientY); },
       onPanStart: (e) => {
         if (e.button !== 0 || (e.target.closest && e.target.closest('button, input'))) return;
-        const vb = this.state.vb || this.parseVb(vbStr);
+        if (this._zoomTimer) { clearTimeout(this._zoomTimer); this._zoomTimer = null; }
+        const vb = this._liveVb || this.state.vb || this.parseVb(vbStr);
         const rect = e.currentTarget.getBoundingClientRect();
         this._pan = {
           id: e.pointerId, sx: e.clientX, sy: e.clientY, vb, moved: false,
@@ -2751,9 +2896,10 @@ class Component extends DCLogic {
           w: this._pan.vb.w,
           h: this._pan.vb.h,
         };
+        this._liveVb = this._nextPanVb;
         if (!this._panFrame) this._panFrame = requestAnimationFrame(() => {
           this._panFrame = null;
-          if (this._nextPanVb) this.setState({ vb: this._nextPanVb });
+          if (this._nextPanVb) this.applyVb(this._nextPanVb);
         });
       },
       onPanEnd: (e) => {
@@ -2762,7 +2908,11 @@ class Component extends DCLogic {
         if (e.currentTarget.hasPointerCapture?.(this._pan.id)) e.currentTarget.releasePointerCapture(this._pan.id);
         if (this._panFrame) cancelAnimationFrame(this._panFrame);
         this._panFrame = null;
-        if (this._nextPanVb) this.setState({ vb: this._nextPanVb, panning: false });
+        if (this._nextPanVb) {
+          const committed = this._nextPanVb;
+          this._liveVb = null;
+          this.setState({ vb: committed, panning: false });
+        }
         else if (this.state.panning) this.setState({ panning: false });
         this._nextPanVb = null;
         this._pan = null;

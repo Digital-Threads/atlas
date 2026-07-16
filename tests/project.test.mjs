@@ -39,6 +39,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     "table:typeorm_users", "method:UserEntityRepository.find", "method:UserEntityRepository.save",
     "database:sequelize", "entity:SequelizeAccount", "entity:SequelizeSession",
     "table:sequelize_accounts", "table:sequelize_sessions", "column:sequelize_accounts.email_address",
+    "index:sequelize_accounts.idx_sequelize_accounts_email",
     "method:SequelizeAccountsService.listAccounts", "method:SequelizeAccountsService.createAccount",
     "database:drizzle", "table:drizzle_accounts", "table:drizzle_events",
     "column:drizzle_accounts.email_address", "column:drizzle_events.account_id",
@@ -48,6 +49,9 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     "library:@nestjs/core", "library:typeorm",
     "message_broker:kafka", "message_topic:orders.created", "queue:email-jobs", "processor:EmailProcessor",
     "method:OrderPublisher.publishOrder", "method:OrderEventsConsumer.handleOrder", "method:EmailProcessor.handleEmail",
+    "module:HiddenLinksModule", "service:CheckoutService", "port:PaymentPort", "adapter:PaymentAdapter",
+    "provider:PAYMENT_PORT", "provider:PAYMENT_FACADE", "provider:cqrs:command:CreateOrderCommand",
+    "message_topic:order.completed", "message_topic:orders.audit",
     "database:sql", "schema:public", "table:profiles", "column:public.profiles.display_name",
     "index:public.profiles.profiles_user_id_unique", "constraint:public.profiles.profiles_display_name_check",
     "migration:migrations/001_create_profiles.sql", "database:clickhouse", "schema:clickhouse.analytics",
@@ -94,6 +98,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.deepEqual(sequelizeReference?.metadata?.targetColumns, ["id"]);
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:SequelizeAccount.findAll" && edge.to === "table:sequelize_accounts" && edge.type === "reads"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:SequelizeAccount.create" && edge.to === "table:sequelize_accounts" && edge.type === "writes"));
+  const sequelizeIndex = result.graph.nodes.find((node) => node.id === "index:sequelize_accounts.idx_sequelize_accounts_email");
+  assert.equal(JSON.stringify(sequelizeIndex?.metadata?.columns), '["email_address"]');
   const drizzleReference = result.graph.edges.find((edge) => edge.from === "table:drizzle_events" && edge.to === "table:drizzle_accounts" && edge.type === "references");
   assert.deepEqual(drizzleReference?.metadata?.sourceColumns, ["account_id"]);
   assert.deepEqual(drizzleReference?.metadata?.targetColumns, ["id"]);
@@ -108,6 +114,17 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "method:OrderPublisher.scheduleEmail" && edge.to === "queue:email-jobs" && edge.type === "enqueues"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "queue:email-jobs" && edge.to === "processor:EmailProcessor" && edge.type === "processes"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "queue:email-jobs" && edge.to === "method:EmailProcessor.handleEmail" && edge.type === "delivers_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "service:CheckoutService" && edge.to === "provider:PAYMENT_PORT" && edge.type === "injects" && edge.metadata?.evidence?.rule === "nestjs.inject-token"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "provider:PAYMENT_PORT" && edge.to === "adapter:PaymentAdapter" && edge.type === "references"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "service:CheckoutService" && edge.to === "adapter:PaymentAdapter" && edge.type === "injects"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "provider:PAYMENT_FACADE" && edge.to === "provider:PAYMENT_PORT" && edge.type === "injects"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "adapter:PaymentAdapter" && edge.to === "port:PaymentPort" && edge.type === "implements"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "module:HiddenLinksModule" && edge.to === "module:WorkerModule" && edge.type === "imports" && edge.metadata?.forwardRef === true));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:CheckoutService.checkout" && edge.to === "provider:cqrs:command:CreateOrderCommand" && edge.type === "triggers"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "provider:cqrs:command:CreateOrderCommand" && edge.to === "provider:CreateOrderHandler" && edge.type === "delivers_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:CheckoutService.checkout" && edge.to === "message_topic:order.completed" && edge.type === "publishes_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "message_topic:order.completed" && edge.to === "method:OrderCompletedListener.handle" && edge.type === "delivers_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "method:CheckoutService.checkout" && edge.to === "message_topic:orders.audit" && edge.type === "publishes_to" && edge.metadata?.transport === "kafka"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "migration:migrations/001_create_profiles.sql" && edge.to === "table:profiles" && edge.type === "creates"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "index:public.profiles.profiles_user_id_unique" && edge.to === "table:profiles" && edge.type === "indexes"));
   const profileReferences = result.graph.edges.filter((edge) => edge.from === "table:profiles" && edge.to === "table:users" && edge.type === "references");
@@ -203,8 +220,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.equal(viewerData.project.name, result.graph.project.name);
   assert.equal(viewerData.nodes.filter((node) => node.type === "processor").length, 1);
   assert.equal(viewerData.nodes.filter((node) => node.type === "use_case").length, 1);
-  assert.equal(viewerData.nodes.filter((node) => node.type === "port").length, 1);
-  assert.equal(viewerData.nodes.filter((node) => node.type === "adapter").length, 1);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "port").length, 2);
+  assert.equal(viewerData.nodes.filter((node) => node.type === "adapter").length, 2);
   assert.equal(viewerData.nodes.filter((node) => node.type === "scheduled_job").length, 3);
   assert.ok(viewerData.nodes.some((node) => node.id === "environment:staging"));
   assert.ok(viewerData.nodes.some((node) => node.id === "environment:production"));
@@ -219,6 +236,14 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(viewerData.edges.some((edge) => edge.relation === "writes" && edge.kind === "data"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "adapter:CreateUserAdapter" && edge.to === "port:CreateUserPort" && edge.relation === "implements"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "references" && edge.details?.relation));
+  assert.ok(viewerData.nodes.some((node) => node.id === "table:dynamic_orders"));
+  assert.ok(viewerData.nodes.some((node) => node.id === "column:dynamic_orders.customerId"));
+  assert.ok(viewerData.nodes.some((node) => node.id === "index:dynamic_orders.idx_dynamic_orders_customer_id"));
+  assert.equal(
+    JSON.stringify(viewerData.nodes.find((node) => node.id === "index:dynamic_orders.idx_dynamic_orders_customer_id")?.details?.columns),
+    '["customerId"]',
+  );
+  assert.ok(!viewerData.nodes.some((node) => node.id.includes("${tableName}") || node.id.includes("${columnName}")));
   assert.ok(viewerData.nodes.filter((node) => node.type === "column").every((node) => !node.details?.plainDescriptionSource));
   assert.ok(viewerData.edges.some((edge) => edge.from === "controller:UsersController" && edge.to === "method:UsersController.create" && edge.verb === "declares"));
   assert.ok(viewerData.edges.some((edge) => edge.from === "route:POST:/api/users" && edge.to === "method:UsersController.create" && edge.verb === "handled by"));
@@ -312,7 +337,10 @@ test("covers the complete NestJS MVP architecture surface", async () => {
 
   const cliScan = spawnSync(process.execPath, [cli, "scan", "--path", project], { encoding: "utf8" });
   assert.equal(cliScan.status, 0, cliScan.stderr);
-  assert.match(cliScan.stdout, /Scanning files\.\.\.[\s\S]*NestJS detected[\s\S]*Graph created:[\s\S]*Done/);
+  assert.match(
+    cliScan.stdout,
+    /Scanning files\.\.\.[\s\S]*(?:NestJS detected|No source changes\. Reusing the cached architecture graph\.)[\s\S]*Graph created:[\s\S]*Done/,
+  );
 
   await writeFile(resolve(project, ".atlas/report.md"), "stale report\n");
   const cliReport = spawnSync(process.execPath, [cli, "report", "--path", project], { encoding: "utf8" });
@@ -471,6 +499,9 @@ test("uses a custom output directory across CLI, report, server, and MCP", async
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /--output <path>/);
   }
+  const scanHelp = spawnSync(process.execPath, [cli, "scan", "--help"], { encoding: "utf8" });
+  assert.equal(scanHelp.status, 0, scanHelp.stderr);
+  assert.match(scanHelp.stdout, /--no-cache/);
 });
 
 test("rejects unsupported output formats with a clear CLI error", () => {
@@ -486,4 +517,6 @@ test("identifies Atlas as a publishable Digital Threads package", async () => {
   assert.equal(packageJson.author, "Digital Threads");
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.private, false);
+  const cliSource = await readFile(resolve(here, "../src/version.ts"), "utf8");
+  assert.match(cliSource, new RegExp(`ATLAS_VERSION\\s*=\\s*["']${packageJson.version.replaceAll(".", "\\.")}["']`));
 });

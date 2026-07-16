@@ -54,6 +54,9 @@ test("trace explorer follows ports to their implementing adapters", async () => 
   assert.match(scene.status, /Complete for the selected filters/);
   assert.ok(scene.nodes.every((node) => [node.x, node.y, node.w, node.h].every(Number.isFinite)));
   assert.ok(scene.edges.every((edge) => edge.d.startsWith("M ") && !edge.d.includes("NaN")));
+  const optimized = viewer.optimizeScene(scene, null);
+  assert.equal(optimized.edges.length, scene.edges.length, "level-of-detail must preserve visible trace links");
+  assert.ok(optimized.edges.every((edge) => edge.from && edge.to), "optimized links must retain their graph endpoints");
 
   const adapter = scene.nodes.find((node) => node.id === "adapter:CreateUserAdapter");
   adapter.onClick({ preventDefault() {}, stopPropagation() {} });
@@ -202,4 +205,59 @@ test("ClickHouse overview stays bounded and a selected service opens direct cont
   const focused = viewer.scene();
   assert.match(focused.status, /One-hop context/);
   assert.ok(focused.nodes.length < 40, "a ClickHouse service must not expand the complete database catalog");
+});
+
+test("large scenes use viewport culling, bounded animation, and level of detail", async () => {
+  const viewer = await createViewer();
+  viewer.state = { ...viewer.state, sel: "synthetic:499" };
+  viewer._svgEl = { getBoundingClientRect: () => ({ width: 1200, height: 700 }) };
+  const nodes = Array.from({ length: 500 }, (_, index) => ({
+    id: `synthetic:${index}`,
+    label: `Synthetic architecture element ${index}`,
+    x: (index % 25) * 300,
+    y: Math.floor(index / 25) * 80,
+    w: 260,
+    h: 58,
+    op: 1,
+  }));
+  const edges = Array.from({ length: 1500 }, (_, index) => ({
+    id: `edge:${index}`,
+    from: `synthetic:${index % 500}`,
+    to: `synthetic:${(index + 1) % 500}`,
+    moving: true,
+    stationary: false,
+    showLabel: true,
+    op: 1,
+  }));
+  const scene = { nodes, edges, groups: [], cols: [], status: "Synthetic scene" };
+
+  const overview = viewer.optimizeScene(scene, null);
+  assert.ok(overview.nodes.length <= 280);
+  assert.ok(overview.edges.length <= 720);
+  assert.ok(overview.edges.filter((edge) => edge.moving).length <= 120);
+  assert.ok(overview.nodes.some((node) => node.id === "synthetic:499"), "selected node must survive the safety limit");
+  assert.ok(overview.nodes.some((node) => node.full === false), "zoomed-out cards should use the lightweight representation");
+
+  const viewport = viewer.optimizeScene(scene, { x: 0, y: 0, w: 1200, h: 700 });
+  assert.ok(viewport.nodes.length < overview.nodes.length, "off-screen nodes should not remain in the SVG DOM");
+  assert.match(viewport.status, /off-screen or lower-priority/);
+});
+
+test("large catalogs render in bounded pages and remain searchable", async () => {
+  const viewer = await createViewer();
+  for (let index = 0; index < 1000; index += 1) {
+    viewer.state.D.nodes.push({ id: `file:generated-${index}.ts`, type: "file", label: `generated-${index}.ts`, file: `src/generated-${index}.ts`, desc: "Generated fixture" });
+  }
+  viewer.state = { ...viewer.state, mode: "files", catLimit: 240, catQ: "" };
+  let values = viewer.renderVals();
+  assert.ok(values.catalogItems.filter((item) => item.isNode).length <= 241);
+  assert.equal(values.showCatalogMore, true);
+  values.loadMoreCatalog();
+  assert.equal(viewer.state.catLimit, 480);
+
+  values = viewer.renderVals();
+  values.onCatQ({ target: { value: "generated-999" } });
+  values = viewer.renderVals();
+  assert.equal(values.catalogItems.filter((item) => item.isNode).length, 1);
+  assert.equal(values.catalogItems.find((item) => item.isNode).label, "generated-999.ts");
 });

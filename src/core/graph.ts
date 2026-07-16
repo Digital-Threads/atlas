@@ -8,6 +8,7 @@ import type {
   GraphSubgraph,
 } from "./types.js";
 import { graphEdgeTypes, graphNodeTypes } from "./types.js";
+import { ATLAS_VERSION } from "../version.js";
 
 const validNodeTypes = new Set<string>(graphNodeTypes);
 const validEdgeTypes = new Set<string>(graphEdgeTypes);
@@ -60,7 +61,7 @@ export class GraphBuilder {
   toGraph(project: ArchitectureGraph["project"]): ArchitectureGraph {
     const nodes = [...this.nodes.values()].sort((a, b) => a.id.localeCompare(b.id));
     const edges = [...this.edges.values()].sort((a, b) => a.id.localeCompare(b.id));
-    return { version: "0.1.0", project, nodes, edges, stats: buildStats(nodes, edges) };
+    return { version: ATLAS_VERSION, project, nodes, edges, stats: buildStats(nodes, edges) };
   }
 }
 
@@ -78,9 +79,27 @@ export function buildStats(nodes: GraphNode[], edges: GraphEdge[]): GraphStats {
 
 export class GraphQuery {
   private readonly nodeMap: Map<string, GraphNode>;
+  private readonly edgeMap = new Map<string, GraphEdge>();
+  private readonly incomingMap = new Map<string, GraphEdge[]>();
+  private readonly outgoingMap = new Map<string, GraphEdge[]>();
+  private readonly nodesByType = new Map<GraphNode["type"], GraphNode[]>();
 
   constructor(readonly graph: ArchitectureGraph) {
     this.nodeMap = new Map(graph.nodes.map((node) => [node.id, node]));
+    for (const node of graph.nodes) {
+      const typed = this.nodesByType.get(node.type) ?? [];
+      typed.push(node);
+      this.nodesByType.set(node.type, typed);
+    }
+    for (const edge of graph.edges) {
+      this.edgeMap.set(edge.id, edge);
+      const incoming = this.incomingMap.get(edge.to) ?? [];
+      incoming.push(edge);
+      this.incomingMap.set(edge.to, incoming);
+      const outgoing = this.outgoingMap.get(edge.from) ?? [];
+      outgoing.push(edge);
+      this.outgoingMap.set(edge.from, outgoing);
+    }
   }
 
   findNode(query: string): GraphNode[] {
@@ -107,11 +126,11 @@ export class GraphQuery {
   }
 
   getIncoming(id: string): GraphEdge[] {
-    return this.graph.edges.filter((edge) => edge.to === id);
+    return this.incomingMap.get(id) ?? [];
   }
 
   getOutgoing(id: string): GraphEdge[] {
-    return this.graph.edges.filter((edge) => edge.from === id);
+    return this.outgoingMap.get(id) ?? [];
   }
 
   findRoutes(): GraphNode[] { return this.byType("route"); }
@@ -135,7 +154,8 @@ export class GraphQuery {
     const table = this.nodeMap.get(tableId);
     if (!table || table.type !== "table") return { nodes: [], edges: [] };
     const edgeTypes = new Set<GraphEdgeType>(["has_column", "indexes", "contains", "references", "reads", "writes", "creates", "alters", "drops"]);
-    const edges = this.graph.edges.filter((edge) => edgeTypes.has(edge.type) && (edge.from === tableId || edge.to === tableId));
+    const edges = [...this.getIncoming(tableId), ...this.getOutgoing(tableId)]
+      .filter((edge) => edgeTypes.has(edge.type));
     const ids = new Set([tableId, ...edges.flatMap((edge) => [edge.from, edge.to])]);
     return { nodes: [...ids].map((id) => this.nodeMap.get(id)).filter(Boolean) as GraphNode[], edges };
   }
@@ -158,7 +178,7 @@ export class GraphQuery {
     }
     return {
       nodes: [...nodeIds].map((id) => this.nodeMap.get(id)).filter(Boolean) as GraphNode[],
-      edges: this.graph.edges.filter((edge) => edgeIds.has(edge.id)),
+      edges: [...edgeIds].map((id) => this.edgeMap.get(id)).filter(Boolean) as GraphEdge[],
     };
   }
 
@@ -183,7 +203,7 @@ export class GraphQuery {
     }
     return {
       nodes: [...nodeIds].map((id) => this.nodeMap.get(id)).filter(Boolean) as GraphNode[],
-      edges: this.graph.edges.filter((edge) => edgeIds.has(edge.id)),
+      edges: [...edgeIds].map((id) => this.edgeMap.get(id)).filter(Boolean) as GraphEdge[],
     };
   }
 
@@ -196,7 +216,7 @@ export class GraphQuery {
   }
 
   private byType(type: GraphNode["type"]): GraphNode[] {
-    return this.graph.nodes.filter((node) => node.type === type);
+    return this.nodesByType.get(type) ?? [];
   }
 
   private walk(
@@ -227,7 +247,7 @@ export class GraphQuery {
     }
     return {
       nodes: [...nodeIds].map((id) => this.nodeMap.get(id)).filter(Boolean) as GraphNode[],
-      edges: this.graph.edges.filter((edge) => edgeIds.has(edge.id)),
+      edges: [...edgeIds].map((id) => this.edgeMap.get(id)).filter(Boolean) as GraphEdge[],
     };
   }
 }

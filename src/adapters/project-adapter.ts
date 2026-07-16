@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { loadAll } from "js-yaml";
 import type { GraphEdge, GraphNode, ScannedFile } from "../core/types.js";
@@ -29,7 +28,6 @@ export class ProjectAdapter implements ArchitectureAdapter {
     const nodes = new Map<string, GraphNode>();
     const edges: AdapterResult["edges"] = [];
     const warnings: string[] = [];
-    const contents = new Map<string, string>();
     const addNode: AddNode = (node) => nodes.set(node.id, {
       ...nodes.get(node.id), ...node, metadata: { ...nodes.get(node.id)?.metadata, ...node.metadata },
     });
@@ -37,54 +35,58 @@ export class ProjectAdapter implements ArchitectureAdapter {
       const relationshipKey = typeof metadata?.relationshipKey === "string" ? metadata.relationshipKey : "";
       edges.push({ from, to, type, label: relationshipKey ? `${type}#${relationshipKey}` : type, source: "config", confidence: 1, metadata });
     };
-    const contentOf = async (file: ScannedFile) => {
-      if (contents.has(file.path)) return contents.get(file.path)!;
-      const content = await readFile(file.absolutePath, "utf8").catch(() => "");
-      contents.set(file.path, content);
-      return content;
-    };
+    const contentOf = (file: ScannedFile) => context.readFile(file);
 
     const packageFile = context.files.find((file) => file.path === "package.json");
     const packageText = packageFile ? await contentOf(packageFile) : "";
     const clickHouseProject = /@clickhouse\/client|clickhouse-js|clickhouse/i.test(packageText);
 
-    for (const file of context.files.filter((item) => item.extension === ".env")) {
-      parseEnvironmentContract(file, await contentOf(file), addNode, addEdge);
-    }
-
-    for (const file of context.files.filter((item) => item.extension === ".sql" || isMigrationFile(item))) {
-      const content = await contentOf(file);
-      const fragments = file.extension === ".sql" ? [content] : extractSqlFragments(content);
-      parseSqlFile(file, fragments, clickHouseProject, addNode, addEdge);
-    }
-
-    for (const file of context.files.filter((item) => [".ts", ".js"].includes(item.extension))) {
-      const content = await contentOf(file);
-      parseSchedules(file, content, addNode, addEdge);
-      parseRepeatableJobs(file, content, addNode, addEdge);
-      if (/CREATE\s+(?:MATERIALIZED\s+VIEW|TABLE)|ALTER\s+TABLE/i.test(content) && /clickhouse|MergeTree|PARTITION\s+BY/i.test(content)) {
-        parseSqlFile(file, extractSqlFragments(content), true, addNode, addEdge);
-      }
-    }
-
-    for (const file of context.files.filter((item) => isWorkflowFile(item.path))) {
-      parseWorkflow(file, await contentOf(file), addNode, addEdge, warnings);
-    }
-
-    for (const file of context.files.filter((item) => item.extension.startsWith("dockerfile"))) {
-      parseDockerfile(file, await contentOf(file), context.projectRoot, addNode, addEdge);
-    }
-
-    for (const file of context.files.filter((item) => [".yml", ".yaml", ".tpl"].includes(item.extension))) {
-      const content = await contentOf(file);
-      if (isWorkflowFile(file.path)) continue;
-      if (isComposeFile(file.path, content)) parseCompose(file, content, addNode, addEdge, warnings);
-      if (isKubernetesFile(file.path, content)) parseKubernetes(file, content, addNode, addEdge, warnings);
-    }
+    await Promise.all([
+      forEachConcurrent(context.files.filter((item) => item.extension === ".env"), 16, async (file) => {
+        parseEnvironmentContract(file, await contentOf(file), addNode, addEdge);
+      }),
+      forEachConcurrent(context.files.filter((item) => item.extension === ".sql" || isMigrationFile(item)), 16, async (file) => {
+        const content = await contentOf(file);
+        const fragments = file.extension === ".sql" ? [content] : extractSqlFragments(content);
+        parseSqlFile(file, fragments, clickHouseProject, addNode, addEdge);
+      }),
+      forEachConcurrent(context.files.filter((item) => [".ts", ".js"].includes(item.extension)), 16, async (file) => {
+        const content = await contentOf(file);
+        parseSchedules(file, content, addNode, addEdge);
+        parseRepeatableJobs(file, content, addNode, addEdge);
+        if (/CREATE\s+(?:MATERIALIZED\s+VIEW|TABLE)|ALTER\s+TABLE/i.test(content) && /clickhouse|MergeTree|PARTITION\s+BY/i.test(content)) {
+          parseSqlFile(file, extractSqlFragments(content), true, addNode, addEdge);
+        }
+      }),
+      forEachConcurrent(context.files.filter((item) => isWorkflowFile(item.path)), 8, async (file) => {
+        parseWorkflow(file, await contentOf(file), addNode, addEdge, warnings);
+      }),
+      forEachConcurrent(context.files.filter((item) => item.extension.startsWith("dockerfile")), 8, async (file) => {
+        parseDockerfile(file, await contentOf(file), context.projectRoot, addNode, addEdge);
+      }),
+      forEachConcurrent(context.files.filter((item) => [".yml", ".yaml", ".tpl"].includes(item.extension)), 8, async (file) => {
+        const content = await contentOf(file);
+        if (isWorkflowFile(file.path)) return;
+        if (isComposeFile(file.path, content)) parseCompose(file, content, addNode, addEdge, warnings);
+        if (isKubernetesFile(file.path, content)) parseKubernetes(file, content, addNode, addEdge, warnings);
+      }),
+    ]);
 
     resolveInfrastructureEdges(nodes, edges);
     return { nodes: [...nodes.values()], edges, warnings };
   }
+}
+
+async function forEachConcurrent<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length || 1));
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      await worker(items[index]);
+    }
+  }));
 }
 
 function isProjectConfig(file: ScannedFile): boolean {
@@ -164,6 +166,7 @@ function parseCreateTable(statement: string, file: ScannedFile, databaseId: stri
   const match = statement.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s*\(/i);
   if (!match) return;
   const qualified = sqlName(match[1]);
+  if (isDynamicSqlName(qualified)) return;
   const { schema, table } = splitQualifiedName(qualified);
   const tableId = tableNodeId(schema, table);
   addSchemaAndTable(databaseId, schema, table, tableId, file.path, clickhouse, addNode, addEdge);
@@ -181,6 +184,7 @@ function parseCreateTable(statement: string, file: ScannedFile, databaseId: stri
     const column = trimmed.match(/^([`"\w.]+)\s+([^\s,]+(?:\s*\([^)]*\))?)([\s\S]*)$/);
     if (!column) continue;
     const name = sqlName(column[1]);
+    if (isDynamicSqlName(name)) continue;
     const rest = column[3];
     const columnId = `column:${qualified}.${name}`;
     addNode({ id: columnId, type: "column", label: `${qualified}.${name}`, name, file: file.path, framework: clickhouse ? "clickhouse" : "sql", source: "config", confidence: 1, metadata: {
@@ -233,6 +237,7 @@ function parseAlterTable(statement: string, file: ScannedFile, databaseId: strin
   const match = statement.match(/ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+([\s\S]*)/i);
   if (!match) return;
   const qualified = sqlName(match[1]);
+  if (isDynamicSqlName(qualified)) return;
   const { schema, table } = splitQualifiedName(qualified);
   const tableId = tableNodeId(schema, table);
   addSchemaAndTable(databaseId, schema, table, tableId, file.path, clickhouse, addNode, addEdge);
@@ -269,13 +274,14 @@ function sqlColumns(value?: string): string[] {
 }
 
 function parseCreateIndex(statement: string, file: ScannedFile, migrationId: string | null, addNode: AddNode, addEdge: AddEdge) {
-  const match = statement.match(/CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s]+)\s+ON\s+([^\s(]+)\s*\(([^)]*)\)([\s\S]*)/i);
+  const match = statement.match(/CREATE\s+(UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([^\s]+)\s+ON\s+([^\s(]+)\s*\(([^)]*)\)([\s\S]*)/i);
   if (!match) return;
   const indexName = sqlName(match[2]);
   const qualified = sqlName(match[3]);
+  if (isDynamicSqlName(indexName) || isDynamicSqlName(qualified)) return;
   const target = splitQualifiedName(qualified);
   const id = `index:${qualified}.${indexName}`;
-  addNode({ id, type: "index", label: indexName, name: indexName, file: file.path, source: "config", confidence: 1, metadata: { unique: Boolean(match[1]), columns: splitTopLevel(match[4]).map((item) => item.trim()), predicate: match[5].match(/WHERE\s+([\s\S]*)/i)?.[1]?.trim() } });
+  addNode({ id, type: "index", label: indexName, name: indexName, file: file.path, source: "config", confidence: 1, metadata: { unique: Boolean(match[1]), columns: splitTopLevel(match[4]).map(normalizeIndexColumn), predicate: match[5].match(/WHERE\s+([\s\S]*)/i)?.[1]?.trim() } });
   addEdge(id, tableNodeId(target.schema, target.table), "indexes");
   if (migrationId) addEdge(migrationId, id, "creates");
 }
@@ -284,6 +290,7 @@ function parseMaterializedView(statement: string, file: ScannedFile, databaseId:
   const match = statement.match(/CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)([\s\S]*)/i);
   if (!match) return;
   const name = sqlName(match[1]);
+  if (isDynamicSqlName(name)) return;
   const id = `materialized_view:${name}`;
   addNode({ id, type: "materialized_view", label: name, name, file: file.path, framework: clickhouse ? "clickhouse" : "sql", source: "config", confidence: 1, metadata: clickHouseMetadata(match[2]) });
   addEdge(databaseId, id, "contains");
@@ -580,10 +587,15 @@ function normalizeEnvironment(value: string): string | null {
 }
 
 function extractSqlFragments(content: string): string[] {
-  const values: string[] = [];
-  for (const match of content.matchAll(/(?:query|execute)\s*\(\s*([`'"])([\s\S]*?)\1/g)) values.push(match[2]);
-  for (const match of content.matchAll(/([`'"])(CREATE\s+(?:MATERIALIZED\s+VIEW|TABLE|INDEX)|ALTER\s+TABLE)[\s\S]*?\1/gi)) values.push(match[0].slice(1, -1));
-  return values;
+  const constants = new Map<string, string>();
+  for (const match of content.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*([`'"])([^\r\n]*?)\2\s*;?/g)) {
+    constants.set(match[1], match[3]);
+  }
+  const resolveTemplates = (value: string) => value.replace(/\$\{([A-Za-z_$][\w$]*)\}/g, (placeholder, name: string) => constants.get(name) ?? placeholder);
+  const values = new Set<string>();
+  for (const match of content.matchAll(/(?:query|execute)\s*\(\s*([`'"])([\s\S]*?)\1/g)) values.add(resolveTemplates(match[2]));
+  for (const match of content.matchAll(/([`'"])(CREATE\s+(?:MATERIALIZED\s+VIEW|TABLE|INDEX)|ALTER\s+TABLE)[\s\S]*?\1/gi)) values.add(resolveTemplates(match[0].slice(1, -1)));
+  return [...values];
 }
 
 function splitSqlStatements(content: string): string[] {
@@ -641,6 +653,11 @@ function splitQualifiedName(value: string): { schema: string; table: string } {
 
 function tableNodeId(schema: string, table: string): string { return `table:${schema === "public" ? table : `${schema}.${table}`}`; }
 function sqlName(value: string): string { return value.trim().replace(/^[`"]|[`"]$/g, "").replaceAll('"."', ".").replaceAll("`.", "."); }
+function normalizeIndexColumn(value: string): string {
+  const trimmed = value.trim();
+  return /^([`"])[^'"`]+\1$/.test(trimmed) ? sqlName(trimmed) : trimmed;
+}
+function isDynamicSqlName(value: string): boolean { return /\$\{|[{}]/.test(value); }
 function compactSql(value: string): string { return value.replace(/\s+/g, " ").trim().slice(0, 500); }
 function unquote(value: string): string { return value.replace(/^(['"`])([\s\S]*)\1$/, "$2"); }
 function expressionValue(value: string): string | null { const match = value.trim().match(/^['"`]([^'"`]*)['"`]$/); return match?.[1] ?? null; }

@@ -1,15 +1,17 @@
+import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 import { NestAdapter } from "./adapters/nest-adapter.js";
 import { ProjectAdapter } from "./adapters/project-adapter.js";
 import { enrichGraphDescriptions } from "./core/descriptions.js";
 import { GraphBuilder } from "./core/graph.js";
-import type { ArchitectureGraph, ArchitectureRisk, ScanOptions, ScanResult } from "./core/types.js";
+import type { ArchitectureGraph, ArchitectureRisk, ScanMetadata, ScanOptions, ScanResult, ScannedFile } from "./core/types.js";
 import { detectStacks } from "./detector/stack-detector.js";
 import { generateReport } from "./output/report.js";
-import { writeOutputs } from "./output/writer.js";
+import { getViewerFingerprint, refreshCachedViewer, writeOutputs } from "./output/writer.js";
 import { detectRisks } from "./risks/risk-detector.js";
 import { scanFiles } from "./scanner/file-scanner.js";
+import { mergeRuntimeEvidence, readRuntimeEvents } from "./runtime/merge.js";
 
 export * from "./core/types.js";
 export { enrichGraphDescriptions } from "./core/descriptions.js";
@@ -19,7 +21,12 @@ export { generateReport } from "./output/report.js";
 export { getBrowserLaunch, openBrowser } from "./server/open-browser.js";
 export { serveViewer } from "./server/viewer-server.js";
 export { scanFiles } from "./scanner/file-scanner.js";
+export { mergeRuntimeEvidence, readRuntimeEvents } from "./runtime/merge.js";
+export { createNestRuntimeInterceptor, RuntimeTracer } from "./runtime/tracer.js";
+export type { RuntimeTracerOptions } from "./runtime/tracer.js";
 export type { FileScanOptions, FileScanResult } from "./scanner/file-scanner.js";
+
+const ANALYSIS_CACHE_VERSION = 2;
 
 export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const started = Date.now();
@@ -31,8 +38,45 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const relativeOutput = relative(projectRoot, outputPath).replaceAll("\\", "/");
   const ignoredPaths = relativeOutput && relativeOutput !== "." && !relativeOutput.startsWith("../") ? [relativeOutput] : [];
   options.onProgress?.({ stage: "scan_files", message: "Scanning files..." });
-  const fileScan = await scanFiles(projectRoot, { ignoredPaths });
-  options.onProgress?.({ stage: "scan_files", message: `${fileScan.files.length} files found` });
+  const fileScan = await scanFiles(projectRoot, {
+    ignoredPaths,
+    cachePath: resolve(outputPath, "cache", "files.json"),
+    useCache: options.incremental !== false,
+  });
+  const inputFingerprint = fingerprintFiles(fileScan.files);
+  const viewerFingerprint = await getViewerFingerprint();
+  options.onProgress?.({
+    stage: "scan_files",
+    message: `${fileScan.files.length} files found (${fileScan.hashed} hashed, ${fileScan.reused} unchanged)`,
+  });
+  if (options.incremental !== false) {
+    const cached = await loadCachedAnalysis(outputPath, inputFingerprint);
+    if (cached) {
+      const finished = Date.now();
+      const metadata: ScanMetadata = {
+        ...cached.metadata,
+        scanStartedAt,
+        scanFinishedAt: new Date(finished).toISOString(),
+        durationMs: finished - started,
+        filesScanned: fileScan.files.length,
+        filesIgnored: fileScan.ignored,
+        filesHashed: fileScan.hashed,
+        filesReused: fileScan.reused,
+        cacheHit: true,
+        inputFingerprint,
+        analysisCacheVersion: ANALYSIS_CACHE_VERSION,
+        viewerFingerprint,
+      };
+      options.onProgress?.({ stage: "parse_architecture", message: "No source changes. Reusing the cached architecture graph." });
+      if (cached.metadata.viewerFingerprint !== viewerFingerprint) {
+        options.onProgress?.({ stage: "write_outputs", message: "Refreshing viewer assets..." });
+        await refreshCachedViewer(outputPath, cached.graph, metadata, cached.risks);
+      } else {
+        await writeFile(resolve(outputPath, "metadata.json"), `${JSON.stringify(metadata, null, 2)}\n`);
+      }
+      return { graph: cached.graph, metadata, risks: cached.risks, outputPath };
+    }
+  }
   options.onProgress?.({ stage: "detect_stack", message: "Detecting project stack..." });
   const detectedStacks = await detectStacks(projectRoot, fileScan.files);
   const nestStack = detectedStacks.find((stack) => stack.name === "nestjs");
@@ -57,25 +101,36 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   }
   addFileHierarchy(builder, projectRoot, fileScan.files.map((file) => file.path));
 
-  const adapter = new NestAdapter();
-  const adapterContext = { projectRoot, files: fileScan.files, detectedStacks, debug: options.debug };
-  const adapterDetection = await adapter.detect(adapterContext);
-  if (adapterDetection.detected) {
-    options.onProgress?.({ stage: "parse_architecture", message: "Parsing NestJS architecture..." });
-    const adapterResult = await adapter.scan(adapterContext);
-    for (const node of await adapter.buildNodes(adapterResult)) builder.addNode(node);
-    for (const edge of await adapter.buildEdges(adapterResult)) builder.addEdge(edge);
-    if (options.debug) for (const warning of adapterResult.warnings) console.error(`[debug] ${warning}`);
-  }
-
-  const projectAdapter = new ProjectAdapter();
-  const projectAdapterDetection = await projectAdapter.detect(adapterContext);
-  if (projectAdapterDetection.detected) {
-    options.onProgress?.({ stage: "parse_architecture", message: "Parsing data, schedules, and delivery configuration..." });
-    const adapterResult = await projectAdapter.scan(adapterContext);
-    for (const node of await projectAdapter.buildNodes(adapterResult)) builder.addNode(node);
-    for (const edge of await projectAdapter.buildEdges(adapterResult)) builder.addEdge(edge);
-    if (options.debug) for (const warning of adapterResult.warnings) console.error(`[debug] ${warning}`);
+  const contentReads = new Map<string, Promise<string>>();
+  const readScannedFile = (file: ScannedFile) => {
+    let pending = contentReads.get(file.path);
+    if (!pending) {
+      pending = readFile(file.absolutePath, "utf8").catch(() => "");
+      contentReads.set(file.path, pending);
+      void pending.then(() => {
+        if (contentReads.get(file.path) === pending) contentReads.delete(file.path);
+      });
+    }
+    return pending;
+  };
+  const adapterContext = { projectRoot, files: fileScan.files, detectedStacks, readFile: readScannedFile, debug: options.debug };
+  const adapters = [new NestAdapter(), new ProjectAdapter()];
+  const detections = await Promise.all(adapters.map((adapter) => adapter.detect(adapterContext)));
+  const activeAdapters = adapters.filter((_, index) => detections[index].detected);
+  if (activeAdapters.length) {
+    options.onProgress?.({
+      stage: "parse_architecture",
+      message: `Parsing architecture with ${activeAdapters.map((adapter) => adapter.name).join(" and ")}...`,
+    });
+    const adapterResults = await Promise.all(activeAdapters.map(async (adapter) => ({
+      adapter,
+      result: await adapter.scan(adapterContext),
+    })));
+    for (const { adapter, result } of adapterResults) {
+      for (const node of await adapter.buildNodes(result)) builder.addNode(node);
+      for (const edge of await adapter.buildEdges(result)) builder.addEdge(edge);
+      if (options.debug) for (const warning of result.warnings) console.error(`[debug] ${warning}`);
+    }
   }
 
   options.onProgress?.({ stage: "build_graph", message: "Building architecture graph..." });
@@ -92,7 +147,7 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   graph = enrichGraphDescriptions(builder.toGraph(project));
 
   const finished = Date.now();
-  const metadata = {
+  const metadata: ScanMetadata = {
     version: graph.version,
     projectName,
     projectRoot,
@@ -101,6 +156,12 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
     durationMs: finished - started,
     filesScanned: fileScan.files.length,
     filesIgnored: fileScan.ignored,
+    filesHashed: fileScan.hashed,
+    filesReused: fileScan.reused,
+    cacheHit: false,
+    inputFingerprint,
+    analysisCacheVersion: ANALYSIS_CACHE_VERSION,
+    viewerFingerprint,
     detectedStacks,
   };
   options.onProgress?.({ stage: "write_outputs", message: "Writing graph, report, and viewer..." });
@@ -121,6 +182,34 @@ export async function regenerateReport(projectPath: string, outputPath = ".atlas
   const report = generateReport(graph, risks);
   await writeFile(resolve(output, "report.md"), report);
   return resolve(output, "report.md");
+}
+
+export async function mergeRuntimeTrace(
+  projectPath: string,
+  outputPath = ".atlas",
+  inputPath?: string,
+): Promise<ScanResult> {
+  const projectRoot = resolve(projectPath);
+  const output = resolve(projectRoot, outputPath);
+  const trace = resolve(projectRoot, inputPath ?? `${outputPath}/runtime.jsonl`);
+  const [graph, metadata, risks, events] = await Promise.all([
+    readFile(resolve(output, "graph.json"), "utf8").then((value) => JSON.parse(value) as ArchitectureGraph),
+    readFile(resolve(output, "metadata.json"), "utf8").then((value) => JSON.parse(value) as ScanMetadata),
+    readFile(resolve(output, "risks.json"), "utf8").then((value) => JSON.parse(value) as ArchitectureRisk[]),
+    readRuntimeEvents(trace),
+  ]);
+  const runtimeFingerprint = fingerprintRuntimeEvents(events);
+  if (!events.length) throw new Error(`No runtime observations found in ${trace}`);
+  if (metadata.runtimeFingerprint === runtimeFingerprint) return { graph, metadata, risks, outputPath: output };
+  const mergedGraph = mergeRuntimeEvidence(graph, events);
+  const mergedMetadata: ScanMetadata = {
+    ...metadata,
+    runtimeEvents: events.reduce((total, event) => total + Math.max(1, event.count ?? 1), 0),
+    runtimeMergedAt: new Date().toISOString(),
+    runtimeFingerprint,
+  };
+  await writeOutputs(output, mergedGraph, mergedMetadata, risks);
+  return { graph: mergedGraph, metadata: mergedMetadata, risks, outputPath: output };
 }
 
 function addFileHierarchy(builder: GraphBuilder, projectRoot: string, files: string[]) {
@@ -151,4 +240,37 @@ function languageFor(extension: string): string {
 
 async function readJson(path: string): Promise<Record<string, unknown> | null> {
   try { return JSON.parse(await readFile(path, "utf8")); } catch { return null; }
+}
+
+function fingerprintFiles(files: ScannedFile[]): string {
+  const hash = createHash("sha256");
+  for (const file of files) {
+    hash.update(file.path);
+    hash.update("\0");
+    hash.update(file.hash ?? `${file.size}:${file.lastModified}`);
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+function fingerprintRuntimeEvents(events: import("./core/types.js").RuntimeTraceEvent[]): string {
+  return createHash("sha256").update(JSON.stringify(events)).digest("hex");
+}
+
+async function loadCachedAnalysis(
+  outputPath: string,
+  inputFingerprint: string,
+): Promise<{ graph: ArchitectureGraph; metadata: ScanMetadata; risks: ArchitectureRisk[] } | null> {
+  try {
+    const [graph, metadata, risks] = await Promise.all([
+      readFile(resolve(outputPath, "graph.json"), "utf8").then((value) => JSON.parse(value) as ArchitectureGraph),
+      readFile(resolve(outputPath, "metadata.json"), "utf8").then((value) => JSON.parse(value) as ScanMetadata),
+      readFile(resolve(outputPath, "risks.json"), "utf8").then((value) => JSON.parse(value) as ArchitectureRisk[]),
+    ]);
+    if (metadata.analysisCacheVersion !== ANALYSIS_CACHE_VERSION || metadata.inputFingerprint !== inputFingerprint) return null;
+    if (!Array.isArray(graph.nodes) || !Array.isArray(graph.edges) || !Array.isArray(risks)) return null;
+    return { graph, metadata, risks };
+  } catch {
+    return null;
+  }
 }
