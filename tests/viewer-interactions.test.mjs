@@ -151,6 +151,82 @@ test("module dependencies and internals are separate views", async () => {
   assert.match(viewer.scene().status, /One-hop context/);
 });
 
+test("module landscape renders directional import relationships", async () => {
+  const viewer = await createViewer();
+  const modules = viewer.state.D.nodes.filter((node) => node.type === "module").slice(0, 2);
+  assert.equal(modules.length, 2, "fixture must contain at least two modules");
+  const domain = {
+    id: "test-boundary",
+    name: "Test boundary",
+    desc: "Test module boundary",
+    counts: "2 modules",
+    modules: modules.map((node) => node.id),
+    allModules: modules.map((node) => node.id),
+  };
+  viewer.state.D.domains = [domain];
+  viewer.state.D.edges.push({
+    from: modules[0].id,
+    to: modules[1].id,
+    verb: "imports",
+    relation: "imports",
+    kind: "sync",
+    confidence: 1,
+    source: "ast",
+  });
+
+  const scene = viewer.sceneModuleGrid(domain.id);
+  const relationship = scene.edges.find((edge) => edge.from === modules[0].id && edge.to === modules[1].id);
+  assert.ok(relationship);
+  assert.equal(relationship.color, "#7452a8");
+  assert.match(scene.status, /directional import relationships/);
+});
+
+test("operations navigation separates deployment, runtime and environments", async () => {
+  const viewer = await createViewer();
+  let values = viewer.renderVals();
+  const labels = values.navItems.filter((item) => item.isItem).map((item) => item.label);
+  assert.ok(labels.includes("Deployment"));
+  assert.ok(labels.includes("Runtime"));
+  assert.ok(labels.includes("Environments"));
+  assert.ok(!labels.includes("Delivery & Runtime"));
+
+  viewer.state = { ...viewer.state, mode: "deployment", deliveryEnv: "production", sel: null };
+  const deployment = viewer.scene();
+  assert.deepEqual(deployment.cols.map((column) => column.label), ["WORKFLOW", "CI / CD JOBS", "BUILD", "ARTIFACT", "DEPLOY"]);
+  assert.ok(deployment.nodes.every((node) => !["container", "ingress", "config_map", "secret"].includes(viewer.node(node.id)?.type)));
+
+  viewer.state = { ...viewer.state, mode: "runtime", deliveryEnv: "production", sel: null };
+  const runtime = viewer.scene();
+  assert.deepEqual(runtime.cols.map((column) => column.label), ["PUBLIC ENTRY", "ROUTING", "WORKLOADS", "CONTAINERS", "CONFIGURATION"]);
+  assert.ok(runtime.nodes.every((node) => !["workflow", "pipeline_job", "build_stage"].includes(viewer.node(node.id)?.type)));
+
+  viewer.state = { ...viewer.state, mode: "environments", sel: null };
+  const environments = viewer.scene();
+  assert.deepEqual(environments.cols.map((column) => column.label), ["ENVIRONMENT", "DELIVERY", "RUNTIME", "CONFIGURATION"]);
+  assert.ok(environments.nodes.some((node) => viewer.node(node.id)?.type === "environment"));
+  assert.ok(environments.edges.length > 0);
+});
+
+test("edge grammar distinguishes structure, delivery, configuration and async flow", async () => {
+  const viewer = await createViewer();
+  const a = { x: 0, y: 0, w: 100, h: 40 };
+  const b = { x: 200, y: 0, w: 100, h: 40 };
+  const edge = (relation, kind = "sync") => viewer.linkEdge(a, b, { from: "service:UsersService", to: "table:users", verb: relation, relation, kind }, false, false, true);
+
+  const imports = edge("imports");
+  assert.equal(imports.color, "#7452a8");
+  assert.equal(imports.moving, false);
+  const deploys = edge("deploys");
+  assert.equal(deploys.color, "#c56a22");
+  assert.equal(deploys.moving, true);
+  const configures = edge("configures");
+  assert.equal(configures.color, "#8b5ca8");
+  assert.equal(configures.moving, false);
+  const publishes = edge("publishes_to", "async");
+  assert.equal(publishes.color, "#0f7895");
+  assert.equal(publishes.moving, true);
+});
+
 test("HTTP flow explicitly passes through its controller and drills into context", async () => {
   const viewer = await createViewer();
   const candidate = Object.entries(viewer.state.D.flows).map(([id, flow]) => {
