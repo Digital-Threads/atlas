@@ -125,6 +125,17 @@ test("project search ranks exact endpoints above incidental file matches", async
   assert.equal(results[0].type, "HTTP route");
 });
 
+test("system map keeps group connections and exposes delivery and runtime", async () => {
+  const viewer = await createViewer();
+  viewer.state = { ...viewer.state, mode: "map", mapVariant: "clusters" };
+  const scene = viewer.sceneMap();
+  assert.ok(scene.groups.some((group) => /Delivery & runtime/.test(group.label)));
+  assert.ok(scene.nodes.some((node) => ["workflow", "pipeline_job", "container_image", "deployment", "container", "infrastructure_service", "ingress", "environment"].includes(viewer.node(node.id)?.type)));
+  assert.ok(scene.edgeEndpointIds.some((id) => id.startsWith("d.")), "domain group anchors must be retained");
+  const optimized = viewer.optimizeScene(scene, null);
+  assert.equal(optimized.edges.length, scene.edges.length, "level-of-detail must not remove edges connected to visible domain groups");
+});
+
 test("focused context uses one methodology and recenters without duplicate cards", async () => {
   const viewer = await createViewer();
   const moduleNode = viewer.state.D.nodes.find((node) => node.type === "module"
