@@ -30,7 +30,7 @@
     ::-webkit-scrollbar-thumb { background: #c9d1cd; border-radius: 5px; border: 2px solid #f2f4f3; }
     @keyframes atlasFade { from { opacity: 0; } to { opacity: 1; } }
     @keyframes atlasDash { to { stroke-dashoffset: -20; } }
-    .atlas-edge-async { animation: atlasDash 1.8s linear infinite; }
+    .atlas-edge-flow { animation: atlasDash 1.8s linear infinite; }
     @media (prefers-reduced-motion: reduce) { .atlas-edge { animation: none !important; } }
     .atlas-scroll-screen { scrollbar-gutter: stable; }
     .atlas-table-row { transition: background 120ms ease, border-color 120ms ease; }
@@ -412,6 +412,10 @@
                 <marker id="arr-data" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#1e8068"></path></marker>
                 <marker id="arr-external" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#c94747"></path></marker>
                 <marker id="arr-destructive" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#b93c3c"></path></marker>
+                <marker id="arr-structure" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#7452a8"></path></marker>
+                <marker id="arr-delivery" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#c56a22"></path></marker>
+                <marker id="arr-config" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#8b5ca8"></path></marker>
+                <marker id="arr-network" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0.6 L7.4,4 L0,7.4 Z" fill="#16798b"></path></marker>
               </defs>
 
               <!-- group / domain boxes -->
@@ -450,7 +454,7 @@
                 <g sc-camel-opacity="{{ edge.op }}" onClick="{{ edge.onClick }}" onMouseEnter="{{ edge.onEnter }}" onMouseLeave="{{ onHoverOut }}" style="cursor: {{ edge.cursor }};">
                   <path sc-camel-d="{{ edge.d }}" fill="none" stroke="transparent" stroke-width="12"></path>
                   <sc-if value="{{ edge.moving }}" hint-placeholder-val="{{ false }}">
-                    <path class="atlas-edge atlas-edge-async" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}"></path>
+                    <path class="atlas-edge atlas-edge-async atlas-edge-flow" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}"></path>
                   </sc-if>
                   <sc-if value="{{ edge.stationary }}" hint-placeholder-val="{{ true }}">
                     <path class="atlas-edge" sc-camel-d="{{ edge.d }}" fill="none" sc-camel-stroke="{{ edge.color }}" sc-camel-stroke-width="{{ edge.w }}" sc-camel-stroke-dasharray="{{ edge.dash }}" sc-camel-marker-end="{{ edge.marker }}"></path>
@@ -527,6 +531,9 @@
               <span title="An event or queued job. The moving dash shows that work happens later." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#0f7895" stroke-width="1.6" stroke-dasharray="4 3"></line></svg>event / queue</span>
               <span title="Light dashed green reads data; dark solid green writes or changes data." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="8" style="flex: 0 0 auto;"><line x1="0" y1="2" x2="22" y2="2" stroke="#3c987c" stroke-width="1.4" stroke-dasharray="2 3"></line><line x1="0" y1="6" x2="22" y2="6" stroke="#176f59" stroke-width="1.8"></line></svg>read / write</span>
               <span title="A call that leaves the analyzed system boundary." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#c94747" stroke-width="1.6"></line></svg>external</span>
+              <span title="Imports, ownership and module wiring." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#7452a8" stroke-width="1.6"></line></svg>structure</span>
+              <span title="Build and deployment progression." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#c56a22" stroke-width="1.8" stroke-dasharray="6 4"></line></svg>build / deploy</span>
+              <span title="Runtime configuration supplied to a workload." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#8b5ca8" stroke-width="1.6" stroke-dasharray="2 4"></line></svg>configuration</span>
               <button onClick="{{ openGuide }}" style="pointer-events: auto; border: 0; background: transparent; color: #1f6f5b; font-size: 10px; font-weight: 700; padding: 0;" style-hover="text-decoration: underline;">How to read this map?</button>
             </div>
 
@@ -914,7 +921,9 @@ class Component extends DCLogic {
     else if (n.type === 'materialized_view' || /clickhouse/i.test(`${n.id} ${n.label} ${n.file || ''} ${n.details?.engine || ''}`)) mode = 'clickhouse';
     else if (['table', 'database', 'schema', 'column', 'index', 'constraint'].includes(n.type)) mode = 'database';
     else if (n.type === 'scheduled_job') mode = 'schedules';
-    else if (['workflow', 'pipeline_job', 'build_stage', 'container_image', 'container', 'deployment', 'infrastructure_service', 'ingress', 'config_map', 'secret', 'environment'].includes(n.type)) mode = 'delivery';
+    else if (['workflow', 'pipeline_job', 'build_stage', 'container_image', 'deployment'].includes(n.type)) mode = 'deployment';
+    else if (['container', 'infrastructure_service', 'ingress', 'config_map', 'secret'].includes(n.type)) mode = 'runtime';
+    else if (n.type === 'environment') mode = 'environments';
     else if (n.type === 'env') mode = 'configuration';
     else if (['external', 'library'].includes(n.type)) mode = 'external';
     else if (n.type === 'risk') mode = 'risks';
@@ -964,12 +973,16 @@ class Component extends DCLogic {
   // ---------- geometry ----------
   edgeStyle(kind, relation, verb) {
     const rel = relation || String(verb || '').toLowerCase().replaceAll(' ', '_');
-    if (rel === 'drops' || rel === 'drop') return { color: '#b93c3c', dash: '7 4', marker: 'url(#arr-destructive)', labelFill: '#963131' };
-    if (rel === 'reads' || rel === 'read') return { color: '#3c987c', dash: '2 3', marker: 'url(#arr-data-read)', labelFill: '#27765f' };
-    if (rel === 'writes' || rel === 'write' || ['creates', 'alters', 'indexes'].includes(rel)) return { color: '#176f59', dash: '', marker: 'url(#arr-data-write)', labelFill: '#135c4a' };
+    if (rel === 'drops' || rel === 'drop') return { color: '#b93c3c', dash: '7 4', marker: 'url(#arr-destructive)', labelFill: '#963131', animate: false };
+    if (rel === 'reads' || rel === 'read') return { color: '#3c987c', dash: '2 3', marker: 'url(#arr-data-read)', labelFill: '#27765f', animate: false };
+    if (rel === 'writes' || rel === 'write' || ['creates', 'alters', 'indexes'].includes(rel)) return { color: '#176f59', dash: '', marker: 'url(#arr-data-write)', labelFill: '#135c4a', animate: false };
+    if (['imports', 'contains', 'provides', 'declares', 'has_method', 'owns'].includes(rel)) return { color: '#7452a8', dash: '', marker: 'url(#arr-structure)', labelFill: '#60428e', animate: false };
+    if (['builds', 'publishes', 'deploys', 'releases'].includes(rel)) return { color: '#c56a22', dash: '6 4', marker: 'url(#arr-delivery)', labelFill: '#9c5119', animate: true };
+    if (['configures', 'runs_in'].includes(rel)) return { color: '#8b5ca8', dash: '2 4', marker: 'url(#arr-config)', labelFill: '#704786', animate: false };
+    if (['targets', 'exposes', 'routes_to'].includes(rel)) return { color: '#16798b', dash: '', marker: 'url(#arr-network)', labelFill: '#116575', animate: false };
     const map = { sync: ['#7d8a84', '', 'url(#arr-sync)', '#4f5a55'], async: ['#0f7895', '5 4', 'url(#arr-async)', '#0f6478'], data: ['#1e8068', '', 'url(#arr-data)', '#176a56'], external: ['#c94747', '', 'url(#arr-external)', '#a83a3a'] };
     const [color, dash, marker, labelFill] = map[kind] || map.sync;
-    return { color, dash, marker, labelFill };
+    return { color, dash, marker, labelFill, animate: kind === 'async' };
   }
   bez(x1, y1, x2, y2) { const dx = Math.max(36, Math.abs(x2 - x1) * 0.45); return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2 - 8} ${y2}`; }
   linkEdge(a, b, e, hi, dim, showLabels) {
@@ -990,7 +1003,7 @@ class Component extends DCLogic {
       d, color: st.color, dash: st.dash, marker: st.marker, labelFill: st.labelFill,
       w: hi ? 2.6 : (e.kind === 'async' ? 2 : (e.relation === 'writes' ? 1.8 : 1.5)), op: dim ? 0.14 : (hi ? 1 : (inferred ? 0.58 : (e.kind === 'async' ? 0.96 : 0.74))),
       showLabel: !!(showLabels && e.verb && !dim), verb: e.verb, lx: (x1 + x2) / 2, ly: (y1 + y2) / 2 - 7,
-      moving: e.kind === 'async' && !dim, stationary: e.kind !== 'async' || dim,
+      moving: st.animate && !dim, stationary: !st.animate || dim,
       onEnter: (ev) => this.hoverEdge(ev, e),
       cursor: clickId ? 'pointer' : 'default',
       onClick: clickId ? (ev) => { ev.stopPropagation(); this.reveal(clickId); } : () => {},
@@ -1032,6 +1045,10 @@ class Component extends DCLogic {
     const relationNote = {
       reads: 'reads data without changing it', writes: 'changes stored data', creates: 'creates a data structure',
       alters: 'changes a data structure', drops: 'removes a data structure', indexes: 'defines an index',
+      imports: 'imports this module boundary', contains: 'owns this component', provides: 'registers this provider',
+      builds: 'builds this artifact', publishes: 'publishes this artifact', deploys: 'deploys into an environment',
+      exposes: 'exposes this runtime service', targets: 'routes traffic to this workload',
+      configures: 'supplies runtime configuration', runs_in: 'runs in this environment',
     }[e.relation];
     const kindNote = relationNote || { sync: 'synchronous call — the caller waits', async: 'event or queue — work happens later', data: 'data relationship', external: 'call outside the system' }[e.kind] || '';
     const relationDetails = e.details ? Object.entries(e.details).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`).join(' · ') : '';
@@ -1103,7 +1120,9 @@ class Component extends DCLogic {
       return this.sceneContext(sel);
     }
     if (mode === 'schedules') return sel ? this.sceneScheduled(sel) : this.sceneScheduleOverview();
-    if (mode === 'delivery') return this.state.deliveryEnv === 'compare' ? this.sceneDeliveryCompare() : this.sceneDelivery(this.state.deliveryEnv || 'production');
+    if (mode === 'deployment') return this.sceneDeployment(this.state.deliveryEnv || 'production');
+    if (mode === 'runtime') return this.sceneRuntime(this.state.deliveryEnv || 'production');
+    if (mode === 'environments') return this.sceneEnvironments();
     if (mode === 'configuration') return sel ? this.sceneDirectional(sel) : this.sceneConfiguration();
     if (mode === 'external') return sel ? this.sceneDirectional(sel) : this.sceneGrid(['external', 'library'], 'Select an integration to see which code depends on it.');
     if (mode === 'risks') return sel ? this.sceneRisk(sel) : this.sceneGrid(['risk'], 'Select a risk to see the affected code.');
@@ -1309,35 +1328,47 @@ class Component extends DCLogic {
     [...sceneEdges.values()].sort((a, b) => (a.kind === 'async' ? 1 : 0) - (b.kind === 'async' ? 1 : 0)).forEach((e) => {
       const a = pos[e.from], b = pos[e.to];
       if (!a || !b) return;
-      E.push(this.linkEdge(a, b, e, false, false, showLabels && variant !== 'clusters'));
+      const count = e.count || 1;
+      const labelled = { ...e, verb: count > 1 ? `${e.verb || e.kind} ×${count}` : (e.verb || e.kind) };
+      E.push(this.linkEdge(a, b, labelled, false, false, showLabels));
     });
     const aggNote = lights.length ? (expanded ? `all ${D.domains.length} areas shown` : `${detailed.length} areas in detail · ${lights.length} aggregated (${lightModCount} modules — click to expand)`) : `all ${D.domains.length} areas shown`;
-    return { nodes: N, edges: E, groups: G, cols: C, status: `${aggNote} · ${runtime.length} of ${runtimeTotal} runtime components · ${visibleDataIds.length} of ${dataTotal} data stores · ${extIds.length} of ${extTotal} external systems. Full catalogs stay available in the sidebar.` };
+    return { nodes: N, edges: E, groups: G, cols: C, status: `${aggNote} · ${E.length} aggregated directional connections · ${runtime.length} of ${runtimeTotal} runtime components · ${visibleDataIds.length} of ${dataTotal} data stores · ${extIds.length} of ${extTotal} external systems. Full catalogs stay available in the sidebar.` };
   }
 
   sceneModuleGrid(domainFilter) {
     const { D } = this.state;
-    const N = [], G = [];
+    const N = [], E = [], G = [], pos = {};
     const allDoms = domainFilter ? D.domains.filter((d) => d.id === domainFilter) : D.domains;
     const doms = allDoms.slice(0, domainFilter ? 1 : 9);
     doms.forEach((dm, i) => {
       const perRow = domainFilter ? 1 : 3;
       const col = i % perRow, row = Math.floor(i / perRow);
       const allModuleIds = dm.allModules || dm.modules;
-      const moduleIds = allModuleIds.slice(0, domainFilter ? 8 : 3);
+      const moduleIds = allModuleIds.slice(0, domainFilter ? 18 : 3);
       const h = 42 + moduleIds.length * 54 + 6;
       const x = 40 + col * 360, y = 40 + row * 260;
       const grp = { x, y, w: 320, h, fill: '#fff', stroke: '#ccd5d1', label: dm.name, sub: dm.counts, footY: y + h - 32 };
       G.push(grp);
+      pos['d.' + dm.id] = { x, y, w: 320, h };
       moduleIds.forEach((mid, j) => {
         const m = this.node(mid);
-        N.push(this.mkNode(m, x + 10, y + 38 + j * 54, 300, 46, { sub: `${this.plural((m.metrics && m.metrics.routes) || 0, 'route')} · ${this.plural((m.metrics && m.metrics.services) || 0, 'service')} · ${this.plural((m.metrics && m.metrics.tests) || 0, 'test')}` }));
+        const box = { x: x + 10, y: y + 38 + j * 54, w: 300, h: 46 }; pos[mid] = box;
+        N.push(this.mkNode(m, box.x, box.y, box.w, box.h, { sub: `${this.plural((m.metrics && m.metrics.routes) || 0, 'route')} · ${this.plural((m.metrics && m.metrics.services) || 0, 'service')} · ${this.plural((m.metrics && m.metrics.tests) || 0, 'test')}` }));
       });
     });
+    if (domainFilter) {
+      const visible = new Set(N.map((node) => node.id));
+      D.edges.filter((edge) => (edge.relation === 'imports' || edge.verb === 'imports') && visible.has(edge.from) && visible.has(edge.to))
+        .forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
+    } else {
+      D.mapEdges.filter((edge) => (edge.relation === 'imports' || edge.verb === 'imports') && pos[edge.from] && pos[edge.to])
+        .forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], { ...edge, verb: edge.count > 1 ? `imports ×${edge.count}` : 'imports' }, false, false, true)));
+    }
     const shownModules = N.length;
     const totalModules = allDoms.reduce((sum, dm) => sum + (dm.allModules || dm.modules).length, 0);
     const scope = domainFilter ? `Area “${doms[0] ? doms[0].name : ''}”` : `${doms.length} key areas of ${D.domains.length}`;
-    return { nodes: N, edges: [], groups: G, cols: [], status: `${scope} · ${shownModules} representative modules of ${totalModules}. Select any module in the catalog to see its full story.` };
+    return { nodes: N, edges: E, groups: G, cols: [], status: `${scope} · ${shownModules} representative modules of ${totalModules} · ${E.length} directional import relationships. Select a module to see its incoming dependencies, outgoing dependencies and owned components.` };
   }
 
   // Generic semantic profile for modules without a curated one — built from the graph.
@@ -2191,9 +2222,9 @@ class Component extends DCLogic {
     return { nodes: N, edges: E, groups: [], cols: C, status: `${root.label}: ${root.details?.humanSchedule || root.details?.expression || 'configured schedule'}${root.details?.timeZone ? ' · timezone ' + root.details.timeZone : ''}.` };
   }
 
-  sceneDelivery(environment) {
+  sceneDeployment(environment) {
     const { D } = this.state;
-    const deliveryTypes = new Set(['workflow', 'pipeline_job', 'build_stage', 'container_image', 'container', 'deployment', 'infrastructure_service', 'ingress', 'config_map', 'secret']);
+    const deliveryTypes = new Set(['workflow', 'pipeline_job', 'build_stage', 'container_image', 'deployment']);
     const environmentMatches = (node) => !node.details?.environment || node.details.environment === environment;
     const candidates = D.nodes.filter((node) => deliveryTypes.has(node.type) && environmentMatches(node));
     const seed = new Set(candidates.filter((node) => node.details?.environment === environment || ['workflow', 'pipeline_job', 'build_stage'].includes(node.type)).map((node) => node.id));
@@ -2208,59 +2239,96 @@ class Component extends DCLogic {
     }
     const nodes = candidates.filter((node) => seed.has(node.id));
     const columns = [
-      { label: 'CI / CD', sub: 'workflows and jobs', types: ['workflow', 'pipeline_job'] },
-      { label: 'BUILD', sub: 'Docker stages and images', types: ['build_stage', 'container_image'] },
-      { label: 'DEPLOY', sub: `workloads in ${environment}`, types: ['deployment', 'container'] },
-      { label: 'NETWORK', sub: 'services and ingress', types: ['infrastructure_service', 'ingress'] },
-      { label: 'CONFIGURATION', sub: 'ConfigMaps and Secrets', types: ['config_map', 'secret'] },
+      { label: 'WORKFLOW', sub: 'what starts delivery', types: ['workflow'] },
+      { label: 'CI / CD JOBS', sub: 'test, build and release jobs', types: ['pipeline_job'] },
+      { label: 'BUILD', sub: 'Docker build stages', types: ['build_stage'] },
+      { label: 'ARTIFACT', sub: 'container images produced', types: ['container_image'] },
+      { label: 'DEPLOY', sub: `release into ${environment}`, types: ['deployment'] },
+    ];
+    const N = [], E = [], C = [], pos = {};
+    columns.forEach((column, col) => {
+      const x = 40 + col * 285;
+      C.push({ x, y: 34, subY: 47, x2: x + 230, ly: 56, label: column.label, sub: column.sub, fill: col === 4 ? '#c56a22' : '#8b9793' });
+      nodes.filter((node) => column.types.includes(node.type)).forEach((node, row) => {
+        const b = { x, y: 76 + row * 72, w: 230, h: 54 }; pos[node.id] = b;
+        const sub = node.type === 'pipeline_job' ? (node.details?.stage || node.details?.runner || 'pipeline job')
+          : node.type === 'build_stage' ? (node.details?.baseImage || 'Docker stage')
+          : node.type === 'deployment' ? (node.details?.kind || `deploys to ${environment}`)
+          : node.details?.image || node.details?.kind || '';
+        N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub }));
+      });
+    });
+    D.edges.filter((edge) => pos[edge.from] && pos[edge.to]).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
+    const exact = nodes.filter((node) => node.details?.environment === environment).length;
+    const status = exact ? `${environment}: ${exact} environment-specific release components · ${nodes.length} pipeline components shown.` : `${environment}: no environment-specific deployment target detected. Shared CI/build evidence is shown where available.`;
+    return { nodes: N, edges: E, groups: [], cols: C, status, emptyOk: nodes.length === 0 };
+  }
+
+  sceneRuntime(environment) {
+    const { D } = this.state;
+    const types = new Set(['ingress', 'infrastructure_service', 'deployment', 'container', 'config_map', 'secret']);
+    const nodes = D.nodes.filter((node) => types.has(node.type) && (!node.details?.environment || node.details.environment === environment));
+    const columns = [
+      { label: 'PUBLIC ENTRY', sub: 'traffic entering the environment', types: ['ingress'] },
+      { label: 'ROUTING', sub: 'services and internal addresses', types: ['infrastructure_service'] },
+      { label: 'WORKLOADS', sub: 'deployed applications', types: ['deployment'] },
+      { label: 'CONTAINERS', sub: 'running process boundaries', types: ['container'] },
+      { label: 'CONFIGURATION', sub: 'ConfigMaps and secret names', types: ['config_map', 'secret'] },
     ];
     const N = [], E = [], C = [], pos = {};
     columns.forEach((column, col) => {
       const x = 40 + col * 285;
       C.push({ x, y: 34, subY: 47, x2: x + 230, ly: 56, label: column.label, sub: column.sub, fill: col === 2 ? '#df642d' : '#8b9793' });
-      nodes.filter((node) => column.types.includes(node.type)).forEach((node, row) => { const b = { x, y: 76 + row * 72, w: 230, h: 54 }; pos[node.id] = b; N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub: node.type === 'secret' ? 'names only · values never stored' : node.details?.image || node.details?.kind || '' })); });
+      nodes.filter((node) => column.types.includes(node.type)).forEach((node, row) => {
+        const b = { x, y: 76 + row * 72, w: 230, h: 56 }; pos[node.id] = b;
+        const sub = node.type === 'secret' ? 'names only · values never stored'
+          : node.type === 'deployment' ? `${node.details?.kind || 'workload'} · ${node.details?.replicas ?? 'replicas not specified'}`
+          : node.type === 'container' ? (node.details?.image || 'container image not resolved')
+          : node.type === 'ingress' ? 'external HTTP entry'
+          : node.type === 'infrastructure_service' ? 'routes traffic to a workload'
+          : `${(node.details?.keys || []).length} configuration keys`;
+        N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub }));
+      });
     });
     D.edges.filter((edge) => pos[edge.from] && pos[edge.to]).forEach((edge) => E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, false, false, true)));
-    const exact = nodes.filter((node) => node.details?.environment === environment).length;
-    const status = exact ? `${environment}: ${exact} environment-specific components · ${nodes.length} delivery/runtime components shown.` : `${environment}: no environment-specific runtime configuration detected. Shared CI/build stages are shown where available.`;
-    return { nodes: N, edges: E, groups: [], cols: C, status, emptyOk: nodes.length === 0 };
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${environment}: ${nodes.length} runtime components · ${E.length} detected runtime connections.`, emptyOk: nodes.length === 0 };
   }
 
-  sceneDeliveryCompare() {
+  sceneEnvironments() {
     const { D } = this.state;
-    const types = new Set(['workflow', 'pipeline_job', 'build_stage', 'container_image', 'container', 'deployment', 'infrastructure_service', 'ingress', 'config_map', 'secret']);
-    const candidates = D.nodes.filter((node) => types.has(node.type) && (!node.details?.environment || ['staging', 'production'].includes(node.details.environment)));
-    const groups = new Map();
-    candidates.forEach((node) => {
-      const key = `${node.type}:${node.label.toLowerCase().replace(/\b(staging|production|prod|stage)\b/g, '').replace(/[^a-z0-9]+/g, '-')}`;
-      const group = groups.get(key) || { key, staging: null, production: null, shared: null };
-      const env = node.details?.environment;
-      if (env === 'staging') group.staging = node; else if (env === 'production') group.production = node; else group.shared = node;
-      groups.set(key, group);
+    const order = { development: 0, local: 1, staging: 2, production: 3 };
+    const environments = D.nodes.filter((node) => node.type === 'environment')
+      .sort((a, b) => (order[a.details?.environment || a.name] ?? 9) - (order[b.details?.environment || b.name] ?? 9) || a.label.localeCompare(b.label));
+    const N = [], E = [], C = [], pos = {};
+    const columns = [['ENVIRONMENT', 'detected runtime scope'], ['DELIVERY', 'jobs, images and deployments'], ['RUNTIME', 'ingress, services and containers'], ['CONFIGURATION', 'ConfigMaps, secrets and variables']];
+    columns.forEach(([label, sub], col) => C.push({ x: 40 + col * 320, y: 34, subY: 47, x2: 300 + col * 320, ly: 56, label, sub, fill: col === 0 ? '#df642d' : '#8b9793' }));
+    this._syn = this._syn || {};
+    environments.forEach((envNode, row) => {
+      const environment = envNode.details?.environment || envNode.name || envNode.label.toLowerCase();
+      const members = D.nodes.filter((node) => node.details?.environment === environment);
+      const sets = [
+        members.filter((node) => ['workflow', 'pipeline_job', 'build_stage', 'container_image', 'deployment'].includes(node.type)),
+        members.filter((node) => ['ingress', 'infrastructure_service', 'container'].includes(node.type)),
+        members.filter((node) => ['config_map', 'secret', 'env'].includes(node.type)),
+      ];
+      const y = 78 + row * 94;
+      const envBox = { x: 40, y, w: 260, h: 62 }; pos[envNode.id] = envBox;
+      N.push(this.mkNode(envNode, envBox.x, envBox.y, envBox.w, envBox.h, { sub: `${members.length} environment-specific components` }));
+      sets.forEach((items, index) => {
+        const id = `environment-summary:${environment}:${index}`;
+        const labels = items.slice(0, 3).map((node) => node.label).join(', ');
+        const synthetic = { id, type: index === 0 ? 'deployment' : index === 1 ? 'container' : 'config_map', label: `${items.length} ${index === 0 ? 'delivery' : index === 1 ? 'runtime' : 'configuration'} components`, desc: labels || 'No environment-specific evidence detected.' };
+        this._syn[id] = synthetic;
+        const b = { x: 360 + index * 320, y, w: 260, h: 62 }; pos[id] = b;
+        N.push(this.mkNode(synthetic, b.x, b.y, b.w, b.h, {
+          sub: labels || 'nothing detected',
+          onClick: () => this.setState({ mode: index === 0 ? 'deployment' : index === 1 ? 'runtime' : 'configuration', deliveryEnv: environment, sel: null, vb: null, hist: [] }),
+          over: items.length ? {} : { fill: '#fafbfa', stroke: '#d8dedb' },
+        }));
+        E.push(this.linkEdge(envBox, b, { from: envNode.id, to: id, verb: index === 0 ? 'delivers' : index === 1 ? 'runs' : 'configures', relation: index === 0 ? 'deploys' : index === 1 ? 'targets' : 'configures', kind: 'sync' }, false, !items.length, true));
+      });
     });
-    const columnFor = (node) => ['workflow', 'pipeline_job'].includes(node.type) ? 0 : ['build_stage', 'container_image'].includes(node.type) ? 1 : ['deployment', 'container'].includes(node.type) ? 2 : ['infrastructure_service', 'ingress'].includes(node.type) ? 3 : 4;
-    const columns = [['CI / CD', 'shared workflows'], ['BUILD', 'shared image pipeline'], ['DEPLOY', 'staging vs production'], ['NETWORK', 'services and ingress'], ['CONFIGURATION', 'ConfigMaps and secret names']];
-    const N = [], E = [], C = [], posById = {}, rows = [0, 0, 0, 0, 0], statusCounts = { same: 0, changed: 0, missing: 0 };
-    columns.forEach(([label, sub], index) => C.push({ x: 40 + index * 285, y: 34, subY: 47, x2: 270 + index * 285, ly: 56, label, sub, fill: index === 2 ? '#df642d' : '#8b9793' }));
-    [...groups.values()].sort((a, b) => (a.production || a.staging || a.shared).label.localeCompare((b.production || b.staging || b.shared).label)).forEach((group) => {
-      const node = group.production || group.staging || group.shared;
-      const comparable = (value) => JSON.stringify(Object.fromEntries(Object.entries(value?.details || {}).filter(([key]) => key !== 'environment')));
-      const missing = !group.shared && (!group.production || !group.staging);
-      const changed = !missing && group.production && group.staging && comparable(group.production) !== comparable(group.staging);
-      const status = missing ? 'missing' : changed ? 'changed' : 'same'; statusCounts[status] += 1;
-      const col = columnFor(node), row = rows[col]++, b = { x: 40 + col * 285, y: 76 + row * 72, w: 230, h: 56 };
-      const sub = group.shared ? 'shared by staging and production' : missing ? `${group.production ? 'production only' : 'staging only'}` : changed ? 'configuration differs' : 'same in both environments';
-      const over = status === 'missing' ? { stroke: '#1e8068', fill: '#eef7f3', sw: 2 } : status === 'changed' ? { stroke: '#b27a12', fill: '#fdf6e5', sw: 1.6 } : {};
-      N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub, over }));
-      [group.shared, group.staging, group.production].filter(Boolean).forEach((item) => { posById[item.id] = b; });
-    });
-    const seen = new Set();
-    D.edges.forEach((edge) => {
-      const a = posById[edge.from], b = posById[edge.to]; if (!a || !b || a === b) return;
-      const key = `${a.x}:${a.y}>${b.x}:${b.y}:${edge.verb}`; if (seen.has(key)) return; seen.add(key);
-      E.push(this.linkEdge(a, b, edge, false, false, true));
-    });
-    return { nodes: N, edges: E, groups: [], cols: C, status: `Staging vs production: ${statusCounts.same} matching · ${statusCounts.changed} changed · ${statusCounts.missing} present in one environment only.`, emptyOk: N.length === 0 };
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${environments.length} environments detected. Each row compares delivery, runtime and configuration evidence without mixing their diagrams.`, emptyOk: environments.length === 0 };
   }
 
   sceneConfiguration() {
@@ -2425,8 +2493,10 @@ class Component extends DCLogic {
       { id: 'database', label: 'Database Schema', count: loading ? '' : D.project.stats.tables },
       { id: 'migrations', label: 'Migrations', count: loading ? '' : D.project.stats.migrations || 0 },
       { id: 'clickhouse', label: 'ClickHouse', count: loading ? '' : D.nodes.filter((n) => /clickhouse/i.test(`${n.id} ${n.label} ${n.file || ''} ${n.details?.engine || ''}`)).length },
-      { h: 'Delivery & Runtime' },
-      { id: 'delivery', label: 'Environments', count: loading ? '' : D.nodes.filter((n) => n.type === 'deployment').length },
+      { h: 'Operations' },
+      { id: 'deployment', label: 'Deployment', count: loading ? '' : D.nodes.filter((n) => ['workflow', 'pipeline_job', 'build_stage', 'container_image', 'deployment'].includes(n.type)).length },
+      { id: 'runtime', label: 'Runtime', count: loading ? '' : D.nodes.filter((n) => ['container', 'infrastructure_service', 'ingress'].includes(n.type)).length },
+      { id: 'environments', label: 'Environments', count: loading ? '' : D.nodes.filter((n) => n.type === 'environment').length },
       { id: 'configuration', label: 'Configuration', count: loading ? '' : D.nodes.filter((n) => n.type === 'env').length },
       { h: 'Boundary' },
       { id: 'external', label: 'External', count: loading ? '' : D.nodes.filter((n) => ['external', 'library'].includes(n.type)).length },
@@ -2458,7 +2528,9 @@ class Component extends DCLogic {
       migrations: ['Migration History', 'Every detected database change, including created, altered and removed structures.'],
       clickhouse: ['ClickHouse Architecture', 'The analytical data path: event sources, ClickHouse schemas, storage tables, materialized views and indexes.'],
       schedules: ['Scheduled Jobs', 'Cron, interval, timeout, repeatable queue and Kubernetes jobs — when they run and what they change.'],
-      delivery: ['Delivery & Runtime', 'How code is tested, built and deployed across development, staging and production.'],
+      deployment: ['Deployment', 'Follow code from CI/CD through image creation and release into the selected environment.'],
+      runtime: ['Runtime Topology', 'Ingress, services, workloads, containers and configuration in the selected environment.'],
+      environments: ['Environment Comparison', 'What exists in development, staging and production, and where their runtime configuration differs.'],
       configuration: ['Configuration Contract', 'Required settings, safe examples, protected names, owning environments and runtime consumers.'],
       external: ['External', 'APIs and libraries used outside the application boundary.'],
       risks: ['Risks', 'Detected architecture concerns, with the affected code.'],
@@ -2488,7 +2560,9 @@ class Component extends DCLogic {
       migrations: null,
       clickhouse: { title: 'ClickHouse structures', types: ['database', 'schema', 'table', 'materialized_view', 'index'], groupBy: 'type' },
       schedules: { title: 'Scheduled jobs', types: ['scheduled_job'], groupBy: 'type' },
-      delivery: { title: 'Delivery & runtime', types: ['workflow', 'pipeline_job', 'build_stage', 'container_image', 'container', 'deployment', 'infrastructure_service', 'ingress', 'config_map', 'secret', 'environment'], groupBy: 'type' },
+      deployment: { title: 'Deployment pipeline', types: ['workflow', 'pipeline_job', 'build_stage', 'container_image', 'deployment'], groupBy: 'type' },
+      runtime: { title: 'Runtime topology', types: ['ingress', 'infrastructure_service', 'deployment', 'container', 'config_map', 'secret'], groupBy: 'type' },
+      environments: { title: 'Environments', types: ['environment'], groupBy: 'type' },
       configuration: { title: 'Configuration contract', types: ['env'], groupBy: 'type' },
       external: { title: 'Integrations', types: ['external', 'library'], groupBy: 'type' },
       risks: { title: 'Findings', types: ['risk'], groupBy: null },
@@ -2790,8 +2864,8 @@ class Component extends DCLogic {
         ? { value: this.state.moduleView || 'dependencies', buttons: [['dependencies', 'Dependencies'], ['internals', 'Internals']], key: 'moduleView', preserveSelection: true }
       : ['database', 'clickhouse'].includes(mode) && databaseRoot
         ? { value: this.state.dbDetail || 'overview', buttons: [['overview', 'Overview'], ['columns', 'Columns'], ['indexes', 'Indexes & Rules'], ['relations', 'Relations & Access'], ['migrations', 'Migrations']], key: 'dbDetail', preserveSelection: true }
-      : mode === 'delivery'
-          ? { value: this.state.deliveryEnv || 'production', buttons: [['development', 'Development'], ['staging', 'Staging'], ['production', 'Production'], ['compare', 'Compare']], key: 'deliveryEnv' }
+      : ['deployment', 'runtime'].includes(mode)
+          ? { value: this.state.deliveryEnv || 'production', buttons: [['development', 'Development'], ['staging', 'Staging'], ['production', 'Production']], key: 'deliveryEnv' }
           : null;
     const isJobCatalog = mode === 'schedules' && !sel;
     const listScreen = mode === 'data' || mode === 'migrations' || mode === 'configuration' || isJobCatalog;
