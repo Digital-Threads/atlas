@@ -571,7 +571,8 @@ function parseWorkload(file: ScannedFile, kind: string, name: string, doc: Dict,
   addEdge(`file:${file.path}`, id, "declares");
   if (environment) addEdge(id, `environment:${environment}`, "runs_in");
   const volumes = kubernetesVolumes(podSpec, environment);
-  for (const raw of [...initContainers.map((item) => ({ ...item, atlasInit: true })), ...containers]) {
+  const runtimeContainers: Dict[] = [...initContainers.map((item) => ({ ...item, atlasInit: true })), ...containers];
+  for (const raw of runtimeContainers) {
     const containerName = String(raw.name ?? "container");
     const containerId = `container:${cleanId(name)}:${cleanId(containerName)}:${environment ?? "default"}`;
     addNode({ id: containerId, type: "container", label: containerName, name: containerName, file: file.path, framework: "kubernetes", source: "config", confidence: 1, metadata: { image: raw.image, command: raw.command, args: raw.args, ports: raw.ports, resources: raw.resources, readinessProbe: raw.readinessProbe, livenessProbe: raw.livenessProbe, startupProbe: raw.startupProbe, securityContext: raw.securityContext, volumeMounts: raw.volumeMounts, initContainer: raw.atlasInit === true, environment } });
