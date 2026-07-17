@@ -245,6 +245,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "async"));
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "external"));
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "data" && [edge.from, edge.to].some((id) => id.startsWith("database:"))));
+  assert.ok(viewerData.mapEdges.some((edge) => [edge.from, edge.to].some((id) => /^(workflow|pipeline_job|container_image|deployment|container|infrastructure_service|ingress|environment):/.test(id))), "system map must retain delivery and runtime endpoints");
   assert.ok(viewerData.mapEdges.every((edge) => edge.relation !== "has_column"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "reads" && edge.kind === "data"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "writes" && edge.kind === "data"));
