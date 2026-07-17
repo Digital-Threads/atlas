@@ -91,6 +91,31 @@ test("trace controls progressively disclose depth and filter async work", async 
   assert.ok(!viewer.scene().nodes.some((node) => node.id === "message_topic:orders.created"));
 });
 
+test("path explorer selects two endpoints and renders only their exact chain", async () => {
+  const viewer = await createViewer();
+  viewer.state = { ...viewer.state, mode: "routes", sel: "route:POST:/api/users" };
+
+  let values = viewer.renderVals();
+  assert.equal(values.pathLabel, "Path A → B");
+  values.togglePath();
+  assert.equal(viewer.state.pathFrom, "route:POST:/api/users");
+  assert.equal(viewer.state.pathPicking, "to");
+
+  viewer.select("table:User");
+  assert.equal(viewer.state.pathTo, "table:User");
+  assert.equal(viewer.state.pathPicking, null);
+  const scene = viewer.scene();
+  assert.equal(scene.nodes[0].id, "route:POST:/api/users");
+  assert.equal(scene.nodes.at(-1).id, "table:User");
+  assert.equal(scene.edges.length, scene.nodes.length - 1);
+  assert.ok(scene.nodes.every((node, index) => node.step === index + 1));
+  assert.match(scene.status, /relationship steps? from POST \/api\/users to User/);
+
+  values = viewer.renderVals();
+  values.pathDirectionBtns.find((button) => button.label === "Any connection").go();
+  assert.equal(viewer.state.pathDirection, "both");
+});
+
 test("project search ranks exact endpoints above incidental file matches", async () => {
   const viewer = await createViewer();
   viewer.state = { ...viewer.state, q: "POST /api/users", searchOpen: true };
