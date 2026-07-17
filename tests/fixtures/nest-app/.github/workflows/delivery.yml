@@ -6,7 +6,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - run: npm test
+  quality:
+    uses: ./.github/workflows/reusable-quality.yml
   deploy-staging:
     needs: test
     runs-on: ubuntu-latest
@@ -23,4 +26,3 @@ jobs:
       - run: docker build -t registry.example.test/atlas-api:production .
       - run: docker push registry.example.test/atlas-api:production
       - run: kubectl apply -f k8s/production
-
