@@ -174,8 +174,9 @@ The NestJS adapter currently detects:
 - SQL migrations, columns, indexes, keys, constraints, and foreign-key relationships;
 - ClickHouse tables, materialized views, engines, partition/order keys, and TTL rules;
 - NestJS cron/interval/timeout jobs, repeatable queue jobs, and Kubernetes CronJobs;
-- GitHub Actions and GitLab CI workflows, jobs, dependencies, images, and deploy commands;
-- Dockerfiles, Compose services, and Kubernetes workloads, containers, probes, services, ingress, ConfigMaps, and Secret names;
+- GitHub Actions and GitLab CI workflows, reusable workflows, actions, jobs, dependencies, images, and deploy commands;
+- Dockerfiles and Compose services, health checks, dependencies, networks, volumes, configs, and Secret names;
+- Kubernetes workloads, init containers, probes, services, ingress, autoscaling, volumes, ConfigMaps, Secret names, Kustomize overlays, Helm metadata, and Argo CD applications;
 - environment variable contracts and safe examples, while redacting secret-like values;
 - external HTTP API hosts;
 - unit test relationships;
@@ -254,6 +255,13 @@ request and asynchronous flows, complete data catalog and focused table ERD,
 migrations, scheduled jobs, source files, risks, deployment, runtime topology,
 environment comparison, and configuration contracts.
 
+**Path A -> B** answers a direct architecture question without opening a giant
+neighbourhood graph. Select any starting element, select a target, and Atlas renders
+only the exact detected chain between them. Directed mode follows the real execution
+or dependency direction; Any connection can cross an incoming relationship while
+keeping every arrowhead truthful. The Overview also ranks architecture hubs by their
+actual graph degree so highly influential elements are visible immediately.
+
 Operations are deliberately separated. **Deployment** follows CI/CD jobs, Docker
 build stages, images, and releases. **Runtime** follows ingress, services, workloads,
 containers, ConfigMaps, and Secret names. Both switch independently between
@@ -307,6 +315,7 @@ The server exposes these tools:
 - `atlas_get_node`
 - `atlas_get_dependencies`
 - `atlas_get_dependents`
+- `atlas_find_path`
 - `atlas_find_routes`
 - `atlas_find_flow`
 - `atlas_find_async_flows`
@@ -348,11 +357,11 @@ npm run typecheck
 ```
 
 The tests scan a representative NestJS fixture, validate route-to-database,
-publisher-to-consumer, DI-token, CQRS, runtime, migration, schedule, and delivery flows, exercise all 18 MCP
+publisher-to-consumer, DI-token, CQRS, runtime, migration, schedule, path, and delivery flows, exercise all 19 MCP
 tools, verify architecture and deployment risks, and confirm that real secret values
 never enter generated artifacts. The performance suite generates 1,000 TypeScript
 files, 100 controllers, 300 services, and 1,000 routes; it also checks warm-scan
-reuse, indexed graph queries, viewport culling, and bounded animation.
+reuse, indexed graph and path queries, viewport culling, and bounded animation.
 
 The detailed MVP requirements and their automated evidence are listed in
 [`docs/PRD-COMPLIANCE.md`](docs/PRD-COMPLIANCE.md).
