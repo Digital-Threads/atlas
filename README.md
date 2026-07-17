@@ -255,6 +255,12 @@ request and asynchronous flows, complete data catalog and focused table ERD,
 migrations, scheduled jobs, source files, risks, deployment, runtime topology,
 environment comparison, and configuration contracts.
 
+The **System Map** combines business domains, asynchronous runtime, data and external
+systems with a visible Delivery & Runtime band. Its grouped domain anchors keep every
+detected aggregate arrow in the scene, and hovering a component isolates its direct
+system connections. Build/deploy, structure, events, data and external calls use
+different line grammar instead of one generic edge style.
+
 **Path A -> B** answers a direct architecture question without opening a giant
 neighbourhood graph. Select any starting element, select a target, and Atlas renders
 only the exact detected chain between them. Directed mode follows the real execution
