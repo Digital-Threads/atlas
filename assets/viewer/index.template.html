@@ -1105,7 +1105,11 @@ class Component extends DCLogic {
     const keys = ['mode', 'sel', 'tech', 'trace', 'traceRoot', 'pathActive', 'pathFrom', 'pathTo', 'pathDirection', 'activeFlow', 'expandedOp', 'domainFilter', 'mapVariant',
       'moduleView', 'dataVariant', 'deliveryEnv', 'dbDetail', 'traceDirection', 'traceDepth', 'traceSync', 'traceAsync',
       'traceData', 'traceExternal', 'traceStructure', 'mapExpanded'];
+    const mapHover = this.state.mode === 'map' && this.state.hover
+      ? (this.state.hover.nodeId || `${this.state.hover.edgeFrom || ''}>${this.state.hover.edgeTo || ''}`)
+      : '';
     const cacheKey = keys.map((key) => `${key}:${String(this.state[key] ?? '')}`).join('|')
+      + `|mapHover:${mapHover}`
       + `|labels:${String(this.props.showEdgeLabels ?? true)}|variant:${String(this.props.mapVariant ?? '')}`;
     const cached = this._sceneCache.get(cacheKey);
     if (cached) return cached;
@@ -1209,6 +1213,9 @@ class Component extends DCLogic {
       .sort((a, b) => (b.count || 0) - (a.count || 0))
       .forEach((edge) => { addRuntime(edge.from); addRuntime(edge.to); });
     keyIds(runtimeTypes, 15).forEach(addRuntime);
+    const operationsTypes = ['workflow', 'pipeline_job', 'build_stage', 'container_image', 'deployment', 'container', 'infrastructure_service', 'ingress', 'environment'];
+    const operationsTotal = D.nodes.filter((n) => operationsTypes.includes(n.type)).length;
+    const operations = keyIds(operationsTypes, 15);
     const dataIds = D.nodes.filter((n) => n.type === 'database').map((n) => n.id);
     const dataTotal = dataIds.length || D.nodes.filter((n) => ['table', 'entity', 'model'].includes(n.type)).length;
     const visibleDataIds = (dataIds.length ? dataIds : keyIds(['table', 'entity', 'model'], 5)).slice(0, 5);
@@ -1277,6 +1284,21 @@ class Component extends DCLogic {
         });
         runtimeY += boxH + 24;
       }
+      // Delivery and runtime are part of the system story, not a disconnected catalog.
+      if (operations.length) {
+        const oy = runtimeY;
+        const operationCols = 5;
+        const operationRows = Math.max(1, Math.ceil(operations.length / operationCols));
+        const operationH = 50 + operationRows * 62;
+        G.push({ x: 40, y: oy, w: 4 * (cardW + 56) - 56, h: operationH, fill: '#fff7ef', stroke: '#dfc7ad', label: 'Delivery & runtime — CI/CD to running workloads', sub: operationsTotal > operations.length ? `${operations.length} key components of ${operationsTotal}` : `${operationsTotal} components — all shown`, footY: 0 });
+        operations.forEach((id, i) => {
+          const col = i % operationCols, row = Math.floor(i / operationCols);
+          const bx = 56 + col * 264, by = oy + 36 + row * 62;
+          pos[id] = { x: bx, y: by, w: 250, h: 52 };
+          N.push(this.mkNode(this.node(id), bx, by, 250, 52));
+        });
+        runtimeY += operationH + 24;
+      }
       // runtime band
       const ry = runtimeY;
       const runtimeCols = 5;
@@ -1302,11 +1324,14 @@ class Component extends DCLogic {
     } else if (variant === 'layers') {
       const laneW = 7 * 210;
       const domainRows = Math.max(1, Math.ceil(visibleDomainIds.length / 7));
-      const runtimeLaneY = 40 + domainRows * 66 + 80;
+      const operationsLaneY = 40 + domainRows * 66 + 80;
+      const operationsRows = Math.max(1, Math.ceil(operations.length / 7));
+      const runtimeLaneY = operationsLaneY + (operations.length ? operationsRows * 66 + 80 : 0);
       const runtimeRows = Math.max(1, Math.ceil(runtime.length / 7));
       const dataLaneY = runtimeLaneY + runtimeRows * 66 + 80;
       const lanes = [
         { label: 'DOMAIN MODULES', y: 40, ids: visibleDomainIds },
+        ...(operations.length ? [{ label: 'DELIVERY & RUNTIME — BUILD · DEPLOY · EXPOSE', y: operationsLaneY, ids: operations }] : []),
         { label: 'ASYNC RUNTIME — TOPICS · QUEUES · PROCESSORS', y: runtimeLaneY, ids: runtime },
         { label: 'DATA & EXTERNAL', y: dataLaneY, ids: visibleDataIds.concat(extIds) },
       ];
@@ -1330,11 +1355,12 @@ class Component extends DCLogic {
         });
       });
     } else {
-      // 'columns' — three semantic columns: domains | events & jobs | data & external
+      // 'columns' — semantic progression from code boundaries to runtime and effects.
       const colDefs = [
         { label: 'DOMAINS', sub: 'the business areas of the app', x: 40, ids: visibleDomainIds },
         { label: 'EVENTS & BACKGROUND JOBS', sub: 'work that happens later, after the response', x: 460, ids: runtime },
         { label: 'DATA & EXTERNAL', sub: 'what gets stored or sent outside', x: 880, ids: visibleDataIds.concat(extIds) },
+        { label: 'DELIVERY & RUNTIME', sub: 'how code is built, deployed and exposed', x: 1300, ids: operations },
       ];
       colDefs.forEach((cd) => {
         C.push({ x: cd.x, y: 28, subY: 41, x2: cd.x + 300, ly: 50, label: cd.label, sub: cd.sub, fill: '#8b9793' });
@@ -1367,15 +1393,31 @@ class Component extends DCLogic {
       if (previous) previous.count = (previous.count || 1) + (edge.count || 1);
       else sceneEdges.set(key, { ...edge, from, to });
     });
+    const hover = this.state.hover || {};
+    const hoveredNode = hover.nodeId ? this.node(hover.nodeId) : null;
+    const exactTypes = new Set(runtimeTypes.concat(operationsTypes, ['database', 'external']));
+    const focusEndpoint = hoveredNode
+      ? (exactTypes.has(hoveredNode.type) ? hoveredNode.id : (hoveredNode.domain ? `d.${hoveredNode.domain}` : hoveredNode.id))
+      : null;
+    const connected = new Set(focusEndpoint ? [focusEndpoint] : []);
+    if (focusEndpoint) [...sceneEdges.values()].forEach((edge) => {
+      if (edge.from === focusEndpoint || edge.to === focusEndpoint) { connected.add(edge.from); connected.add(edge.to); }
+    });
     [...sceneEdges.values()].sort((a, b) => (a.kind === 'async' ? 1 : 0) - (b.kind === 'async' ? 1 : 0)).forEach((e) => {
       const a = pos[e.from], b = pos[e.to];
       if (!a || !b) return;
       const count = e.count || 1;
       const labelled = { ...e, verb: count > 1 ? `${e.verb || e.kind} ×${count}` : (e.verb || e.kind) };
-      E.push(this.linkEdge(a, b, labelled, false, false, showLabels));
+      const related = !focusEndpoint || e.from === focusEndpoint || e.to === focusEndpoint;
+      E.push(this.linkEdge(a, b, labelled, !!focusEndpoint && related, !!focusEndpoint && !related, showLabels));
+    });
+    if (focusEndpoint) N.forEach((node) => {
+      const source = this.node(node.id);
+      const endpoint = source && exactTypes.has(source.type) ? source.id : (source?.domain ? `d.${source.domain}` : node.id);
+      node.op = connected.has(endpoint) ? 1 : 0.22;
     });
     const aggNote = lights.length ? (expanded ? `all ${D.domains.length} areas shown` : `${detailed.length} areas in detail · ${lights.length} aggregated (${lightModCount} modules — click to expand)`) : `all ${D.domains.length} areas shown`;
-    return { nodes: N, edges: E, groups: G, cols: C, status: `${aggNote} · ${E.length} aggregated directional connections · ${runtime.length} of ${runtimeTotal} runtime components · ${visibleDataIds.length} of ${dataTotal} data stores · ${extIds.length} of ${extTotal} external systems. Full catalogs stay available in the sidebar.` };
+    return { nodes: N, edges: E, groups: G, cols: C, edgeEndpointIds: Object.keys(pos), status: `${aggNote} · ${E.length} aggregated directional connections · ${operations.length} of ${operationsTotal} delivery/runtime components · ${runtime.length} of ${runtimeTotal} async components · ${visibleDataIds.length} of ${dataTotal} data stores · ${extIds.length} of ${extTotal} external systems. Hover a component to isolate its direct system connections.` };
   }
 
   sceneModuleGrid(domainFilter) {
@@ -2514,6 +2556,7 @@ class Component extends DCLogic {
       limited = scn.nodes.length - hardNodeLimit;
     }
     const ids = new Set(nodes.map((node) => node.id));
+    (scn.edgeEndpointIds || []).forEach((id) => ids.add(id));
     let edges = scn.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
     if (edges.length > hardEdgeLimit) {
       const selected = this.state.sel;
