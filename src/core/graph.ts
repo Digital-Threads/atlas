@@ -215,8 +215,54 @@ export class GraphQuery {
     return this.walk(nodeId, "incoming", depth);
   }
 
+  findPath(
+    fromId: string,
+    toId: string,
+    direction: "outgoing" | "both" = "outgoing",
+    maxDepth = 20,
+  ): GraphSubgraph {
+    if (!this.nodeMap.has(fromId) || !this.nodeMap.has(toId)) return { nodes: [], edges: [] };
+    if (fromId === toId) return { nodes: [this.nodeMap.get(fromId)!], edges: [] };
+    const queue: Array<{ id: string; depth: number }> = [{ id: fromId, depth: 0 }];
+    const visited = new Set([fromId]);
+    const previous = new Map<string, { nodeId: string; edge: GraphEdge }>();
+    let cursor = 0;
+    while (cursor < queue.length) {
+      const current = queue[cursor++];
+      if (current.depth >= Math.max(1, maxDepth)) continue;
+      const candidates = [
+        ...this.getOutgoing(current.id).map((edge) => ({ edge, next: edge.to })),
+        ...(direction === "both" ? this.getIncoming(current.id).map((edge) => ({ edge, next: edge.from })) : []),
+      ].sort((a, b) => pathEdgePriority(a.edge) - pathEdgePriority(b.edge) || a.edge.id.localeCompare(b.edge.id));
+      for (const candidate of candidates) {
+        if (visited.has(candidate.next)) continue;
+        visited.add(candidate.next);
+        previous.set(candidate.next, { nodeId: current.id, edge: candidate.edge });
+        if (candidate.next === toId) return this.reconstructPath(fromId, toId, previous);
+        queue.push({ id: candidate.next, depth: current.depth + 1 });
+      }
+    }
+    return { nodes: [], edges: [] };
+  }
+
   private byType(type: GraphNode["type"]): GraphNode[] {
     return this.nodesByType.get(type) ?? [];
+  }
+
+  private reconstructPath(fromId: string, toId: string, previous: Map<string, { nodeId: string; edge: GraphEdge }>): GraphSubgraph {
+    const nodeIds = [toId];
+    const edges: GraphEdge[] = [];
+    let current = toId;
+    while (current !== fromId) {
+      const step = previous.get(current);
+      if (!step) return { nodes: [], edges: [] };
+      nodeIds.push(step.nodeId);
+      edges.push(step.edge);
+      current = step.nodeId;
+    }
+    nodeIds.reverse();
+    edges.reverse();
+    return { nodes: nodeIds.map((id) => this.nodeMap.get(id)!), edges };
   }
 
   private walk(
@@ -250,6 +296,13 @@ export class GraphQuery {
       edges: [...edgeIds].map((id) => this.edgeMap.get(id)).filter(Boolean) as GraphEdge[],
     };
   }
+}
+
+function pathEdgePriority(edge: GraphEdge): number {
+  if (["handles", "calls", "reads", "writes", "publishes_to", "delivers_to", "enqueues", "processes", "targets", "exposes", "deploys"].includes(edge.type)) return 0;
+  if (["injects", "implements", "uses", "connects_to", "configures", "builds", "publishes", "triggers", "schedules"].includes(edge.type)) return 1;
+  if (["depends_on", "references", "imports", "exports", "provides"].includes(edge.type)) return 2;
+  return 3;
 }
 
 function searchableNode(node: GraphNode): string {
