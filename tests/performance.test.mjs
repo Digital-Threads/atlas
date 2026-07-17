@@ -125,4 +125,13 @@ test("serves repeated graph queries from indexes on a large graph", () => {
   const duration = performance.now() - started;
   assert.equal(relationships, edges.length * 2);
   assert.ok(duration < 2000, `indexed graph queries took ${Math.round(duration)}ms`);
+
+  let target = 0;
+  for (let step = 0; step < 10; step += 1) target = (target * 17 + 1) % nodes.length;
+  const pathStarted = performance.now();
+  const path = query.findPath("service:Service0", `service:Service${target}`, "outgoing", 12);
+  const pathDuration = performance.now() - pathStarted;
+  assert.equal(path.nodes[0].id, "service:Service0");
+  assert.equal(path.nodes.at(-1).id, `service:Service${target}`);
+  assert.ok(pathDuration < 1000, `indexed path search took ${Math.round(pathDuration)}ms`);
 });
