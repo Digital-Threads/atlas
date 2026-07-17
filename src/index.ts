@@ -26,7 +26,7 @@ export { createNestRuntimeInterceptor, RuntimeTracer } from "./runtime/tracer.js
 export type { RuntimeTracerOptions } from "./runtime/tracer.js";
 export type { FileScanOptions, FileScanResult } from "./scanner/file-scanner.js";
 
-const ANALYSIS_CACHE_VERSION = 2;
+const ANALYSIS_CACHE_VERSION = 3;
 
 export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const started = Date.now();
