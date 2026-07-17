@@ -1,6 +1,6 @@
 {
   "name": "@dthreads/atlas",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Architecture intelligence for NestJS codebases.",
   "keywords": [
     "nestjs",

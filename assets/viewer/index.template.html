@@ -153,6 +153,9 @@
           <sc-if value="{{ showTraceToggle }}" hint-placeholder-val="{{ false }}">
             <button onClick="{{ toggleTrace }}" aria-pressed="{{ tracePressed }}" title="Follow every detected downstream branch from this element" style="height: 28px; border: 1px solid {{ traceBorder }}; border-radius: 6px; padding: 0 10px; font-size: 11.5px; font-weight: 600; background: {{ traceBg }}; color: {{ traceFg }};" style-hover="border-color: #9fb0a9;">{{ traceLabel }}</button>
           </sc-if>
+          <sc-if value="{{ showPathToggle }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ togglePath }}" aria-pressed="{{ pathPressed }}" title="Find the exact architecture path between two elements" style="height: 28px; border: 1px solid {{ pathBorder }}; border-radius: 6px; padding: 0 10px; font-size: 11.5px; font-weight: 600; background: {{ pathBg }}; color: {{ pathFg }};" style-hover="border-color: #9fb0a9;">{{ pathLabel }}</button>
+          </sc-if>
           <sc-if value="{{ showGraphControls }}" hint-placeholder-val="{{ true }}">
             <div style="display: flex; gap: 6px;">
               <button onClick="{{ goBack }}" disabled="{{ backDisabled }}" title="Back to previous selection" aria-label="Back" style="width: 30px; height: 28px; border: 1px solid #d4dbd7; border-radius: 6px; background: #fff; color: #3c4744; font-size: 14px; opacity: {{ backOpacity }};" style-hover="background: #f2f5f4;">←</button>
@@ -218,6 +221,17 @@
                         <strong style="display: block; font-size: 12px; overflow-wrap: anywhere;">{{ rk.label }}</strong>
                         <small style="display: block; font-size: 10.5px; color: #6b7873; font-family: 'IBM Plex Mono', monospace; overflow-wrap: anywhere;">{{ rk.file }}</small>
                       </span>
+                    </button>
+                  </sc-for>
+                </section>
+                <section style="background: #fff; border: 1px solid #dde3e0; border-radius: 8px; padding: 16px 18px;">
+                  <h2 style="margin: 0; font-size: 13.5px;">Architecture hubs</h2>
+                  <p style="margin: 2px 0 5px; color: #6b7873; font-size: 10.5px;">Highly connected elements that influence many flows.</p>
+                  <sc-for list="{{ ovHubs }}" as="hub" hint-placeholder-count="4">
+                    <button onClick="{{ hub.go }}" title="{{ hub.tip }}" style="display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 8px; align-items: center; width: 100%; border: 0; border-top: 1px solid #eef1ef; background: transparent; padding: 8px 2px; text-align: left;" style-hover="background: #f4f8f6;">
+                      <i style="width: 8px; height: 8px; border-radius: 50%; background: {{ hub.color }};"></i>
+                      <span style="min-width: 0;"><strong style="display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ hub.label }}</strong><small style="display: block; color: #6b7873; font-size: 10.5px;">{{ hub.type }}</small></span>
+                      <span style="color: #4e5a56; font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap;">{{ hub.connections }} links</span>
                     </button>
                   </sc-for>
                 </section>
@@ -525,6 +539,19 @@
               </div>
             </sc-if>
 
+            <!-- exact A to B path controls -->
+            <sc-if value="{{ pathActive }}" hint-placeholder-val="{{ false }}">
+              <div style="position: absolute; left: 12px; top: 46px; z-index: 8; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: calc(100% - 24px); padding: 7px 8px; border: 1px solid #cbd7d2; border-radius: 7px; background: rgba(255,255,255,0.98); box-shadow: 0 5px 16px rgba(22,33,29,0.08);">
+                <button onClick="{{ pickPathStart }}" title="Choose a different starting element" style="min-width: 150px; max-width: 260px; height: 28px; border: 1px solid {{ pathStartBorder }}; border-radius: 5px; padding: 0 8px; background: {{ pathStartBg }}; color: #34413c; font-size: 10.5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>From:</strong> {{ pathFromLabel }}</button>
+                <span style="color: #8b9793; font-size: 14px;">→</span>
+                <button onClick="{{ pickPathTarget }}" title="Choose a different target element" style="min-width: 150px; max-width: 260px; height: 28px; border: 1px solid {{ pathTargetBorder }}; border-radius: 5px; padding: 0 8px; background: {{ pathTargetBg }}; color: #34413c; font-size: 10.5px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><strong>To:</strong> {{ pathToLabel }}</button>
+                <div role="group" aria-label="Path direction" style="display: flex; border: 1px solid #d4dbd7; border-radius: 5px; overflow: hidden;">
+                  <sc-for list="{{ pathDirectionBtns }}" as="pb" hint-placeholder-count="2"><button onClick="{{ pb.go }}" title="{{ pb.tip }}" style="height: 26px; border: 0; border-right: 1px solid #e4e9e6; padding: 0 8px; font-size: 10.5px; font-weight: {{ pb.fw }}; color: {{ pb.fg }}; background: {{ pb.bg }};">{{ pb.label }}</button></sc-for>
+                </div>
+                <span style="font-size: 10.5px; color: #6b7873;">{{ pathInstruction }}</span>
+              </div>
+            </sc-if>
+
             <!-- legend -->
             <div style="position: absolute; left: 12px; bottom: 10px; display: flex; align-items: center; gap: 13px; padding: 6px 10px; border: 1px solid #d4dbd7; border-radius: 6px; background: rgba(255,255,255,0.94); font-size: 10px; color: #57635e; max-width: {{ legendMaxW }}; overflow: hidden; white-space: nowrap;">
               <span title="A direct call. The caller waits for a result." style="display: inline-flex; align-items: center; gap: 5px;"><svg width="22" height="6" style="flex: 0 0 auto;"><line x1="0" y1="3" x2="22" y2="3" stroke="#7d8a84" stroke-width="1.6"></line></svg>direct call</span>
@@ -752,6 +779,7 @@ class Component extends DCLogic {
   state = {
     D: null, mode: 'map', sel: null, activeFlow: null, expandedOp: null,
     tech: false, trace: false, traceRoot: null, traceDirection: 'outgoing', traceDepth: '3',
+    pathActive: false, pathFrom: null, pathTo: null, pathPicking: null, pathDirection: 'outgoing',
     traceSync: true, traceAsync: true, traceData: true, traceExternal: true, traceStructure: false,
     tab: 'overview', hist: [], q: '', catQ: '', catLimit: 240, searchOpen: false,
     vb: null, hover: null, panning: false, domainFilter: null,
@@ -813,6 +841,13 @@ class Component extends DCLogic {
       const related = this._edgesByRelation.get(relation) || [];
       related.push(edge); this._edgesByRelation.set(relation, related);
     });
+    this._flowsByNode = new Map();
+    const indexFlow = (id, flow, kind) => (flow.steps || []).forEach((step) => {
+      const list = this._flowsByNode.get(step.id) || [];
+      list.push({ id, flow, kind }); this._flowsByNode.set(step.id, list);
+    });
+    Object.entries(D.flows || {}).forEach(([id, flow]) => indexFlow(id, flow, 'route'));
+    Object.entries(D.asyncFlows || {}).forEach(([id, flow]) => indexFlow(id, flow, 'async'));
     this._sceneCache = new Map();
   }
   node(id) {
@@ -827,6 +862,7 @@ class Component extends DCLogic {
   typeNodes(type) { this.ensureIndexes(); return this._nodesByType?.get(type) || []; }
   relationEdges(relation) { this.ensureIndexes(); return this._edgesByRelation?.get(relation) || []; }
   nodeDegree(id) { return this.incomingEdges(id).length + this.outgoingEdges(id).length; }
+  flowsForNode(id) { this.ensureIndexes(); return this._flowsByNode?.get(id) || []; }
   _opNode(id) {
     const profiles = Object.entries(this.state.D.moduleProfiles || {});
     for (const [moduleId, prof] of profiles) {
@@ -900,6 +936,11 @@ class Component extends DCLogic {
   select(id, opts = {}) {
     this.setState((s) => {
       const hist = s.sel && s.sel !== id ? s.hist.concat(s.sel) : s.hist;
+      if (s.pathActive && s.pathPicking) {
+        return s.pathPicking === 'from'
+          ? { sel: id, hist, pathFrom: id, pathTo: null, pathPicking: 'to', tech: false, trace: false, traceRoot: null, vb: null, hover: null, searchOpen: false, panelHidden: false }
+          : { sel: id, hist, pathTo: id, pathPicking: null, tech: false, trace: false, traceRoot: null, vb: null, hover: null, searchOpen: false, panelHidden: false };
+      }
       return { sel: id, hist, tab: opts.tab || 'overview', tech: false, trace: false, traceRoot: null, vb: null, hover: null,
         mode: opts.mode || s.mode, activeFlow: opts.flow !== undefined ? opts.flow : s.activeFlow,
         expandedOp: opts.expandedOp !== undefined ? opts.expandedOp : null, searchOpen: false,
@@ -933,7 +974,7 @@ class Component extends DCLogic {
     this.select(id, { mode, flow, dbDetail });
   }
 
-  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, hist: [], vb: null, hover: null, catQ: '', catLimit: 240, domainFilter: null, mapExpanded: false, dbDetail: 'overview', moduleView: 'dependencies' }); }
+  setMode(mode) { this.setState({ mode, sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, pathActive: false, pathFrom: null, pathTo: null, pathPicking: null, hist: [], vb: null, hover: null, catQ: '', catLimit: 240, domainFilter: null, mapExpanded: false, dbDetail: 'overview', moduleView: 'dependencies' }); }
 
   // ---------- code highlighting ----------
   highlight(code) {
@@ -1061,10 +1102,14 @@ class Component extends DCLogic {
     const { D } = this.state;
     if (!D) return { nodes: [], edges: [], groups: [], cols: [], status: 'Loading…' };
     this.ensureIndexes();
-    const keys = ['mode', 'sel', 'tech', 'trace', 'traceRoot', 'activeFlow', 'expandedOp', 'domainFilter', 'mapVariant',
+    const keys = ['mode', 'sel', 'tech', 'trace', 'traceRoot', 'pathActive', 'pathFrom', 'pathTo', 'pathDirection', 'activeFlow', 'expandedOp', 'domainFilter', 'mapVariant',
       'moduleView', 'dataVariant', 'deliveryEnv', 'dbDetail', 'traceDirection', 'traceDepth', 'traceSync', 'traceAsync',
       'traceData', 'traceExternal', 'traceStructure', 'mapExpanded'];
+    const mapHover = this.state.mode === 'map' && this.state.hover
+      ? (this.state.hover.nodeId || `${this.state.hover.edgeFrom || ''}>${this.state.hover.edgeTo || ''}`)
+      : '';
     const cacheKey = keys.map((key) => `${key}:${String(this.state[key] ?? '')}`).join('|')
+      + `|mapHover:${mapHover}`
       + `|labels:${String(this.props.showEdgeLabels ?? true)}|variant:${String(this.props.mapVariant ?? '')}`;
     const cached = this._sceneCache.get(cacheKey);
     if (cached) return cached;
@@ -1075,7 +1120,8 @@ class Component extends DCLogic {
   }
 
   buildScene() {
-    const { D, mode, sel, tech, trace, traceRoot, activeFlow, expandedOp, domainFilter } = this.state;
+    const { D, mode, sel, tech, trace, traceRoot, pathActive, pathFrom, pathTo, activeFlow, expandedOp, domainFilter } = this.state;
+    if (pathActive && pathFrom && pathTo) return this.scenePath(pathFrom, pathTo);
     if (tech && sel) return this.sceneTech(sel);
     if (trace && (traceRoot || sel)) return this.sceneTrace(traceRoot || sel);
     if (mode === 'map') return this.sceneMap();
@@ -1167,6 +1213,9 @@ class Component extends DCLogic {
       .sort((a, b) => (b.count || 0) - (a.count || 0))
       .forEach((edge) => { addRuntime(edge.from); addRuntime(edge.to); });
     keyIds(runtimeTypes, 15).forEach(addRuntime);
+    const operationsTypes = ['workflow', 'pipeline_job', 'build_stage', 'container_image', 'deployment', 'container', 'infrastructure_service', 'ingress', 'environment'];
+    const operationsTotal = D.nodes.filter((n) => operationsTypes.includes(n.type)).length;
+    const operations = keyIds(operationsTypes, 15);
     const dataIds = D.nodes.filter((n) => n.type === 'database').map((n) => n.id);
     const dataTotal = dataIds.length || D.nodes.filter((n) => ['table', 'entity', 'model'].includes(n.type)).length;
     const visibleDataIds = (dataIds.length ? dataIds : keyIds(['table', 'entity', 'model'], 5)).slice(0, 5);
@@ -1235,6 +1284,21 @@ class Component extends DCLogic {
         });
         runtimeY += boxH + 24;
       }
+      // Delivery and runtime are part of the system story, not a disconnected catalog.
+      if (operations.length) {
+        const oy = runtimeY;
+        const operationCols = 5;
+        const operationRows = Math.max(1, Math.ceil(operations.length / operationCols));
+        const operationH = 50 + operationRows * 62;
+        G.push({ x: 40, y: oy, w: 4 * (cardW + 56) - 56, h: operationH, fill: '#fff7ef', stroke: '#dfc7ad', label: 'Delivery & runtime — CI/CD to running workloads', sub: operationsTotal > operations.length ? `${operations.length} key components of ${operationsTotal}` : `${operationsTotal} components — all shown`, footY: 0 });
+        operations.forEach((id, i) => {
+          const col = i % operationCols, row = Math.floor(i / operationCols);
+          const bx = 56 + col * 264, by = oy + 36 + row * 62;
+          pos[id] = { x: bx, y: by, w: 250, h: 52 };
+          N.push(this.mkNode(this.node(id), bx, by, 250, 52));
+        });
+        runtimeY += operationH + 24;
+      }
       // runtime band
       const ry = runtimeY;
       const runtimeCols = 5;
@@ -1260,11 +1324,14 @@ class Component extends DCLogic {
     } else if (variant === 'layers') {
       const laneW = 7 * 210;
       const domainRows = Math.max(1, Math.ceil(visibleDomainIds.length / 7));
-      const runtimeLaneY = 40 + domainRows * 66 + 80;
+      const operationsLaneY = 40 + domainRows * 66 + 80;
+      const operationsRows = Math.max(1, Math.ceil(operations.length / 7));
+      const runtimeLaneY = operationsLaneY + (operations.length ? operationsRows * 66 + 80 : 0);
       const runtimeRows = Math.max(1, Math.ceil(runtime.length / 7));
       const dataLaneY = runtimeLaneY + runtimeRows * 66 + 80;
       const lanes = [
         { label: 'DOMAIN MODULES', y: 40, ids: visibleDomainIds },
+        ...(operations.length ? [{ label: 'DELIVERY & RUNTIME — BUILD · DEPLOY · EXPOSE', y: operationsLaneY, ids: operations }] : []),
         { label: 'ASYNC RUNTIME — TOPICS · QUEUES · PROCESSORS', y: runtimeLaneY, ids: runtime },
         { label: 'DATA & EXTERNAL', y: dataLaneY, ids: visibleDataIds.concat(extIds) },
       ];
@@ -1288,11 +1355,12 @@ class Component extends DCLogic {
         });
       });
     } else {
-      // 'columns' — three semantic columns: domains | events & jobs | data & external
+      // 'columns' — semantic progression from code boundaries to runtime and effects.
       const colDefs = [
         { label: 'DOMAINS', sub: 'the business areas of the app', x: 40, ids: visibleDomainIds },
         { label: 'EVENTS & BACKGROUND JOBS', sub: 'work that happens later, after the response', x: 460, ids: runtime },
         { label: 'DATA & EXTERNAL', sub: 'what gets stored or sent outside', x: 880, ids: visibleDataIds.concat(extIds) },
+        { label: 'DELIVERY & RUNTIME', sub: 'how code is built, deployed and exposed', x: 1300, ids: operations },
       ];
       colDefs.forEach((cd) => {
         C.push({ x: cd.x, y: 28, subY: 41, x2: cd.x + 300, ly: 50, label: cd.label, sub: cd.sub, fill: '#8b9793' });
@@ -1325,15 +1393,31 @@ class Component extends DCLogic {
       if (previous) previous.count = (previous.count || 1) + (edge.count || 1);
       else sceneEdges.set(key, { ...edge, from, to });
     });
+    const hover = this.state.hover || {};
+    const hoveredNode = hover.nodeId ? this.node(hover.nodeId) : null;
+    const exactTypes = new Set(runtimeTypes.concat(operationsTypes, ['database', 'external']));
+    const focusEndpoint = hoveredNode
+      ? (exactTypes.has(hoveredNode.type) ? hoveredNode.id : (hoveredNode.domain ? `d.${hoveredNode.domain}` : hoveredNode.id))
+      : null;
+    const connected = new Set(focusEndpoint ? [focusEndpoint] : []);
+    if (focusEndpoint) [...sceneEdges.values()].forEach((edge) => {
+      if (edge.from === focusEndpoint || edge.to === focusEndpoint) { connected.add(edge.from); connected.add(edge.to); }
+    });
     [...sceneEdges.values()].sort((a, b) => (a.kind === 'async' ? 1 : 0) - (b.kind === 'async' ? 1 : 0)).forEach((e) => {
       const a = pos[e.from], b = pos[e.to];
       if (!a || !b) return;
       const count = e.count || 1;
       const labelled = { ...e, verb: count > 1 ? `${e.verb || e.kind} ×${count}` : (e.verb || e.kind) };
-      E.push(this.linkEdge(a, b, labelled, false, false, showLabels));
+      const related = !focusEndpoint || e.from === focusEndpoint || e.to === focusEndpoint;
+      E.push(this.linkEdge(a, b, labelled, !!focusEndpoint && related, !!focusEndpoint && !related, showLabels));
+    });
+    if (focusEndpoint) N.forEach((node) => {
+      const source = this.node(node.id);
+      const endpoint = source && exactTypes.has(source.type) ? source.id : (source?.domain ? `d.${source.domain}` : node.id);
+      node.op = connected.has(endpoint) ? 1 : 0.22;
     });
     const aggNote = lights.length ? (expanded ? `all ${D.domains.length} areas shown` : `${detailed.length} areas in detail · ${lights.length} aggregated (${lightModCount} modules — click to expand)`) : `all ${D.domains.length} areas shown`;
-    return { nodes: N, edges: E, groups: G, cols: C, status: `${aggNote} · ${E.length} aggregated directional connections · ${runtime.length} of ${runtimeTotal} runtime components · ${visibleDataIds.length} of ${dataTotal} data stores · ${extIds.length} of ${extTotal} external systems. Full catalogs stay available in the sidebar.` };
+    return { nodes: N, edges: E, groups: G, cols: C, edgeEndpointIds: Object.keys(pos), status: `${aggNote} · ${E.length} aggregated directional connections · ${operations.length} of ${operationsTotal} delivery/runtime components · ${runtime.length} of ${runtimeTotal} async components · ${visibleDataIds.length} of ${dataTotal} data stores · ${extIds.length} of ${extTotal} external systems. Hover a component to isolate its direct system connections.` };
   }
 
   sceneModuleGrid(domainFilter) {
@@ -1737,8 +1821,9 @@ class Component extends DCLogic {
     const walk = (direction, sign) => {
       const queue = [{ id: rootId, depth: 0 }];
       const seen = new Set([rootId]);
-      while (queue.length) {
-        const current = queue.shift();
+      let cursor = 0;
+      while (cursor < queue.length) {
+        const current = queue[cursor++];
         if (current.depth >= depthLimit) continue;
         const candidates = (this._traceIndex[direction].get(current.id) || []).filter(allowed);
         for (const edge of candidates) {
@@ -1793,6 +1878,61 @@ class Component extends DCLogic {
     const completeness = truncated ? `Safety limit reached at ${N.length} elements / ${E.length} links; narrow the filters or depth to inspect this branch without freezing the browser.` : traceDepth === 'all' ? `Complete for the selected filters: ${N.length} elements and ${E.length} links.` : `${N.length} elements and ${E.length} links are visible. Choose All to verify the complete reachable path.`;
     const evidence = inferred ? ` ${inferred} inferred link${inferred === 1 ? '' : 's'} are dotted and labelled on hover.` : ' Every shown link is directly supported by the scanner.';
     return { nodes: N, edges: E, groups: [], cols: C, status: `${depthScope} from ${root.label}. ${completeness}${evidence}` };
+  }
+
+  scenePath(fromId, toId) {
+    const from = this.node(fromId), to = this.node(toId);
+    if (!from || !to) return { nodes: [], edges: [], groups: [], cols: [], status: 'Choose two valid architecture elements.', emptyOk: true };
+    if (fromId === toId) {
+      const box = { x: 80, y: 100, w: 280, h: 58 };
+      return { nodes: [this.mkNode(from, box.x, box.y, box.w, box.h, { step: 1, over: { fill: '#fdf3ec', stroke: '#df642d', sw: 2 } })], edges: [], groups: [], cols: [], status: 'Start and target are the same element.' };
+    }
+    this.ensureIndexes();
+    const both = this.state.pathDirection === 'both';
+    const priority = (edge) => {
+      const relation = edge.relation || String(edge.verb || '').replaceAll(' ', '_');
+      if (['handles', 'calls', 'reads', 'writes', 'publishes_to', 'delivers_to', 'enqueues', 'processes', 'targets', 'exposes', 'deploys'].includes(relation)) return 0;
+      if (['injects', 'implements', 'uses', 'connects_to', 'configures', 'builds', 'publishes', 'triggers', 'schedules'].includes(relation)) return 1;
+      if (['depends_on', 'references', 'imports', 'exports', 'provides'].includes(relation)) return 2;
+      return 3;
+    };
+    const queue = [{ id: fromId, depth: 0 }], visited = new Set([fromId]), previous = new Map();
+    let cursor = 0, found = false, safety = false;
+    while (cursor < queue.length && !found) {
+      const current = queue[cursor++];
+      if (current.depth >= 24) continue;
+      const candidates = [
+        ...this.outgoingEdges(current.id).map((edge) => ({ edge, next: edge.to })),
+        ...(both ? this.incomingEdges(current.id).map((edge) => ({ edge, next: edge.from })) : []),
+      ].sort((a, b) => priority(a.edge) - priority(b.edge) || `${a.edge.from}>${a.edge.to}`.localeCompare(`${b.edge.from}>${b.edge.to}`));
+      for (const candidate of candidates) {
+        if (visited.has(candidate.next)) continue;
+        if (visited.size >= 30000) { safety = true; break; }
+        visited.add(candidate.next); previous.set(candidate.next, { previous: current.id, edge: candidate.edge });
+        if (candidate.next === toId) { found = true; break; }
+        queue.push({ id: candidate.next, depth: current.depth + 1 });
+      }
+    }
+    if (!found) return { nodes: [], edges: [], groups: [], cols: [], status: safety ? 'Path search reached the 30,000 element safety limit. Narrow the endpoints.' : `No ${both ? 'connected' : 'directed'} path was detected from ${from.label} to ${to.label}.`, emptyOk: true };
+    const ids = [toId], links = []; let current = toId;
+    while (current !== fromId) {
+      const step = previous.get(current); if (!step) break;
+      ids.push(step.previous); links.push(step.edge); current = step.previous;
+    }
+    ids.reverse(); links.reverse();
+    const N = [], E = [], C = [], pos = {};
+    ids.forEach((id, index) => {
+      const node = this.node(id); if (!node) return;
+      const x = 40 + index * 300, box = { x, y: 100, w: 250, h: 58 }; pos[id] = box;
+      C.push({ x, y: 46, x2: x + 250, ly: 56, label: index === 0 ? 'START' : index === ids.length - 1 ? 'TARGET' : `STEP ${index + 1}`, sub: this.tLabel(node.type), subY: 69, fill: index === 0 || index === ids.length - 1 ? '#df642d' : '#8b9793' });
+      N.push(this.mkNode(node, box.x, box.y, box.w, box.h, { step: index + 1, sub: node.file || node.desc || '', over: index === 0 || index === ids.length - 1 ? { fill: '#fdf3ec', stroke: '#df642d', sw: 2 } : {} }));
+    });
+    links.forEach((edge) => {
+      if (!pos[edge.from] || !pos[edge.to]) return;
+      E.push(this.linkEdge(pos[edge.from], pos[edge.to], edge, true, false, true));
+    });
+    const inferred = links.filter((edge) => (edge.confidence ?? 1) < 0.9 || edge.source === 'heuristic').length;
+    return { nodes: N, edges: E, groups: [], cols: C, status: `${links.length} relationship step${links.length === 1 ? '' : 's'} from ${from.label} to ${to.label}.${both ? ' Arrowheads preserve the real relationship direction.' : ''}${inferred ? ` ${inferred} inferred link${inferred === 1 ? '' : 's'} included.` : ''}` };
   }
 
   sceneContext(sel, moduleMode = false) {
@@ -2209,10 +2349,11 @@ class Component extends DCLogic {
     const { D } = this.state;
     const root = this.node(sel);
     const visited = new Map([[sel, 0]]), queue = [sel], links = [];
-    while (queue.length && visited.size < 36) {
-      const current = queue.shift(), depth = visited.get(current);
+    let cursor = 0;
+    while (cursor < queue.length && visited.size < 36) {
+      const current = queue[cursor++], depth = visited.get(current);
       if (depth >= 4) continue;
-      D.edges.filter((edge) => edge.from === current && ['runs', 'triggers', 'calls', 'reads', 'writes', 'publishes', 'enqueues', 'configures', 'uses'].includes(edge.verb)).slice(0, 12).forEach((edge) => { links.push(edge); if (!visited.has(edge.to)) { visited.set(edge.to, depth + 1); queue.push(edge.to); } });
+      this.outgoingEdges(current).filter((edge) => ['runs', 'triggers', 'calls', 'reads', 'writes', 'publishes', 'enqueues', 'configures', 'uses'].includes(edge.verb)).slice(0, 12).forEach((edge) => { links.push(edge); if (!visited.has(edge.to)) { visited.set(edge.to, depth + 1); queue.push(edge.to); } });
     }
     const N = [], E = [], C = [], pos = {}, rows = {};
     const stages = ['SCHEDULE', 'HANDLER', 'WORK', 'DATA / EVENTS', 'EXTERNAL EFFECTS'];
@@ -2266,14 +2407,14 @@ class Component extends DCLogic {
 
   sceneRuntime(environment) {
     const { D } = this.state;
-    const types = new Set(['ingress', 'infrastructure_service', 'deployment', 'container', 'config_map', 'secret']);
-    const nodes = D.nodes.filter((node) => types.has(node.type) && (!node.details?.environment || node.details.environment === environment));
+    const types = new Set(['ingress', 'infrastructure_service', 'deployment', 'container', 'config_map', 'secret', 'config']);
+    const nodes = D.nodes.filter((node) => types.has(node.type) && (!node.details?.environment || node.details.environment === environment) && (node.type !== 'config' || !!node.details?.environment));
     const columns = [
       { label: 'PUBLIC ENTRY', sub: 'traffic entering the environment', types: ['ingress'] },
       { label: 'ROUTING', sub: 'services and internal addresses', types: ['infrastructure_service'] },
       { label: 'WORKLOADS', sub: 'deployed applications', types: ['deployment'] },
       { label: 'CONTAINERS', sub: 'running process boundaries', types: ['container'] },
-      { label: 'CONFIGURATION', sub: 'ConfigMaps and secret names', types: ['config_map', 'secret'] },
+      { label: 'CONFIGURATION', sub: 'settings, networks, volumes and secret names', types: ['config_map', 'secret', 'config'] },
     ];
     const N = [], E = [], C = [], pos = {};
     columns.forEach((column, col) => {
@@ -2286,6 +2427,7 @@ class Component extends DCLogic {
           : node.type === 'container' ? (node.details?.image || 'container image not resolved')
           : node.type === 'ingress' ? 'external HTTP entry'
           : node.type === 'infrastructure_service' ? 'routes traffic to a workload'
+          : node.type === 'config' ? String(node.details?.kind || 'runtime configuration')
           : `${(node.details?.keys || []).length} configuration keys`;
         N.push(this.mkNode(node, b.x, b.y, b.w, b.h, { sub }));
       });
@@ -2309,7 +2451,7 @@ class Component extends DCLogic {
       const sets = [
         members.filter((node) => ['workflow', 'pipeline_job', 'build_stage', 'container_image', 'deployment'].includes(node.type)),
         members.filter((node) => ['ingress', 'infrastructure_service', 'container'].includes(node.type)),
-        members.filter((node) => ['config_map', 'secret', 'env'].includes(node.type)),
+        members.filter((node) => ['config_map', 'secret', 'env', 'config'].includes(node.type)),
       ];
       const y = 78 + row * 94;
       const envBox = { x: 40, y, w: 260, h: 62 }; pos[envNode.id] = envBox;
@@ -2414,6 +2556,7 @@ class Component extends DCLogic {
       limited = scn.nodes.length - hardNodeLimit;
     }
     const ids = new Set(nodes.map((node) => node.id));
+    (scn.edgeEndpointIds || []).forEach((id) => ids.add(id));
     let edges = scn.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
     if (edges.length > hardEdgeLimit) {
       const selected = this.state.sel;
@@ -2620,17 +2763,15 @@ class Component extends DCLogic {
     const panelOpen = !!selNode && !this.state.panelHidden;
     let pVals = {};
     if (panelOpen) {
-      const inc = D.edges.filter((e) => e.to === sel);
-      const out = D.edges.filter((e) => e.from === sel);
+      const inc = this.incomingEdges(sel);
+      const out = this.outgoingEdges(sel);
       let srcKey = D.sources[sel] ? sel : D.fileSource[sel];
       if (!srcKey && selNode.file) {
         const owner = Object.keys(D.sources).find((k) => D.sources[k].file === selNode.file);
         if (owner) srcKey = owner;
       }
       const src = srcKey ? D.sources[srcKey] : null;
-      const flowsOf = [];
-      Object.entries(D.flows).forEach(([fid, f]) => { if (f.steps.some((s) => s.id === sel)) flowsOf.push({ label: f.title.split(' — ')[0], desc: f.summary, go: () => this.select(f.root, { mode: 'routes', flow: fid }) }); });
-      Object.entries(D.asyncFlows).forEach(([fid, f]) => { if (f.steps.some((s) => s.id === sel)) flowsOf.push({ label: f.title.split(' — ')[0], desc: f.summary, go: () => this.select(fid, { mode: 'async', flow: fid }) }); });
+      const flowsOf = this.flowsForNode(sel).map(({ id: fid, flow: f, kind }) => ({ label: f.title.split(' — ')[0], desc: f.summary, go: () => this.select(kind === 'route' ? f.root : fid, { mode: kind === 'route' ? 'routes' : 'async', flow: fid }) }));
 
       const tabs = [{ id: 'overview', label: 'Overview' }];
       if (inc.length) tabs.push({ id: 'incoming', label: `Used by · ${inc.length}` });
@@ -2662,11 +2803,11 @@ class Component extends DCLogic {
         v: Array.isArray(v) ? v.join(', ') : String(v),
       }));
       if (selNode.type === 'table') {
-        facts.push({ k: 'Columns', v: String(D.edges.filter((e) => e.from === sel && e.verb === 'has column').length) });
-        facts.push({ k: 'Indexes', v: String(D.edges.filter((e) => e.to === sel && e.verb === 'indexes').length) });
-        facts.push({ k: 'Relationships', v: String(D.edges.filter((e) => e.verb === 'references' && e.details?.associationOnly !== true && (e.from === sel || e.to === sel) && this.node(e.from)?.type === 'table' && this.node(e.to)?.type === 'table').length) });
-        facts.push({ k: 'Readers / writers', v: String(D.edges.filter((e) => e.to === sel && ['reads', 'writes'].includes(e.verb)).length) });
-        facts.push({ k: 'Migrations', v: String(D.edges.filter((e) => e.to === sel && ['creates', 'alters', 'drops'].includes(e.verb)).length) });
+        facts.push({ k: 'Columns', v: String(out.filter((e) => e.verb === 'has column').length) });
+        facts.push({ k: 'Indexes', v: String(inc.filter((e) => e.verb === 'indexes').length) });
+        facts.push({ k: 'Relationships', v: String([...inc, ...out].filter((e) => e.verb === 'references' && e.details?.associationOnly !== true && this.node(e.from)?.type === 'table' && this.node(e.to)?.type === 'table').length) });
+        facts.push({ k: 'Readers / writers', v: String(inc.filter((e) => ['reads', 'writes'].includes(e.verb)).length) });
+        facts.push({ k: 'Migrations', v: String(inc.filter((e) => ['creates', 'alters', 'drops'].includes(e.verb)).length) });
       }
       if (selNode.domain && D.domains.find((d) => d.id === selNode.domain)) facts.push({ k: 'Domain', v: D.domains.find((d) => d.id === selNode.domain).name });
       const roleRelated = (D.fileRoles[sel] ? D.fileRoles[sel].related : []).map((rid) => {
@@ -2677,7 +2818,10 @@ class Component extends DCLogic {
       const actions = [];
       const flowForSel = D.routeFlowIndex[sel] || (D.asyncFlows[sel] ? sel : null);
       if (flowForSel && !activeFlow) actions.push({ label: 'View focused flow', bg: '#df642d', fg: '#fff', border: '#df642d', go: () => this.select(D.flows[flowForSel] ? (D.flows[flowForSel].root) : sel, { mode: D.flows[flowForSel] ? 'routes' : 'async', flow: flowForSel }) });
-      if (!sel.startsWith('op.')) actions.push({ label: 'Trace dependencies', bg: '#fff', fg: '#1f6f5b', border: '#9fbeb3', go: () => this.setState({ trace: true, traceRoot: sel, traceDepth: '3', tech: false, vb: null, panelHidden: false }) });
+      if (!sel.startsWith('op.')) {
+        actions.push({ label: 'Trace dependencies', bg: '#fff', fg: '#1f6f5b', border: '#9fbeb3', go: () => this.setState({ trace: true, traceRoot: sel, traceDepth: '3', tech: false, pathActive: false, pathFrom: null, pathTo: null, pathPicking: null, vb: null, panelHidden: false }) });
+        actions.push({ label: 'Find path from here', bg: '#fff', fg: '#315d72', border: '#a9bec8', go: () => this.setState({ pathActive: true, pathFrom: sel, pathTo: null, pathPicking: 'to', trace: false, traceRoot: null, tech: false, vb: null, panelHidden: false }) });
+      }
       if (src) actions.push({ label: 'View source', bg: '#fff', fg: '#333e3a', border: '#d4dbd7', go: () => this.setState({ tab: 'source' }) });
       if (selNode.file && selNode.type !== 'file') {
         const fn = D.nodes.find((x) => x.type === 'file' && x.file === selNode.file);
@@ -2732,7 +2876,12 @@ class Component extends DCLogic {
       ovDomains: D.domains.map((dm) => ({ name: dm.name, counts: dm.counts, desc: dm.desc, go: () => this.setState({ mode: 'modules', domainFilter: dm.id, sel: null, vb: null, hist: [] }) })),
       ovFlows: Object.entries(D.flows).slice(0, 4).map(([fid, flow]) => ({ label: flow.title.split(' — ')[0], desc: flow.summary, go: () => this.select(flow.root, { mode: 'routes', flow: fid }) })),
       ovRisks: D.nodes.filter((n) => n.type === 'risk').slice(0, 4).map((r) => ({ label: r.label, file: r.file, sev: r.severity, sevFg: sevColors[r.severity][0], sevBg: sevColors[r.severity][1], go: () => this.reveal(r.id) })),
-    } : { ovStats: [], ovDomains: [], ovFlows: [], ovRisks: [] };
+      ovHubs: D.nodes.filter((node) => ['module', 'controller', 'service', 'use_case', 'port', 'adapter', 'repository', 'topic', 'queue', 'processor', 'table', 'workflow', 'deployment', 'infrastructure_service'].includes(node.type))
+        .map((node) => ({ node, connections: this.nodeDegree(node.id) }))
+        .filter((item) => item.connections > 1)
+        .sort((a, b) => b.connections - a.connections || a.node.label.localeCompare(b.node.label)).slice(0, 5)
+        .map(({ node, connections }) => ({ label: node.label, type: this.tLabel(node.type), connections, color: this.color(node.type), tip: node.desc || this.typeExplain(node.type), go: () => this.reveal(node.id) })),
+    } : { ovStats: [], ovDomains: [], ovFlows: [], ovRisks: [], ovHubs: [] };
 
     // plain-English story for the visible flow / expanded operation
     let story = null;
@@ -2784,11 +2933,12 @@ class Component extends DCLogic {
         orphanGroups.set(schema, [...(orphanGroups.get(schema) || []), table]);
       });
       if (orphanGroups.size) databaseGroups.push({ database: { id: 'detected-data', label: 'Detected application data', details: {} }, schemaGroups: [...orphanGroups.entries()].map(([name, list]) => ({ id: `detected:${name}`, name, list })) });
-      const degree = (id) => D.edges.filter((edge) => edge.from === id || edge.to === id).length;
+      const degree = (id) => this.nodeDegree(id);
       const tableCard = (table) => {
-        const columns = D.edges.filter((edge) => edge.from === table.id && edge.verb === 'has column').length;
-        const indexes = D.edges.filter((edge) => edge.to === table.id && edge.verb === 'indexes').length;
-        const refs = D.edges.filter((edge) => (edge.from === table.id || edge.to === table.id) && edge.verb === 'references' && edge.details?.associationOnly !== true && this.node(edge.from)?.type === 'table' && this.node(edge.to)?.type === 'table').length;
+        const directOut = this.outgoingEdges(table.id), directIn = this.incomingEdges(table.id);
+        const columns = directOut.filter((edge) => edge.verb === 'has column').length;
+        const indexes = directIn.filter((edge) => edge.verb === 'indexes').length;
+        const refs = [...directIn, ...directOut].filter((edge) => edge.verb === 'references' && edge.details?.associationOnly !== true && this.node(edge.from)?.type === 'table' && this.node(edge.to)?.type === 'table').length;
         return { label: table.label, desc: table.desc || this.typeExplain(table.type), hot: degree(table.id) >= 5, counts: `${columns || '?'} cols · ${indexes} idx · ${refs} relations`, tip: `${table.label}: ${columns || 'unknown'} columns, ${indexes} indexes, ${refs} relationships`, go: () => this.reveal(table.id) };
       };
       const visibleDbs = databaseGroups.filter(({ database }) => dbFilter === 'all' || database.id === dbFilter).map(({ database, schemaGroups }) => {
@@ -2814,7 +2964,7 @@ class Component extends DCLogic {
       const migrations = D.nodes.filter((node) => node.type === 'migration');
       const opColors = { creates: ['#1e8068', '#eef7f3'], alters: ['#8a6207', '#fdf4dd'], drops: ['#a83a3a', '#fbeaea'], indexes: ['#3d5a94', '#eef2f8'] };
       const rows = migrations.map((migration, index) => {
-        const ops = D.edges.filter((edge) => edge.from === migration.id && ['creates', 'alters', 'drops', 'indexes'].includes(edge.relation || edge.verb)).map((edge) => {
+        const ops = this.outgoingEdges(migration.id).filter((edge) => ['creates', 'alters', 'drops', 'indexes'].includes(edge.relation || edge.verb)).map((edge) => {
           const relation = edge.relation || edge.verb, target = this.node(edge.to); const colors = opColors[relation] || opColors.alters;
           return { relation, op: relation.replace(/s$/, ''), target: target?.label || edge.to, detail: edge.details?.statement || (target ? this.tLabel(target.type) : ''), fg: colors[0], bg: colors[1] };
         });
@@ -2850,7 +3000,7 @@ class Component extends DCLogic {
       const variables = D.nodes.filter((node) => node.type === 'env').sort((a, b) => a.label.localeCompare(b.label));
       const grouped = new Map(); variables.forEach((node) => grouped.set(node.domain || 'Project', [...(grouped.get(node.domain || 'Project') || []), node]));
       configCatalog = { cfgGroups: [...grouped.entries()].map(([name, list]) => ({ name, count: `${list.length} variables`, vars: list.map((node) => {
-        const consumers = D.edges.filter((edge) => edge.to === node.id || edge.from === node.id).map((edge) => this.node(edge.from === node.id ? edge.to : edge.from)).filter(Boolean);
+        const consumers = [...this.incomingEdges(node.id), ...this.outgoingEdges(node.id)].map((edge) => this.node(edge.from === node.id ? edge.to : edge.from)).filter(Boolean);
         const secret = node.details?.sensitive === true, required = node.details?.required === true;
         return { name: node.label, secret, reqLabel: required ? 'required' : 'optional', reqFg: required ? '#a34517' : '#4e5a56', reqBg: required ? '#fdeee5' : '#eef1ef', purpose: node.details?.purpose || node.desc || 'Runtime configuration setting.', usedBy: consumers.length ? `used by ${consumers.slice(0, 4).map((item) => item.label).join(', ')}` : node.file || 'usage not linked', environment: String(node.details?.environment || 'all detected environments'), value: secret ? 'value hidden' : String(node.details?.exampleValue || node.details?.example || 'no safe example'), rowOp: '1', go: () => this.reveal(node.id) };
       }) })) };
@@ -2892,15 +3042,15 @@ class Component extends DCLogic {
         bg: variantConfig.value === id ? '#16211d' : '#fff', fg: variantConfig.value === id ? '#fff' : '#4e5a56',
         fw: variantConfig.value === id ? 700 : 500, hoverBg: variantConfig.value === id ? '#16211d' : '#f2f5f4',
       })),
-      showTechToggle: !listScreen && !!selNode && !sel?.startsWith('op.'),
-      toggleTech: () => this.setState((s) => ({ tech: !s.tech, trace: false, traceRoot: null, vb: null })),
+      showTechToggle: !listScreen && !this.state.pathActive && !!selNode && !sel?.startsWith('op.'),
+      toggleTech: () => this.setState((s) => ({ tech: !s.tech, trace: false, traceRoot: null, pathActive: false, pathFrom: null, pathTo: null, pathPicking: null, vb: null })),
       techPressed: tech ? 'true' : 'false', techLabel: tech ? '← Semantic view' : 'Technical graph',
       techBg: tech ? '#16211d' : '#fff', techFg: tech ? '#fff' : '#4e5a56', techBorder: tech ? '#16211d' : '#d4dbd7',
-      showTraceToggle: !listScreen && (trace || (!!selNode && !sel?.startsWith('op.'))),
+      showTraceToggle: !listScreen && !this.state.pathActive && (trace || (!!selNode && !sel?.startsWith('op.'))),
       toggleTrace: () => this.setState((s) => {
         if (s.trace) return { trace: false, traceRoot: null, vb: null };
         const flow = s.activeFlow ? (s.D.flows[s.activeFlow] || s.D.asyncFlows[s.activeFlow]) : null;
-        return { trace: true, traceRoot: flow?.root || s.sel, tech: false, vb: null, panelHidden: false };
+        return { trace: true, traceRoot: flow?.root || s.sel, tech: false, pathActive: false, pathFrom: null, pathTo: null, pathPicking: null, vb: null, panelHidden: false };
       }),
       tracePressed: trace ? 'true' : 'false', traceLabel: trace ? '← Focused view' : 'Trace flow',
       traceBg: trace ? '#16211d' : '#fff', traceFg: trace ? '#fff' : '#4e5a56', traceBorder: trace ? '#16211d' : '#d4dbd7',
@@ -2914,6 +3064,21 @@ class Component extends DCLogic {
         ['traceStructure', 'Structure', '#7452a8', 'Imports, declarations, containment, and module wiring.'],
       ].map(([key, label, color, tip]) => ({ label, tip, pressed: this.state[key] ? 'true' : 'false', go: () => this.setState((s) => ({ [key]: !s[key], vb: null })), bg: this.state[key] ? color : '#fff', fg: this.state[key] ? '#fff' : '#4e5a56', border: this.state[key] ? color : '#d4dbd7' })),
       traceDepthBtns: [['3', '3', 'Show three relationship steps.'], ['6', '6', 'Show six relationship steps.'], ['12', '12', 'Show twelve relationship steps.'], ['all', 'All', 'Follow every reachable branch until the graph ends or the browser safety limit is reached.']].map(([id, label, tip]) => ({ label, tip, go: () => this.setState({ traceDepth: id, vb: null }), bg: String(this.state.traceDepth) === id ? '#16211d' : '#fff', fg: String(this.state.traceDepth) === id ? '#fff' : '#4e5a56', fw: String(this.state.traceDepth) === id ? 700 : 500 })),
+      showPathToggle: !listScreen && mode !== 'overview',
+      togglePath: () => this.setState((state) => state.pathActive
+        ? { pathActive: false, pathFrom: null, pathTo: null, pathPicking: null, vb: null }
+        : { pathActive: true, pathFrom: state.sel || null, pathTo: null, pathPicking: state.sel ? 'to' : 'from', tech: false, trace: false, traceRoot: null, panelHidden: false, vb: null }),
+      pathPressed: this.state.pathActive ? 'true' : 'false', pathLabel: this.state.pathActive ? 'Close path' : 'Path A → B',
+      pathBg: this.state.pathActive ? '#16211d' : '#fff', pathFg: this.state.pathActive ? '#fff' : '#4e5a56', pathBorder: this.state.pathActive ? '#16211d' : '#d4dbd7',
+      pathActive: !!this.state.pathActive,
+      pathFromLabel: this.state.pathFrom ? (this.node(this.state.pathFrom)?.label || this.state.pathFrom) : 'click an element or use search',
+      pathToLabel: this.state.pathTo ? (this.node(this.state.pathTo)?.label || this.state.pathTo) : 'click an element or use search',
+      pathStartBorder: this.state.pathPicking === 'from' ? '#df642d' : '#d4dbd7', pathStartBg: this.state.pathPicking === 'from' ? '#fdf3ec' : '#fff',
+      pathTargetBorder: this.state.pathPicking === 'to' ? '#df642d' : '#d4dbd7', pathTargetBg: this.state.pathPicking === 'to' ? '#fdf3ec' : '#fff',
+      pickPathStart: () => this.setState({ pathFrom: null, pathTo: null, pathPicking: 'from', vb: null }),
+      pickPathTarget: () => this.setState((state) => ({ pathTo: null, pathPicking: state.pathFrom ? 'to' : 'from', vb: null })),
+      pathInstruction: this.state.pathPicking === 'from' ? 'Choose the starting element.' : this.state.pathPicking === 'to' ? 'Choose the target element.' : this.state.pathFrom && this.state.pathTo ? 'Exact path found.' : 'Choose both endpoints.',
+      pathDirectionBtns: [['outgoing', 'Directed', 'Follow only the real outgoing direction from start to target.'], ['both', 'Any connection', 'Allow traversal in either direction while preserving real arrowheads.']].map(([id, label, tip]) => ({ label, tip, go: () => this.setState({ pathDirection: id, vb: null }), bg: this.state.pathDirection === id ? '#16211d' : '#fff', fg: this.state.pathDirection === id ? '#fff' : '#4e5a56', fw: this.state.pathDirection === id ? 700 : 500 })),
       goBack: () => this.setState((s) => { const h = s.hist.slice(); const prev = h.pop(); return prev ? { sel: prev, hist: h, vb: null, tech: false, trace: false, traceRoot: null, expandedOp: null } : {}; }),
       backDisabled: !hist.length, backOpacity: hist.length ? '1' : '0.4',
       doFit: () => this.setState({ vb: null }),
@@ -2931,10 +3096,10 @@ class Component extends DCLogic {
       vbStr, svgCursor: panning ? 'grabbing' : 'grab',
       gNodes: displayScene.nodes, gEdges: displayScene.edges, gGroups: displayScene.groups, gCols: displayScene.cols,
       statusText: displayScene.status || '', graphEmpty: !!scn.emptyOk,
-      emptyTitle: catQ ? 'Nothing matches the current filter' : (mode === 'data' ? 'No data structures detected' : 'Nothing was detected in this section'),
-      emptyHint: catQ ? 'Clear the filter in the list on the left to see all elements.' : (mode === 'data' ? 'Atlas did not recognize database schemas, tables, entities, or models in this scan.' : 'This scan did not produce any elements for this view.'),
-      showClearFocus: !!sel || !!activeFlow || trace,
-      clearFocus: () => this.setState({ sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, vb: null, hist: [], dbDetail: 'overview' }),
+      emptyTitle: this.state.pathActive && this.state.pathFrom && this.state.pathTo ? 'No path detected' : catQ ? 'Nothing matches the current filter' : (mode === 'data' ? 'No data structures detected' : 'Nothing was detected in this section'),
+      emptyHint: this.state.pathActive && this.state.pathFrom && this.state.pathTo ? 'Try Any connection, reverse the endpoints, or choose elements with detected relationships.' : catQ ? 'Clear the filter in the list on the left to see all elements.' : (mode === 'data' ? 'Atlas did not recognize database schemas, tables, entities, or models in this scan.' : 'This scan did not produce any elements for this view.'),
+      showClearFocus: !!sel || !!activeFlow || trace || this.state.pathActive,
+      clearFocus: () => this.setState({ sel: null, activeFlow: null, expandedOp: null, tech: false, trace: false, traceRoot: null, pathActive: false, pathFrom: null, pathTo: null, pathPicking: null, vb: null, hist: [], dbDetail: 'overview' }),
       onHoverOut: () => this.setState({ hover: null }),
       onCanvasClick: (e) => {
         if (e.target !== e.currentTarget || this._suppressClick || !this.state.expandedOp) return;

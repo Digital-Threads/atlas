@@ -355,11 +355,26 @@ function parseWorkflow(file: ScannedFile, content: string, addNode: AddNode, add
       const jobId = `pipeline_job:${cleanId(file.path)}:${cleanId(jobName)}`;
       const environment = normalizeEnvironment(typeof job.environment === "string" ? job.environment : String(asDict(job.environment)?.name ?? ""));
       if (environment) addEnvironment(environment, file.path, addNode);
-      addNode({ id: jobId, type: "pipeline_job", label: jobName, name: jobName, file: file.path, framework: gitlab ? "gitlab-ci" : "github-actions", source: "config", confidence: 1, metadata: { stage: job.stage, runner: job["runs-on"], environment, needs: job.needs } });
+      const steps = Array.isArray(job.steps) ? job.steps.map(asDict).filter(Boolean) as Dict[] : [];
+      const actions = steps.map((step) => String(step.uses ?? "")).filter(Boolean);
+      addNode({ id: jobId, type: "pipeline_job", label: jobName, name: jobName, file: file.path, framework: gitlab ? "gitlab-ci" : "github-actions", source: "config", confidence: 1, metadata: {
+        stage: job.stage, runner: job["runs-on"], environment, needs: job.needs, condition: job.if,
+        timeoutMinutes: job["timeout-minutes"], strategy: job.strategy, permissions: job.permissions,
+        actions, serviceCount: Object.keys(asDict(job.services) ?? {}).length,
+      } });
       addEdge(workflowId, jobId, "contains");
       if (environment) addEdge(jobId, `environment:${environment}`, "runs_in");
       for (const dependency of stringList(job.needs)) addEdge(jobId, `pipeline_job:${cleanId(file.path)}:${cleanId(dependency)}`, "depends_on");
-      const steps = Array.isArray(job.steps) ? job.steps.map(asDict).filter(Boolean) as Dict[] : [];
+      if (typeof job.uses === "string") {
+        const target = workflowReference(file.path, job.uses);
+        addNode({ id: target.id, type: "workflow", label: target.label, name: target.label, file: target.file, framework: "github-actions", source: "config", confidence: target.local ? 1 : 0.9, metadata: { reusable: true, reference: job.uses } });
+        addEdge(jobId, target.id, "uses", { reusableWorkflow: true });
+      }
+      for (const action of actions) {
+        const actionId = `config:action:${cleanId(action)}`;
+        addNode({ id: actionId, type: "config", label: action, name: action, file: file.path, framework: "github-action", source: "config", confidence: 1, metadata: { kind: "action" } });
+        addEdge(jobId, actionId, "uses");
+      }
       const script = [...steps.map((step) => `${step.uses ?? ""}\n${step.run ?? ""}`), ...stringList(job.script)].join("\n");
       parseDeliveryCommands(jobId, script, file.path, environment, addNode, addEdge);
     }
@@ -430,10 +445,35 @@ function parseCompose(file: ScannedFile, content: string, addNode: AddNode, addE
   const services = asDict(doc?.services); if (!services) return;
   const environment = environmentFromPath(file.path) ?? "local";
   addEnvironment(environment, file.path, addNode);
+  const composeConfigs = asDict(doc?.configs) ?? {};
+  const composeSecrets = asDict(doc?.secrets) ?? {};
+  const composeNetworks = asDict(doc?.networks) ?? {};
+  const composeVolumes = asDict(doc?.volumes) ?? {};
+  for (const [name, value] of Object.entries(composeConfigs)) {
+    const id = composeResourceId("config_map", file.path, name, environment);
+    addNode({ id, type: "config_map", label: name, name, file: file.path, framework: "docker-compose", source: "config", confidence: 1, metadata: { environment, kind: "compose-config", external: asDict(value)?.external === true, valuesStored: false } });
+    addEdge(id, `environment:${environment}`, "runs_in");
+  }
+  for (const [name, value] of Object.entries(composeSecrets)) {
+    const id = composeResourceId("secret", file.path, name, environment);
+    addNode({ id, type: "secret", label: name, name, file: file.path, framework: "docker-compose", source: "config", confidence: 1, metadata: { environment, kind: "compose-secret", external: asDict(value)?.external === true, valuesStored: false } });
+    addEdge(id, `environment:${environment}`, "runs_in");
+  }
+  for (const [kind, resources] of [["network", composeNetworks], ["volume", composeVolumes]] as const) {
+    for (const [name, value] of Object.entries(resources)) {
+      const id = `config:compose-${kind}:${cleanId(file.path)}:${cleanId(name)}`;
+      addNode({ id, type: "config", label: name, name, file: file.path, framework: "docker-compose", source: "config", confidence: 1, metadata: { environment, kind, external: asDict(value)?.external === true } });
+      addEdge(id, `environment:${environment}`, "runs_in");
+    }
+  }
   for (const [name, rawService] of Object.entries(services)) {
     const service = asDict(rawService); if (!service) continue;
     const id = `container:${cleanId(file.path)}:${cleanId(name)}`;
-    addNode({ id, type: "container", label: name, name, file: file.path, framework: "docker-compose", source: "config", confidence: 1, metadata: { image: service.image, build: service.build, ports: service.ports, volumes: service.volumes, environment } });
+    addNode({ id, type: "container", label: name, name, file: file.path, framework: "docker-compose", source: "config", confidence: 1, metadata: {
+      image: service.image, build: service.build, command: service.command, ports: service.ports,
+      volumes: service.volumes, environment, healthcheck: service.healthcheck, restart: service.restart,
+      profiles: service.profiles, networkMode: service.network_mode,
+    } });
     addEdge(`file:${file.path}`, id, "declares");
     addEdge(id, `environment:${environment}`, "runs_in");
     if (typeof service.image === "string") {
@@ -442,6 +482,18 @@ function parseCompose(file: ScannedFile, content: string, addNode: AddNode, addE
       addEdge(id, imageId, "uses");
     }
     for (const dependency of stringList(service.depends_on)) addEdge(id, `container:${cleanId(file.path)}:${cleanId(dependency)}`, "depends_on");
+    for (const name of stringList(service.networks)) addEdge(id, `config:compose-network:${cleanId(file.path)}:${cleanId(name)}`, "connects_to");
+    for (const item of stringList(service.volumes)) {
+      const name = item.split(":")[0];
+      if (name && !/^[./~]/.test(name) && Object.hasOwn(composeVolumes, name)) addEdge(id, `config:compose-volume:${cleanId(file.path)}:${cleanId(name)}`, "uses");
+    }
+    for (const name of composeReferenceNames(service.configs)) addEdge(id, composeResourceId("config_map", file.path, name, environment), "configures");
+    for (const name of composeReferenceNames(service.secrets)) addEdge(id, composeResourceId("secret", file.path, name, environment), "configures");
+    for (const envFile of stringList(service.env_file)) {
+      const envId = `config:env-file:${cleanId(file.path)}:${cleanId(envFile)}`;
+      addNode({ id: envId, type: "config", label: envFile, name: envFile, file: file.path, framework: "docker-compose", source: "config", confidence: 1, metadata: { environment, kind: "env-file", valuesStored: false } });
+      addEdge(id, envId, "configures");
+    }
     for (const name of environmentNames(service.environment)) {
       const envId = `environment_variable:${name}`;
       addNode({ id: envId, type: "environment_variable", label: name, name, file: file.path, source: "config", confidence: 1, metadata: { valueStored: false, environment } });
@@ -451,7 +503,8 @@ function parseCompose(file: ScannedFile, content: string, addNode: AddNode, addE
 }
 
 function parseKubernetes(file: ScannedFile, content: string, addNode: AddNode, addEdge: AddEdge, warnings: string[]) {
-  for (const value of parseYaml(content, file.path, warnings)) {
+  const documents = parseYaml(content, file.path, warnings);
+  for (const value of documents) {
     const doc = asDict(value); if (!doc || typeof doc.kind !== "string") continue;
     const metadata = asDict(doc.metadata) ?? {};
     const name = String(metadata.name ?? basename(file.path));
@@ -482,8 +535,24 @@ function parseKubernetes(file: ScannedFile, content: string, addNode: AddNode, a
       addNode({ id, type: secret ? "secret" : "config_map", label: name, name, file: file.path, framework: "kubernetes", source: "config", confidence: 1, metadata: { environment, keys: Object.keys(data), valuesStored: false } });
       addEdge(`file:${file.path}`, id, "declares");
       if (environment) addEdge(id, `environment:${environment}`, "runs_in");
+    } else if (kind === "Kustomization") {
+      parseKustomization(file, doc, environment, addNode, addEdge);
+    } else if (kind === "HorizontalPodAutoscaler") {
+      const spec = asDict(doc.spec) ?? {};
+      const target = asDict(spec.scaleTargetRef) ?? {};
+      const id = `config:kubernetes-hpa:${cleanId(name)}:${environment ?? "default"}`;
+      addNode({ id, type: "config", label: name, name, file: file.path, framework: "kubernetes", source: "config", confidence: 1, metadata: { kind, environment, minReplicas: spec.minReplicas, maxReplicas: spec.maxReplicas, metrics: spec.metrics } });
+      if (environment) addEdge(id, `environment:${environment}`, "runs_in");
+      if (typeof target.name === "string") addEdge(id, `deployment:${cleanId(target.name)}:${environment ?? "default"}`, "configures");
+    } else if (["NetworkPolicy", "PersistentVolumeClaim", "ServiceAccount"].includes(kind)) {
+      const id = `config:kubernetes-${cleanId(kind)}:${cleanId(name)}:${environment ?? "default"}`;
+      addNode({ id, type: "config", label: name, name, file: file.path, framework: "kubernetes", source: "config", confidence: 1, metadata: { kind, environment } });
+      if (environment) addEdge(id, `environment:${environment}`, "runs_in");
+    } else if (kind === "Application" && /argoproj\.io/i.test(String(doc.apiVersion ?? ""))) {
+      parseArgoApplication(file, name, doc, environment, addNode, addEdge);
     }
   }
+  if (!documents.some((value) => typeof asDict(value)?.kind === "string")) parseHelmMetadata(file, documents, addNode, addEdge);
 }
 
 function parseWorkload(file: ScannedFile, kind: string, name: string, doc: Dict, environment: string | null, addNode: AddNode, addEdge: AddEdge) {
@@ -492,13 +561,21 @@ function parseWorkload(file: ScannedFile, kind: string, name: string, doc: Dict,
   const template = asDict(spec.template) ?? {};
   const podSpec = asDict(template.spec) ?? {};
   const containers = Array.isArray(podSpec.containers) ? podSpec.containers.map(asDict).filter(Boolean) as Dict[] : [];
-  addNode({ id, type: "deployment", label: name, name, file: file.path, framework: "kubernetes", source: "config", confidence: 1, metadata: { kind, environment, replicas: spec.replicas, strategy: spec.strategy, labels: asDict(asDict(template.metadata)?.labels), containerCount: containers.length } });
+  const initContainers = Array.isArray(podSpec.initContainers) ? podSpec.initContainers.map(asDict).filter(Boolean) as Dict[] : [];
+  addNode({ id, type: "deployment", label: name, name, file: file.path, framework: "kubernetes", source: "config", confidence: 1, metadata: {
+    kind, environment, replicas: spec.replicas, strategy: spec.strategy ?? spec.updateStrategy,
+    labels: asDict(asDict(template.metadata)?.labels), containerCount: containers.length,
+    initContainerCount: initContainers.length, serviceAccountName: podSpec.serviceAccountName,
+    nodeSelector: podSpec.nodeSelector, affinity: podSpec.affinity, tolerations: podSpec.tolerations,
+  } });
   addEdge(`file:${file.path}`, id, "declares");
   if (environment) addEdge(id, `environment:${environment}`, "runs_in");
-  for (const raw of containers) {
+  const volumes = kubernetesVolumes(podSpec, environment);
+  const runtimeContainers: Dict[] = [...initContainers.map((item) => ({ ...item, atlasInit: true })), ...containers];
+  for (const raw of runtimeContainers) {
     const containerName = String(raw.name ?? "container");
     const containerId = `container:${cleanId(name)}:${cleanId(containerName)}:${environment ?? "default"}`;
-    addNode({ id: containerId, type: "container", label: containerName, name: containerName, file: file.path, framework: "kubernetes", source: "config", confidence: 1, metadata: { image: raw.image, ports: raw.ports, resources: raw.resources, readinessProbe: raw.readinessProbe, livenessProbe: raw.livenessProbe, environment } });
+    addNode({ id: containerId, type: "container", label: containerName, name: containerName, file: file.path, framework: "kubernetes", source: "config", confidence: 1, metadata: { image: raw.image, command: raw.command, args: raw.args, ports: raw.ports, resources: raw.resources, readinessProbe: raw.readinessProbe, livenessProbe: raw.livenessProbe, startupProbe: raw.startupProbe, securityContext: raw.securityContext, volumeMounts: raw.volumeMounts, initContainer: raw.atlasInit === true, environment } });
     addEdge(id, containerId, "contains");
     if (typeof raw.image === "string") {
       const imageId = `container_image:${cleanId(raw.image)}`;
@@ -508,6 +585,10 @@ function parseWorkload(file: ScannedFile, kind: string, name: string, doc: Dict,
     for (const reference of configReferences(raw)) {
       const targetId = `${reference.secret ? "secret" : "config_map"}:${cleanId(reference.name)}:${environment ?? "default"}`;
       addEdge(containerId, targetId, "configures", { optional: reference.optional });
+    }
+    for (const mount of Array.isArray(raw.volumeMounts) ? raw.volumeMounts.map(asDict).filter(Boolean) as Dict[] : []) {
+      const volume = volumes.get(String(mount.name ?? ""));
+      if (volume) addEdge(containerId, volume.id, volume.secret || volume.configMap ? "configures" : "uses", { mountPath: mount.mountPath, readOnly: mount.readOnly });
     }
   }
 }
@@ -584,6 +665,93 @@ function normalizeEnvironment(value: string): string | null {
   const clean = value.trim().toLowerCase();
   if (!clean) return null;
   return environmentAliases[clean] ?? (/(prod)/.test(clean) ? "production" : /(stag|stage)/.test(clean) ? "staging" : /(dev)/.test(clean) ? "development" : clean.replace(/[^a-z0-9_-]+/g, "-"));
+}
+
+function workflowReference(sourceFile: string, reference: string): { id: string; label: string; file: string; local: boolean } {
+  const local = reference.startsWith("./");
+  const file = local ? reference.replace(/^\.\//, "") : sourceFile;
+  const label = local ? basename(file) : reference;
+  return { id: `workflow:${cleanId(local ? file : reference)}`, label, file, local };
+}
+
+function composeResourceId(type: "config_map" | "secret", file: string, name: string, environment: string): string {
+  return `${type}:compose:${cleanId(file)}:${cleanId(name)}:${environment}`;
+}
+
+function composeReferenceNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return stringList(value);
+  return value.flatMap((item) => {
+    if (typeof item === "string") return [item];
+    const record = asDict(item);
+    return typeof record?.source === "string" ? [record.source] : [];
+  });
+}
+
+function parseKustomization(file: ScannedFile, doc: Dict, environment: string | null, addNode: AddNode, addEdge: AddEdge) {
+  const metadata = asDict(doc.metadata) ?? {};
+  const name = String(metadata.name ?? basename(file.path));
+  const id = `config:kustomization:${cleanId(file.path)}`;
+  const resources = stringList(doc.resources);
+  const patches = [...stringList(doc.patches), ...stringList(doc.patchesStrategicMerge)];
+  const images = Array.isArray(doc.images) ? doc.images.map(asDict).filter(Boolean) as Dict[] : [];
+  addNode({ id, type: "config", label: name, name, file: file.path, framework: "kustomize", source: "config", confidence: 1, metadata: { kind: "Kustomization", environment, namespace: doc.namespace, resources, patches, imageCount: images.length } });
+  if (environment) addEdge(id, `environment:${environment}`, "runs_in");
+  for (const image of images) {
+    const value = String(image.newName ?? image.name ?? "") + (image.newTag ? `:${String(image.newTag)}` : "");
+    if (!value) continue;
+    const imageId = `container_image:${cleanId(value)}`;
+    addNode({ id: imageId, type: "container_image", label: value, name: value, file: file.path, source: "config", confidence: 1, metadata: { environment, overriddenBy: "kustomize" } });
+    addEdge(id, imageId, "uses");
+  }
+}
+
+function parseArgoApplication(file: ScannedFile, name: string, doc: Dict, fallbackEnvironment: string | null, addNode: AddNode, addEdge: AddEdge) {
+  const spec = asDict(doc.spec) ?? {};
+  const destination = asDict(spec.destination) ?? {};
+  const source = asDict(spec.source) ?? {};
+  const environment = normalizeEnvironment(String(destination.namespace ?? "")) ?? fallbackEnvironment;
+  if (environment) addEnvironment(environment, file.path, addNode);
+  const id = `deployment:argocd:${cleanId(name)}:${environment ?? "default"}`;
+  addNode({ id, type: "deployment", label: name, name, file: file.path, framework: "argocd", source: "config", confidence: 1, metadata: {
+    kind: "Argo CD Application", environment, repository: source.repoURL, revision: source.targetRevision,
+    path: source.path, chart: source.chart, destinationServer: destination.server, syncPolicy: spec.syncPolicy,
+  } });
+  if (environment) addEdge(id, `environment:${environment}`, "runs_in");
+}
+
+function parseHelmMetadata(file: ScannedFile, documents: unknown[], addNode: AddNode, addEdge: AddEdge) {
+  if (!/(^|\/)(helm|charts?)(\/|$)/i.test(file.path)) return;
+  const doc = asDict(documents[0]);
+  if (!doc) return;
+  const chart = /(^|\/)Chart\.ya?ml$/i.test(file.path);
+  const values = /(^|\/)values(?:\.[^.]+)?\.ya?ml$/i.test(file.path);
+  if (!chart && !values) return;
+  const environment = environmentFromPath(file.path);
+  if (environment) addEnvironment(environment, file.path, addNode);
+  const name = chart ? String(doc.name ?? basename(file.path)) : basename(file.path);
+  const id = `config:helm:${cleanId(file.path)}`;
+  addNode({ id, type: "config", label: name, name, file: file.path, framework: "helm", source: "config", confidence: 1, metadata: {
+    kind: chart ? "helm-chart" : "helm-values", environment, version: chart ? doc.version : undefined,
+    appVersion: chart ? doc.appVersion : undefined, keys: values ? Object.keys(doc) : undefined,
+    valuesStored: false,
+  } });
+  if (environment) addEdge(id, `environment:${environment}`, "runs_in");
+}
+
+function kubernetesVolumes(podSpec: Dict, environment: string | null): Map<string, { id: string; secret: boolean; configMap: boolean }> {
+  const result = new Map<string, { id: string; secret: boolean; configMap: boolean }>();
+  const volumes = Array.isArray(podSpec.volumes) ? podSpec.volumes.map(asDict).filter(Boolean) as Dict[] : [];
+  for (const volume of volumes) {
+    const name = String(volume.name ?? "");
+    if (!name) continue;
+    const secret = asDict(volume.secret);
+    const configMap = asDict(volume.configMap);
+    const claim = asDict(volume.persistentVolumeClaim);
+    if (typeof secret?.secretName === "string") result.set(name, { id: `secret:${cleanId(secret.secretName)}:${environment ?? "default"}`, secret: true, configMap: false });
+    else if (typeof configMap?.name === "string") result.set(name, { id: `config_map:${cleanId(configMap.name)}:${environment ?? "default"}`, secret: false, configMap: true });
+    else if (typeof claim?.claimName === "string") result.set(name, { id: `config:kubernetes-PersistentVolumeClaim:${cleanId(claim.claimName)}:${environment ?? "default"}`, secret: false, configMap: false });
+  }
+  return result;
 }
 
 function extractSqlFragments(content: string): string[] {

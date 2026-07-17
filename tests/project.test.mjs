@@ -60,10 +60,18 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     "scheduled_job:kubernetes:cleanup-expired-sessions:production",
     "container:cronjob:cleanup-expired-sessions:cleanup:production",
     "workflow:.github:workflows:delivery.yml", "pipeline_job:.github:workflows:delivery.yml:deploy-staging",
+    "workflow:.github:workflows:reusable-quality.yml", "pipeline_job:.github:workflows:delivery.yml:quality",
+    "config:action:actions:checkout@v4",
     "build_stage:Dockerfile:runtime", "container_image:registry.example.test:atlas-api:production",
     "deployment:atlas-api:staging", "deployment:atlas-api:production",
     "infrastructure_service:atlas-api:staging", "infrastructure_service:atlas-api:production",
     "ingress:atlas-api:production", "config_map:atlas-api:production", "secret:atlas-api-secrets:production",
+    "container:atlas-api:migrate:production", "config:kubernetes-hpa:atlas-api:production",
+    "config:kustomization:k8s:production:kustomization.yml", "deployment:argocd:atlas-api:production",
+    "config:helm:helm:atlas:Chart.yaml", "config:helm:helm:atlas:values.production.yaml",
+    "config_map:compose:docker-compose.development.yml:api-settings:development",
+    "secret:compose:docker-compose.development.yml:api-token:development",
+    "config:compose-network:docker-compose.development.yml:backend",
     "environment:development", "environment:staging", "environment:production",
   ];
   for (const id of requiredNodes) assert.ok(query.getNode(id), `missing node ${id}`);
@@ -140,6 +148,12 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(result.graph.edges.some((edge) => edge.from === "infrastructure_service:atlas-api:production" && edge.to === "deployment:atlas-api:production" && edge.type === "targets"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "ingress:atlas-api:production" && edge.to === "infrastructure_service:atlas-api:production" && edge.type === "exposes"));
   assert.ok(result.graph.edges.some((edge) => edge.from === "container:atlas-api:api:production" && edge.to === "secret:atlas-api-secrets:production" && edge.type === "configures"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "pipeline_job:.github:workflows:delivery.yml:quality" && edge.to === "workflow:.github:workflows:reusable-quality.yml" && edge.type === "uses"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "pipeline_job:.github:workflows:delivery.yml:test" && edge.to === "config:action:actions:checkout@v4" && edge.type === "uses"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "container:docker-compose.development.yml:api" && edge.to === "config_map:compose:docker-compose.development.yml:api-settings:development" && edge.type === "configures"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "container:docker-compose.development.yml:api" && edge.to === "config:compose-network:docker-compose.development.yml:backend" && edge.type === "connects_to"));
+  assert.ok(result.graph.edges.some((edge) => edge.from === "config:kubernetes-hpa:atlas-api:production" && edge.to === "deployment:atlas-api:production" && edge.type === "configures"));
+  assert.equal(query.getNode("container:atlas-api:migrate:production").metadata.initContainer, true);
 
   const featureASettings = "module:SettingsModule@src/feature-a/settings.module.ts";
   const featureBSettings = "module:SettingsModule@src/feature-b/settings.module.ts";
@@ -231,6 +245,7 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "async"));
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "external"));
   assert.ok(viewerData.mapEdges.some((edge) => edge.kind === "data" && [edge.from, edge.to].some((id) => id.startsWith("database:"))));
+  assert.ok(viewerData.mapEdges.some((edge) => [edge.from, edge.to].some((id) => /^(workflow|pipeline_job|container_image|deployment|container|infrastructure_service|ingress|environment):/.test(id))), "system map must retain delivery and runtime endpoints");
   assert.ok(viewerData.mapEdges.every((edge) => edge.relation !== "has_column"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "reads" && edge.kind === "data"));
   assert.ok(viewerData.edges.some((edge) => edge.relation === "writes" && edge.kind === "data"));
@@ -370,8 +385,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   await client.connect(transport);
   try {
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 18);
-    for (const name of ["atlas_find_node", "atlas_get_node", "atlas_get_dependencies", "atlas_get_dependents", "atlas_find_routes", "atlas_find_flow", "atlas_find_async_flows", "atlas_find_async_flow", "atlas_find_tables", "atlas_find_data_model", "atlas_get_table_profile", "atlas_find_migrations", "atlas_find_schedules", "atlas_find_delivery", "atlas_find_environments", "atlas_find_external_apis", "atlas_search", "atlas_project_summary"]) {
+    assert.equal(tools.tools.length, 19);
+    for (const name of ["atlas_find_node", "atlas_get_node", "atlas_get_dependencies", "atlas_get_dependents", "atlas_find_path", "atlas_find_routes", "atlas_find_flow", "atlas_find_async_flows", "atlas_find_async_flow", "atlas_find_tables", "atlas_find_data_model", "atlas_get_table_profile", "atlas_find_migrations", "atlas_find_schedules", "atlas_find_delivery", "atlas_find_environments", "atlas_find_external_apis", "atlas_search", "atlas_project_summary"]) {
       assert.ok(tools.tools.some((tool) => tool.name === name), `missing MCP tool ${name}`);
     }
     const routes = await client.callTool({ name: "atlas_find_routes", arguments: {} });
@@ -390,6 +405,8 @@ test("covers the complete NestJS MVP architecture surface", async () => {
     assert.match(JSON.stringify(nodeDetails), /method:UsersService\.create/);
     const dependents = await client.callTool({ name: "atlas_get_dependents", arguments: { id: "service:UsersService", depth: 2 } });
     assert.match(JSON.stringify(dependents), /controller:UsersController/);
+    const path = await client.callTool({ name: "atlas_find_path", arguments: { from: "route:POST:/api/users", to: "table:User" } });
+    assert.match(JSON.stringify(path), /table:User/);
     const tables = await client.callTool({ name: "atlas_find_tables", arguments: {} });
     assert.match(JSON.stringify(tables), /table:User/);
     const externalApis = await client.callTool({ name: "atlas_find_external_apis", arguments: {} });

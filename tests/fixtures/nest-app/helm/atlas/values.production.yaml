@@ -1,0 +1,6 @@
+replicaCount: 3
+image:
+  repository: registry.example.test/atlas-api
+  tag: production
+secretNames:
+  - atlas-api-secrets

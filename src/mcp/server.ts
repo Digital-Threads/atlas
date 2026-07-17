@@ -41,6 +41,20 @@ export async function startMcpServer(projectPath: string, outputPath = ".atlas")
     inputSchema: { id: z.string().min(1), depth: z.number().int().min(1).max(10).default(2) },
   }, async ({ id, depth }) => result({ graph: query.findDependents(id, depth) }));
 
+  server.registerTool("atlas_find_path", {
+    description: "Find the shortest explainable architecture path between two exact node IDs.",
+    inputSchema: {
+      from: z.string().min(1),
+      to: z.string().min(1),
+      direction: z.enum(["outgoing", "both"]).default("outgoing"),
+      maxDepth: z.number().int().min(1).max(50).default(20),
+    },
+  }, async ({ from, to, direction, maxDepth }) => result({
+    from: query.getNode(from),
+    to: query.getNode(to),
+    path: query.findPath(from, to, direction, maxDepth),
+  }));
+
   server.registerTool("atlas_find_routes", { description: "List all detected HTTP routes." }, async () => result({ routes: query.findRoutes() }));
 
   server.registerTool("atlas_find_flow", {

@@ -19,5 +19,8 @@ test("graph builder deduplicates edges and query traversal is bidirectional", ()
   assert.deepEqual(new Set(query.getNeighbors("service:A", 1).nodes.map((node) => node.id)), new Set(["project:root", "service:A", "service:B"]));
   assert.ok(query.findDependencies("service:A", 1).nodes.some((node) => node.id === "service:B"));
   assert.ok(query.findDependents("service:A", 1).nodes.some((node) => node.id === "project:root"));
+  assert.deepEqual(query.findPath("project:root", "service:B").nodes.map((node) => node.id), ["project:root", "service:A", "service:B"]);
+  assert.deepEqual(query.findPath("service:B", "project:root", "both").nodes.map((node) => node.id), ["service:B", "service:A", "project:root"]);
+  assert.deepEqual(query.findPath("service:B", "project:root").nodes, []);
   assert.equal(query.search("service:A")[0].score, 60);
 });

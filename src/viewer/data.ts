@@ -319,12 +319,19 @@ function buildMapEdges(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): Vie
     });
   }
   const ranked = [...grouped.values()].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
-  const structureEdges = ranked.filter((edge) => edge.kind === "sync").slice(0, 40);
-  const dataEdges = ranked.filter((edge) => edge.kind === "data").slice(0, 30);
-  const externalEdges = ranked.filter((edge) => edge.kind === "external").slice(0, 20);
-  const asyncEdges = ranked.filter((edge) => edge.kind === "async").slice(0, 50);
+  const operationsTypes = new Set(["workflow", "pipeline_job", "build_stage", "container_image", "deployment", "container", "infrastructure_service", "ingress", "environment"]);
+  const operationsRelations = new Set(["builds", "publishes", "deploys", "releases", "targets", "exposes", "routes_to", "configures", "runs_in"]);
+  const isOperationsEdge = (edge: ViewerEdge) => operationsTypes.has(nodes.get(edge.from)?.type ?? "")
+    || operationsTypes.has(nodes.get(edge.to)?.type ?? "")
+    || operationsRelations.has(edge.relation ?? "");
+  const operationsEdges = ranked.filter(isOperationsEdge).slice(0, 40);
+  const architectureEdges = ranked.filter((edge) => !isOperationsEdge(edge));
+  const structureEdges = architectureEdges.filter((edge) => edge.kind === "sync").slice(0, 40);
+  const dataEdges = architectureEdges.filter((edge) => edge.kind === "data").slice(0, 30);
+  const externalEdges = architectureEdges.filter((edge) => edge.kind === "external").slice(0, 20);
+  const asyncEdges = architectureEdges.filter((edge) => edge.kind === "async").slice(0, 50);
   // Separate budgets prevent large schemas from displacing async and external behavior.
-  return [...structureEdges, ...dataEdges, ...externalEdges, ...asyncEdges];
+  return [...operationsEdges, ...structureEdges, ...dataEdges, ...externalEdges, ...asyncEdges];
 }
 
 function buildMapDataOwners(edges: ViewerEdge[], nodes: Map<string, ViewerNode>): Map<string, string> {
@@ -350,6 +357,7 @@ function buildMapDataOwners(edges: ViewerEdge[], nodes: Map<string, ViewerNode>)
 
 function mapEndpoint(node: ViewerNode, dataOwners: Map<string, string>): string {
   if (["topic", "queue", "processor", "broker"].includes(node.type)) return node.id;
+  if (["workflow", "pipeline_job", "build_stage", "container_image", "deployment", "container", "infrastructure_service", "ingress", "environment"].includes(node.type)) return node.id;
   if (node.type === "database") return node.id;
   if (["schema", "table", "entity", "model", "materialized_view"].includes(node.type)) return dataOwners.get(node.id) ?? node.id;
   if (["external", "env"].includes(node.type)) return node.id;

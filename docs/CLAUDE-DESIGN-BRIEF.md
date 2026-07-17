@@ -66,6 +66,14 @@ question, show direction clearly, and avoid an undifferentiated force-directed g
    - Secret-like variables show a hidden-value state, never a fake value.
    - Show where each variable is consumed and which runtime object provides it.
 
+9. **Path A -> B**
+   - A persistent header command starts from the currently selected element.
+   - The target is chosen through global search or by clicking a map card.
+   - Render only the exact chain in numbered left-to-right columns, without unrelated neighbours.
+   - Directed mode follows outgoing links. Any connection may traverse incoming links but preserves real arrow direction.
+   - Explain no-path results and let the user replace either endpoint immediately.
+   - Keep path search indexed and bounded for large project graphs.
+
 ## Shared interaction rules
 
 - Desktop reference viewport: 1440 x 900. Also provide usable 1280 x 720 and mobile layouts.
