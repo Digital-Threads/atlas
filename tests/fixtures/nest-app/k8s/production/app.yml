@@ -13,6 +13,10 @@ spec:
       labels:
         app: atlas-api
     spec:
+      initContainers:
+        - name: migrate
+          image: registry.example.test/atlas-api:production
+          command: ["npm", "run", "migrate"]
       containers:
         - name: api
           image: registry.example.test/atlas-api:production
@@ -38,6 +42,14 @@ spec:
                 name: atlas-api
             - secretRef:
                 name: atlas-api-secrets
+          volumeMounts:
+            - name: runtime-config
+              mountPath: /etc/atlas
+              readOnly: true
+      volumes:
+        - name: runtime-config
+          configMap:
+            name: atlas-api
 ---
 apiVersion: v1
 kind: Service
@@ -87,6 +99,19 @@ metadata:
 stringData:
   JWT_SECRET: another-value-that-must-never-be-stored
 ---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: atlas-api
+  namespace: production
+spec:
+  minReplicas: 3
+  maxReplicas: 12
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: atlas-api
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -104,4 +129,3 @@ spec:
           containers:
             - name: cleanup
               image: registry.example.test/atlas-api:production
-
