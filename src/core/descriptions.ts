@@ -79,7 +79,7 @@ function isIntelligenceNode(type: GraphNodeType): boolean {
   return [
     "database", "schema", "table", "column", "index", "constraint", "migration", "materialized_view",
     "scheduled_job", "workflow", "pipeline_job", "build_stage", "container_image", "container", "deployment",
-    "infrastructure_service", "ingress", "config_map", "secret", "environment", "environment_variable",
+    "infrastructure_service", "ingress", "config_map", "secret", "environment", "environment_variable", "config",
   ].includes(type);
 }
 
@@ -146,10 +146,13 @@ function describeIntelligenceNode(node: GraphNode, index: GraphIndex, plain: boo
       : `Kubernetes ingress${file}${environment}.`;
     case "config_map": return plain
       ? `Provides non-secret runtime settings${environment}; ${Array.isArray(details.keys) ? details.keys.length : 0} setting names were detected.`
-      : `Kubernetes ConfigMap${file}${environment}; values are not stored by Atlas.`;
+      : `${node.framework === "docker-compose" ? "Docker Compose config" : "Kubernetes ConfigMap"}${file}${environment}; values are not stored by Atlas.`;
     case "secret": return plain
       ? `Provides protected runtime settings${environment}; Atlas keeps names only and never stores their values.`
-      : `Kubernetes Secret${file}${environment}; values are never stored by Atlas.`;
+      : `${node.framework === "docker-compose" ? "Docker Compose secret" : "Kubernetes Secret"}${file}${environment}; values are never stored by Atlas.`;
+    case "config": return plain
+      ? `Defines ${humanWords(String(details.kind ?? node.label)).toLowerCase()}${environment} and connects it to ${outgoing.length + incoming.length} detected architecture elements.`
+      : `${humanWords(String(details.kind ?? "configuration"))}${file}${environment}.`;
     case "environment": return plain
       ? `Groups the delivery and runtime configuration for ${node.label}.`
       : `Runtime environment${file}.`;
