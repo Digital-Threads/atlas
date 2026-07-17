@@ -251,9 +251,15 @@ names are confidential.
 
 The viewer works without a cloud backend. Deterministic scenes cover the system map,
 request and asynchronous flows, complete data catalog and focused table ERD,
-migrations, scheduled jobs, source files, risks, and Delivery & Runtime. Delivery
-switches independently between development, staging, and production, so unrelated
-environment topology is not mixed into one unreadable map.
+migrations, scheduled jobs, source files, risks, deployment, runtime topology,
+environment comparison, and configuration contracts.
+
+Operations are deliberately separated. **Deployment** follows CI/CD jobs, Docker
+build stages, images, and releases. **Runtime** follows ingress, services, workloads,
+containers, ConfigMaps, and Secret names. Both switch independently between
+development, staging, and production. **Environments** compares those scopes without
+mixing their complete topologies into one unreadable map. Secret values are never
+stored or displayed.
 
 Large scenes use adaptive detail: off-screen elements are not rendered, distant
 cards switch to a lightweight form, edge labels appear when useful, and animation
