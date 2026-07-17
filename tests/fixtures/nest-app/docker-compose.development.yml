@@ -1,6 +1,10 @@
 services:
   api:
     build: .
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 10s
     ports:
       - "3000:3000"
     environment:
@@ -8,10 +12,25 @@ services:
       DATABASE_URL: postgresql://postgres@database/app
     depends_on:
       - database
+    networks:
+      - backend
+    configs:
+      - api-settings
+    secrets:
+      - api-token
   database:
     image: postgres:17-alpine
     volumes:
       - pg-data:/var/lib/postgresql/data
+    networks:
+      - backend
 volumes:
   pg-data:
-
+networks:
+  backend:
+configs:
+  api-settings:
+    file: ./config/development.json
+secrets:
+  api-token:
+    file: ./secrets/api-token.txt
