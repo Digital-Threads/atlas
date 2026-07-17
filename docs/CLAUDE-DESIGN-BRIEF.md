@@ -50,13 +50,15 @@ question, show direction clearly, and avoid an undifferentiated force-directed g
    - Focused scene: schedule -> handler -> work -> data/events -> external effects.
    - Explicit empty state when no jobs are detected.
 
-7. **Delivery & Runtime**
-   - Deterministic columns: CI/CD -> build -> deploy -> network -> configuration.
-   - Mandatory segmented environment control: Development, Staging, Production.
-   - Add Compare mode for Staging vs Production, highlighting missing, added, and changed components.
+7. **Operations**
+   - Keep Deployment, Runtime, Environments, and Configuration as separate navigation items.
+   - Deployment columns: workflow -> CI/CD jobs -> build stages -> image artifact -> deployment target.
+   - Runtime columns: public entry -> routing -> workloads -> containers -> configuration.
+   - Deployment and Runtime use the same segmented environment control: Development, Staging, Production.
+   - Environments is a comparison view: one row per detected environment with separate delivery, runtime, and configuration summaries.
    - Show workflows/jobs, Docker stages/images, Compose services, Kubernetes workloads/containers, replicas, resources, probes, services, ingress, ConfigMaps, and Secret names.
    - Never show environment or Secret values. Use “names only, values never stored” where needed.
-   - If an environment has no configuration, show that clearly while retaining shared CI/build stages.
+   - If an environment has no configuration, show that clearly while retaining shared CI/build stages where relevant.
 
 8. **Configuration contract**
    - Environment variable names grouped by environment and owning component.

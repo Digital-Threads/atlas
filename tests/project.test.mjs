@@ -299,12 +299,14 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.doesNotMatch(viewerHtml, /mod\.metrics\.routes/);
   assert.match(viewerHtml, /No data structures detected/);
   assert.match(viewerHtml, /Scheduled jobs/);
-  assert.match(viewerHtml, /Delivery & Runtime/);
+  assert.match(viewerHtml, /Deployment/);
+  assert.match(viewerHtml, /Runtime Topology/);
+  assert.match(viewerHtml, /Environment Comparison/);
   assert.match(viewerHtml, /Configuration Contract/);
   assert.match(viewerHtml, /Database Schema/);
   assert.match(viewerHtml, /COMPLETE CROSS-SCHEMA ERD/);
   assert.match(viewerHtml, /ClickHouse Architecture/);
-  assert.match(viewerHtml, /Staging vs production/);
+  assert.match(viewerHtml, /Each row compares delivery, runtime and configuration evidence/);
   assert.match(viewerHtml, /every detected table/);
   assert.match(viewerHtml, /context stays visible/);
   assert.match(viewerHtml, /choose one section to inspect/);
@@ -329,7 +331,9 @@ test("covers the complete NestJS MVP architecture surface", async () => {
   assert.match(viewerHtml, /SERVICES & USE CASES/);
   assert.match(viewerHtml, /No methods are expanded here/);
   assert.match(viewerHtml, /sceneScheduleOverview/);
-  assert.match(viewerHtml, /sceneDelivery/);
+  assert.match(viewerHtml, /sceneDeployment/);
+  assert.match(viewerHtml, /sceneRuntime/);
+  assert.match(viewerHtml, /sceneEnvironments/);
   assert.match(viewerHtml, /sceneConfiguration/);
   assert.doesNotMatch(viewerHtml, /<(?:svg|g|rect|foreignObject|text|line|path)\b[^>]*\s(?:viewBox|x|y|width|height|x1|y1|x2|y2|d|transform|opacity)="\{\{/i);
   assert.doesNotMatch(viewerHtml, /shopcore|deleteUserItems|ItemsService/);
